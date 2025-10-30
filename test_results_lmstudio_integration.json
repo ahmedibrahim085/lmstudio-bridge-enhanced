@@ -1,0 +1,59 @@
+{
+  "health_check": {
+    "status": "PASS",
+    "healthy": true
+  },
+  "list_models": {
+    "status": "PASS",
+    "count": 25,
+    "models": [
+      "qwen/qwen3-coder-30b",
+      "text-embedding-nomic-embed-text-v2-moe",
+      "ibm/granite-4-h-tiny",
+      "text-embedding-qwen3-embedding-8b",
+      "text-embedding-qwen3-embedding-4b"
+    ]
+  },
+  "get_model_info": {
+    "status": "PASS",
+    "model": "qwen/qwen3-coder-30b",
+    "info": {
+      "id": "qwen/qwen3-coder-30b",
+      "object": "model",
+      "owned_by": "organization_owner"
+    }
+  },
+  "chat_completion": {
+    "status": "PASS",
+    "response": "Hello World",
+    "usage": {
+      "prompt_tokens": 17,
+      "completion_tokens": 3,
+      "total_tokens": 20
+    }
+  },
+  "text_completion": {
+    "status": "PASS",
+    "completion": "print(\"Hello World!\")",
+    "usage": {
+      "prompt_tokens": 5,
+      "completion_tokens": 5,
+      "total_tokens": 10
+    }
+  },
+  "create_response": {
+    "status": "PASS",
+    "stateful": true,
+    "response1_id": "resp_dfe59a47f07e832406bf52ba19af0cb588ac7d3f8cedddfe",
+    "response2_id": "resp_f733c537934afc8bd1087925173638b022e926f9336c767d"
+  },
+  "generate_embeddings": {
+    "status": "PASS",
+    "dimensions": 768,
+    "model": "text-embedding-nomic-embed-text-v2-moe"
+  },
+  "autonomous_execution": {
+    "status": "FAIL",
+    "result": "Error during full filesystem execution: unhandled errors in a TaskGroup (1 sub-exception)\n\n  + Exception Group Traceback (most recent call last):\n  |   File \"/Users/ahmedmaged/ai_storage/MyMCPs/lmstudio-bridge-enhanced/tools/autonomous.py\", line 220, in autonomous_filesystem_full\n  |     async with connection.connect() as session:\n  |                ~~~~~~~~~~~~~~~~~~^^\n  |   File \"/opt/anaconda3/lib/python3.13/contextlib.py\", line 235, in __aexit__\n  |     await self.gen.athrow(value)\n  |   File \"/Users/ahmedmaged/ai_storage/MyMCPs/lmstudio-bridge-enhanced/mcp_client/connection.py\", line 53, in connect\n  |     async with stdio_client(self.server_params) as (read, write):\n  |                ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^\n  |   File \"/opt/anaconda3/lib/python3.13/contextlib.py\", line 235, in __aexit__\n  |     await self.gen.athrow(value)\n  |   File \"/opt/anaconda3/lib/python3.13/site-packages/mcp/client/stdio/__init__.py\", line 183, in stdio_client\n  |     anyio.create_task_group() as tg,\n  |     ~~~~~~~~~~~~~~~~~~~~~~~^^\n  |   File \"/opt/anaconda3/lib/python3.13/site-packages/anyio/_backends/_asyncio.py\", line 781, in __aexit__\n  |     raise BaseExceptionGroup(\n  |         \"unhandled errors in a TaskGroup\", self._exceptions\n  |     ) from None\n  | ExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)\n  +-+---------------- 1 ----------------\n    | Exception Group Traceback (most recent call last):\n    |   File \"/opt/anaconda3/lib/python3.13/site-packages/mcp/client/stdio/__init__.py\", line 189, in stdio_client\n    |     yield read_stream, write_stream\n    |   File \"/Users/ahmedmaged/ai_storage/MyMCPs/lmstudio-bridge-enhanced/mcp_client/connection.py\", line 54, in connect\n    |     async with ClientSession(read, write) as session:\n    |                ~~~~~~~~~~~~~^^^^^^^^^^^^^\n    |   File \"/opt/anaconda3/lib/python3.13/site-packages/mcp/shared/session.py\", line 218, in __aexit__\n    |     return await self._task_group.__aexit__(exc_type, exc_val, exc_tb)\n    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    |   File \"/opt/anaconda3/lib/python3.13/site-packages/anyio/_backends/_asyncio.py\", line 781, in __aexit__\n    |     raise BaseExceptionGroup(\n    |         \"unhandled errors in a TaskGroup\", self._exceptions\n    |     ) from None\n    | ExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)\n    +-+---------------- 1 ----------------\n      | Traceback (most recent call last):\n      |   File \"/Users/ahmedmaged/ai_storage/MyMCPs/lmstudio-bridge-enhanced/mcp_client/connection.py\", line 65, in connect\n      |     yield session\n      |   File \"/Users/ahmedmaged/ai_storage/MyMCPs/lmstudio-bridge-enhanced/tools/autonomous.py\", line 230, in autonomous_filesystem_full\n      |     return await self._execute_autonomous_stateful(\n      |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n      |     ...<6 lines>...\n      |     )\n      |     ^\n      |   File \"/Users/ahmedmaged/ai_storage/MyMCPs/lmstudio-bridge-enhanced/tools/autonomous.py\", line 77, in _execute_autonomous_stateful\n      |     response = self.llm.create_response(\n      |         input_text=input_text,\n      |     ...<2 lines>...\n      |         model=\"default\"\n      |     )\n      |   File \"/Users/ahmedmaged/ai_storage/MyMCPs/lmstudio-bridge-enhanced/llm/llm_client.py\", line 287, in create_response\n      |     response.raise_for_status()\n      |     ~~~~~~~~~~~~~~~~~~~~~~~~~^^\n      |   File \"/opt/anaconda3/lib/python3.13/site-packages/requests/models.py\", line 1026, in raise_for_status\n      |     raise HTTPError(http_error_msg, response=self)\n      | requests.exceptions.HTTPError: 500 Server Error: Internal Server Error for url: http://localhost:1234/v1/responses\n      +------------------------------------\n"
+  }
+}

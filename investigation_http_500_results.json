@@ -1,0 +1,20 @@
+{
+  "baseline_no_tools": {
+    "status": "PASS"
+  },
+  "minimal_one_tool": {
+    "status": "PASS",
+    "tool_count": 1
+  },
+  "small_three_tools": {
+    "status": "PASS",
+    "tool_count": 3
+  },
+  "filesystem_full": {
+    "status": "PASS",
+    "tool_count": 14
+  },
+  "chat_completions_comparison": {
+    "status": "PASS"
+  }
+}
