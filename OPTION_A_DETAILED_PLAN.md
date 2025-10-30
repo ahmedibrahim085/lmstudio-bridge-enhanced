@@ -191,6 +191,8 @@ After each phase, ALL 3 LLMs must review and approve:
 
 ## Phase 1: Model Validation Layer (2-2.5 hours)
 
+⚠️ **PREREQUISITE**: Complete `PHASE_0_1_QWEN_CRITICAL_FIXES.md` before starting this phase.
+
 ### Overview
 Create robust model validation infrastructure before touching core autonomous tools.
 
