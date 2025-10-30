@@ -1017,6 +1017,8 @@ async def test_multiple_mcps_with_model():
 
 ## Phase 3: Documentation & Examples (1.5-2 hours)
 
+⚠️ **PREREQUISITE**: Complete Phase 2 (and Phase 0-1 + Phase 1 before that).
+
 ### Overview
 Comprehensive documentation for multi-model feature with examples and troubleshooting.
 
@@ -1315,6 +1317,8 @@ Error: Model 'qwen/qwen3-coder' not found. Available: ['llama3', 'mixtral']
 ---
 
 ## Phase 4: Final Testing & Polish (2-2.5 hours)
+
+⚠️ **PREREQUISITE**: Complete Phase 3 (and all previous phases including Phase 0-1).
 
 ### Overview
 Comprehensive testing, performance validation, and final polish before release.
