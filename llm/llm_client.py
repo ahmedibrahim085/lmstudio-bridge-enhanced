@@ -25,9 +25,10 @@ from utils.error_handling import retry_with_backoff
 logger = logging.getLogger(__name__)
 
 # Default timeout for all LLM API calls
-# Set to 55 seconds to stay safely under Claude Code's 60-second MCP timeout limit
+# Set to 58 seconds to accommodate slower models like Magistral (45-46s response time)
+# Still safely under Claude Code's 60-second MCP timeout limit
 # See: https://github.com/anthropics/claude-code/issues/7575
-DEFAULT_LLM_TIMEOUT = 55
+DEFAULT_LLM_TIMEOUT = 58
 
 # Health check timeout - fast check for API availability
 # Health checks should be quick, so we use a shorter timeout
@@ -168,7 +169,7 @@ class LLMClient:
             max_tokens: Maximum tokens to generate
             tools: Optional list of tools in OpenAI format
             tool_choice: Tool selection strategy ('auto', 'none', or specific tool)
-            timeout: Request timeout in seconds (default 55s, safely under Claude Code's 60s MCP timeout)
+            timeout: Request timeout in seconds (default 58s, safely under Claude Code's 60s MCP timeout)
 
         Returns:
             Response dictionary from LLM API
@@ -229,7 +230,7 @@ class LLMClient:
             temperature: Controls randomness (0.0 to 2.0)
             max_tokens: Maximum tokens to generate
             stop_sequences: Optional list of stop sequences
-            timeout: Request timeout in seconds (default 55s, safely under Claude Code's 60s MCP timeout)
+            timeout: Request timeout in seconds (default 58s, safely under Claude Code's 60s MCP timeout)
 
         Returns:
             Response dictionary from LLM API
@@ -318,7 +319,7 @@ class LLMClient:
         Args:
             text: Single text or list of texts to embed
             model: Optional specific model for embeddings
-            timeout: Request timeout in seconds (default 55s, safely under Claude Code's 60s MCP timeout)
+            timeout: Request timeout in seconds (default 58s, safely under Claude Code's 60s MCP timeout)
 
         Returns:
             Response dictionary with embeddings data
@@ -377,7 +378,7 @@ class LLMClient:
             previous_response_id: Optional ID from previous response for conversation continuity
             stream: Whether to stream response
             model: Optional specific model
-            timeout: Request timeout in seconds (default 55s, safely under Claude Code's 60s MCP timeout)
+            timeout: Request timeout in seconds (default 58s, safely under Claude Code's 60s MCP timeout)
 
         Returns:
             Response dictionary with response ID and output array
