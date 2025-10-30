@@ -152,6 +152,53 @@ Available MCPs (9):
 ...
 ```
 
+## Configuration Discovery 🔍
+
+### Where Does It Look for .mcp.json?
+
+**Priority order** (first found is used):
+
+1. **$MCP_JSON_PATH** environment variable (if set)
+   - Allows explicit override for testing or custom configurations
+   - Example: `MCP_JSON_PATH=/path/to/custom/.mcp.json`
+
+2. **~/.lmstudio/mcp.json** (Highest priority for local LLM)
+   - LM Studio's own MCP configuration
+   - Most relevant when using local LLM via LM Studio
+
+3. **$(pwd)/.mcp.json** (Current working directory)
+   - Where Claude Code runs the MCP server
+   - Project-specific configurations
+
+4. **~/.mcp.json** (User's home directory)
+   - User-wide MCP configuration
+
+5. **$(dirname $(pwd))/.mcp.json** (Parent directory)
+   - Fallback for nested project structures
+
+**100% Dynamic**: No hardcoded paths - works for any user, any project, any system!
+
+### Environment Variable Usage
+
+```bash
+# Override for testing
+MCP_JSON_PATH=/tmp/test-mcps.json python3 your_script.py
+
+# Use project-specific config
+MCP_JSON_PATH=./project-mcps.json python3 your_script.py
+
+# Override in Claude Code's MCP server env (in .mcp.json)
+{
+  "mcpServers": {
+    "lmstudio-bridge-enhanced_v2": {
+      "env": {
+        "MCP_JSON_PATH": "/path/to/custom/.mcp.json"
+      }
+    }
+  }
+}
+```
+
 ## How It Works
 
 ### Step 1: MCP Discovery
@@ -490,7 +537,8 @@ class DynamicAutonomousAgent:
 
 ---
 
-**Documentation Version**: 2.0.0
+**Documentation Version**: 2.1.0
 **Last Updated**: October 30, 2025
 **Author**: Ahmed Maged (via Claude Code)
 **Status**: ✅ Production Ready with Hot Reload!
+**Improvements**: 100% dynamic path discovery with MCP_JSON_PATH support - no hardcoded paths!

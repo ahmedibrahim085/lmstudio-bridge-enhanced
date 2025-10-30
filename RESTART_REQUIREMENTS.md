@@ -145,13 +145,19 @@ $ python3 test_sqlite_discovery.py
 
 **Priority order** (first found is used):
 
-1. **~/.lmstudio/mcp.json** ← Highest priority!
-2. /Users/ahmedmaged/ai_storage/mcp-development-project/.mcp.json
-3. `$(pwd)/.mcp.json`
-4. ~/.mcp.json
-5. `$(dirname $(pwd))/.mcp.json`
+1. **$MCP_JSON_PATH** environment variable (if set) ← Explicit override!
+2. **~/.lmstudio/mcp.json** ← Highest priority for local LLM!
+3. `$(pwd)/.mcp.json` ← Current working directory
+4. **~/.mcp.json** ← User's home directory
+5. `$(dirname $(pwd))/.mcp.json` ← Parent directory
 
-**Rationale**: LM Studio's mcp.json is most relevant for local LLM tools, so it's checked first.
+**Rationale**:
+- Environment variable allows explicit control
+- LM Studio's mcp.json is most relevant for local LLM tools
+- Current working directory is checked (where Claude Code runs the MCP server)
+- Fallback to home directory and parent directory
+
+**100% Dynamic**: No hardcoded paths - works for any user, any project!
 
 ---
 
@@ -190,12 +196,21 @@ python3 -c "from mcp_client.discovery import MCPDiscovery; d = MCPDiscovery(); p
 # List available MCPs (fresh read)
 python3 test_sqlite_discovery.py
 
+# Override with environment variable
+MCP_JSON_PATH=/path/to/custom/.mcp.json python3 test_sqlite_discovery.py
+
 # Test if server sees new MCP (requires using tool in Claude Code)
 # Use: list_available_mcps tool
 ```
 
+**Pro Tip**: Use `MCP_JSON_PATH` environment variable to:
+- Test with different configurations
+- Use project-specific .mcp.json files
+- Override default search order
+
 ---
 
-**Documentation Version**: 2.0.0
+**Documentation Version**: 2.1.0
 **Last Updated**: October 30, 2025
 **Status**: ✅ Hot reload IMPLEMENTED - ONE-TIME restart, then add MCPs instantly!
+**Improvements**: Removed hardcoded paths - 100% dynamic discovery with MCP_JSON_PATH support!

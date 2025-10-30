@@ -44,8 +44,8 @@ class MCPDiscovery:
         Search for .mcp.json in common locations.
 
         Priority order:
-        1. LM Studio's mcp.json (if using local LLM, this is most relevant)
-        2. Claude Code project directory
+        1. MCP_JSON_PATH environment variable (if set)
+        2. LM Studio's mcp.json (if using local LLM, this is most relevant)
         3. Current working directory
         4. User's home directory
         5. Parent directory
@@ -53,18 +53,23 @@ class MCPDiscovery:
         Returns:
             Path to .mcp.json if found, None otherwise
         """
-        possible_paths = [
+        possible_paths = []
+
+        # Check environment variable first (allows explicit override)
+        if "MCP_JSON_PATH" in os.environ:
+            possible_paths.append(os.path.expanduser(os.environ["MCP_JSON_PATH"]))
+
+        # Add standard search locations
+        possible_paths.extend([
             # LM Studio's mcp.json (HIGHEST PRIORITY for local LLM!)
             os.path.expanduser("~/.lmstudio/mcp.json"),
-            # Claude Code project directory
-            "/Users/ahmedmaged/ai_storage/mcp-development-project/.mcp.json",
             # Current working directory
             os.path.join(os.getcwd(), ".mcp.json"),
             # User's home directory
             os.path.expanduser("~/.mcp.json"),
             # Parent directory
             os.path.join(os.path.dirname(os.getcwd()), ".mcp.json")
-        ]
+        ])
 
         for path in possible_paths:
             if os.path.exists(path):
