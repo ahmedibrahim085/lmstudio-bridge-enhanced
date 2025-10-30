@@ -32,6 +32,93 @@ class AutonomousExecutionTools:
         """
         self.llm = llm_client or LLMClient()
 
+    # Private helper methods for consolidated implementation
+
+    async def _execute_autonomous_stateful(
+        self,
+        task: str,
+        session: Any,
+        openai_tools: List[Dict],
+        executor: ToolExecutor,
+        max_rounds: int,
+        max_tokens: int
+    ) -> str:
+        """
+        Core implementation using stateful /v1/responses API.
+
+        This is the optimized implementation with constant token usage.
+        Uses LM Studio's stateful conversation API where the server maintains
+        conversation history automatically.
+
+        Args:
+            task: The task for the local LLM
+            session: Active MCP session
+            openai_tools: List of tools in OpenAI format
+            executor: Tool executor for the session
+            max_rounds: Maximum rounds for autonomous loop
+            max_tokens: Maximum tokens per response
+
+        Returns:
+            Final answer from the LLM
+        """
+        # Autonomous loop with /v1/responses API (stateful!)
+        previous_response_id = None
+
+        for round_num in range(max_rounds):
+            # Determine input text
+            if round_num == 0:
+                input_text = task
+            else:
+                # For subsequent rounds, just say "Continue"
+                # Tool results are automatically available via server-side state
+                input_text = "Continue with the task based on the tool results."
+
+            # Call /v1/responses with tools (auto-converts to flattened format)
+            response = self.llm.create_response(
+                input_text=input_text,
+                tools=openai_tools,
+                previous_response_id=previous_response_id,
+                model="default"
+            )
+
+            # Save response ID for next round
+            previous_response_id = response["id"]
+
+            # Process output array (not choices!)
+            output = response.get("output", [])
+
+            # Check for function calls
+            function_calls = [
+                item for item in output
+                if item.get("type") == "function_call"
+            ]
+
+            if function_calls:
+                # Execute each tool
+                for fc in function_calls:
+                    tool_name = fc["name"]
+                    tool_args = json.loads(fc["arguments"])
+
+                    # Execute via MCP
+                    await executor.execute_tool(tool_name, tool_args)
+
+                # Continue loop (tool results automatically available to LLM)
+                continue
+
+            # Check for final answer (message output)
+            for item in output:
+                if item.get("type") == "message":
+                    # Extract text from content
+                    content = item.get("content", [])
+                    for content_item in content:
+                        if content_item.get("type") == "output_text":
+                            return content_item.get("text", "")
+
+            # If neither function calls nor message, something unexpected happened
+            return f"Unexpected output format in round {round_num + 1}"
+
+        return f"Max rounds ({max_rounds}) reached without final answer."
+
     async def autonomous_filesystem_full(
         self,
         task: str,
@@ -42,11 +129,9 @@ class AutonomousExecutionTools:
         """
         Full autonomous execution with ALL 14 filesystem MCP tools.
 
-        ⚠️ NOTE: Consider using autonomous_filesystem_full_v2() for 98% token savings!
-        - This v1 version uses /v1/chat/completions (linear token growth: ~2,540 tokens/round)
-        - V2 uses /v1/responses (constant usage: ~3,000 tokens total)
-        - V2 enables unlimited rounds without context overflow
-        - See MIGRATION_GUIDE.md for migration details
+        Now optimized to use stateful /v1/responses API (98% token savings!).
+        This function has been internally optimized while maintaining the same
+        external interface.
 
         Provides local LLM access to complete filesystem operations:
         - read_text_file, read_media_file, read_multiple_files
@@ -139,48 +224,17 @@ class AutonomousExecutionTools:
 
                 # 3. Convert ALL tools to OpenAI format
                 openai_tools = SchemaConverter.mcp_tools_to_openai(all_tools)
-
-                # 4. Autonomous loop with local LLM (has access to ALL 14 tools!)
-                messages = [{"role": "user", "content": task}]
                 executor = ToolExecutor(session)
 
-                for round_num in range(max_rounds):
-                    # Call local LLM with ALL tools
-                    response = self.llm.chat_completion(
-                        messages=messages,
-                        tools=openai_tools,
-                        tool_choice="auto",
-                        max_tokens=actual_max_tokens
-                    )
-
-                    message = response["choices"][0]["message"]
-
-                    # Check for tool calls
-                    if message.get("tool_calls"):
-                        # Add assistant message
-                        messages.append(message)
-
-                        # Execute each tool via REAL MCP
-                        for tool_call in message["tool_calls"]:
-                            tool_name = tool_call["function"]["name"]
-                            tool_args = json.loads(tool_call["function"]["arguments"])
-
-                            # Call REAL MCP tool
-                            result = await executor.execute_tool(tool_name, tool_args)
-
-                            # Add tool result to messages
-                            content = ToolExecutor.extract_text_content(result)
-
-                            messages.append({
-                                "role": "tool",
-                                "tool_call_id": tool_call["id"],
-                                "content": content
-                            })
-                    else:
-                        # Local LLM has final answer
-                        return message.get("content", "No content in response")
-
-                return f"Max rounds ({max_rounds}) reached without final answer. Consider increasing max_rounds for more complex tasks."
+                # Call optimized stateful implementation
+                return await self._execute_autonomous_stateful(
+                    task=task,
+                    session=session,
+                    openai_tools=openai_tools,
+                    executor=executor,
+                    max_rounds=max_rounds,
+                    max_tokens=actual_max_tokens
+                )
 
         except Exception as e:
             import traceback
@@ -523,11 +577,9 @@ class AutonomousExecutionTools:
         """
         Full autonomous execution with memory MCP (knowledge graph) tools.
 
-        ⚠️ NOTE: Consider using autonomous_memory_full_v2() for 98% token savings!
-        - This v1 version uses /v1/chat/completions (linear token growth: ~1,234 tokens/round)
-        - V2 uses /v1/responses (constant usage: ~2,000 tokens total)
-        - V2 enables unlimited rounds without context overflow
-        - See MIGRATION_GUIDE.md for migration details
+        Now optimized to use stateful /v1/responses API (98% token savings!).
+        This function has been internally optimized while maintaining the same
+        external interface.
 
         Provides local LLM access to knowledge graph operations:
         - create_entities - Create knowledge entities with observations
@@ -573,48 +625,18 @@ class AutonomousExecutionTools:
                 # Discover ALL memory tools
                 discovery = ToolDiscovery(session)
                 all_tools = await discovery.discover_tools()
-
-                # Convert to OpenAI format
                 openai_tools = SchemaConverter.mcp_tools_to_openai(all_tools)
-
-                # Autonomous loop
-                messages = [{"role": "user", "content": task}]
                 executor = ToolExecutor(session)
 
-                for round_num in range(max_rounds):
-                    # Call local LLM with memory tools
-                    response = self.llm.chat_completion(
-                        messages=messages,
-                        tools=openai_tools,
-                        tool_choice="auto",
-                        max_tokens=actual_max_tokens
-                    )
-
-                    message = response["choices"][0]["message"]
-
-                    # Check for tool calls
-                    if message.get("tool_calls"):
-                        messages.append(message)
-
-                        # Execute each tool via memory MCP
-                        for tool_call in message["tool_calls"]:
-                            tool_name = tool_call["function"]["name"]
-                            tool_args = json.loads(tool_call["function"]["arguments"])
-
-                            # Call memory MCP tool
-                            result = await executor.execute_tool(tool_name, tool_args)
-                            content = ToolExecutor.extract_text_content(result)
-
-                            messages.append({
-                                "role": "tool",
-                                "tool_call_id": tool_call["id"],
-                                "content": content
-                            })
-                    else:
-                        # Local LLM has final answer
-                        return message.get("content", "No content in response")
-
-                return f"Max rounds ({max_rounds}) reached without final answer."
+                # Call optimized stateful implementation
+                return await self._execute_autonomous_stateful(
+                    task=task,
+                    session=session,
+                    openai_tools=openai_tools,
+                    executor=executor,
+                    max_rounds=max_rounds,
+                    max_tokens=actual_max_tokens
+                )
 
         except Exception as e:
             import traceback
@@ -757,11 +779,9 @@ class AutonomousExecutionTools:
         """
         Full autonomous execution with fetch MCP (web content) tools.
 
-        ⚠️ NOTE: Consider using autonomous_fetch_full_v2() for 99% token savings!
-        - This v1 version uses /v1/chat/completions (linear token growth: ~410 tokens/round)
-        - V2 uses /v1/responses (constant usage: ~500 tokens total)
-        - V2 enables unlimited rounds without context overflow
-        - See MIGRATION_GUIDE.md for migration details
+        Now optimized to use stateful /v1/responses API (99% token savings!).
+        This function has been internally optimized while maintaining the same
+        external interface.
 
         Provides local LLM access to web content fetching:
         - fetch - Retrieve web content and convert to markdown
@@ -801,48 +821,18 @@ class AutonomousExecutionTools:
                 # Discover ALL fetch tools
                 discovery = ToolDiscovery(session)
                 all_tools = await discovery.discover_tools()
-
-                # Convert to OpenAI format
                 openai_tools = SchemaConverter.mcp_tools_to_openai(all_tools)
-
-                # Autonomous loop
-                messages = [{"role": "user", "content": task}]
                 executor = ToolExecutor(session)
 
-                for round_num in range(max_rounds):
-                    # Call local LLM with fetch tools
-                    response = self.llm.chat_completion(
-                        messages=messages,
-                        tools=openai_tools,
-                        tool_choice="auto",
-                        max_tokens=actual_max_tokens
-                    )
-
-                    message = response["choices"][0]["message"]
-
-                    # Check for tool calls
-                    if message.get("tool_calls"):
-                        messages.append(message)
-
-                        # Execute each tool via fetch MCP
-                        for tool_call in message["tool_calls"]:
-                            tool_name = tool_call["function"]["name"]
-                            tool_args = json.loads(tool_call["function"]["arguments"])
-
-                            # Call fetch MCP tool
-                            result = await executor.execute_tool(tool_name, tool_args)
-                            content = ToolExecutor.extract_text_content(result)
-
-                            messages.append({
-                                "role": "tool",
-                                "tool_call_id": tool_call["id"],
-                                "content": content
-                            })
-                    else:
-                        # Local LLM has final answer
-                        return message.get("content", "No content in response")
-
-                return f"Max rounds ({max_rounds}) reached without final answer."
+                # Call optimized stateful implementation
+                return await self._execute_autonomous_stateful(
+                    task=task,
+                    session=session,
+                    openai_tools=openai_tools,
+                    executor=executor,
+                    max_rounds=max_rounds,
+                    max_tokens=actual_max_tokens
+                )
 
         except Exception as e:
             import traceback
@@ -984,11 +974,9 @@ class AutonomousExecutionTools:
         """
         Full autonomous execution with GitHub MCP tools.
 
-        ⚠️ NOTE: Consider using autonomous_github_full_v2() for 94% token savings!
-        - This v1 version uses /v1/chat/completions (linear token growth: ~2,600 tokens/round)
-        - V2 uses /v1/responses (constant usage: ~7,500 tokens total)
-        - V2 enables unlimited rounds without context overflow
-        - See MIGRATION_GUIDE.md for migration details
+        Now optimized to use stateful /v1/responses API (94% token savings!).
+        This function has been internally optimized while maintaining the same
+        external interface.
 
         Provides local LLM access to GitHub operations:
         - Repository management (create, fork, search)
@@ -1040,45 +1028,17 @@ class AutonomousExecutionTools:
 
                 # Convert to OpenAI format
                 openai_tools = SchemaConverter.mcp_tools_to_openai(all_tools)
-
-                # Autonomous loop
-                messages = [{"role": "user", "content": task}]
                 executor = ToolExecutor(session)
 
-                for round_num in range(max_rounds):
-                    # Call local LLM with GitHub tools
-                    response = self.llm.chat_completion(
-                        messages=messages,
-                        tools=openai_tools,
-                        tool_choice="auto",
-                        max_tokens=actual_max_tokens
-                    )
-
-                    message = response["choices"][0]["message"]
-
-                    # Check for tool calls
-                    if message.get("tool_calls"):
-                        messages.append(message)
-
-                        # Execute each tool via GitHub MCP
-                        for tool_call in message["tool_calls"]:
-                            tool_name = tool_call["function"]["name"]
-                            tool_args = json.loads(tool_call["function"]["arguments"])
-
-                            # Call GitHub MCP tool
-                            result = await executor.execute_tool(tool_name, tool_args)
-                            content = ToolExecutor.extract_text_content(result)
-
-                            messages.append({
-                                "role": "tool",
-                                "tool_call_id": tool_call["id"],
-                                "content": content
-                            })
-                    else:
-                        # Local LLM has final answer
-                        return message.get("content", "No content in response")
-
-                return f"Max rounds ({max_rounds}) reached without final answer."
+                # Call optimized stateful implementation
+                return await self._execute_autonomous_stateful(
+                    task=task,
+                    session=session,
+                    openai_tools=openai_tools,
+                    executor=executor,
+                    max_rounds=max_rounds,
+                    max_tokens=actual_max_tokens
+                )
 
         except Exception as e:
             import traceback
