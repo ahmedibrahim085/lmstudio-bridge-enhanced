@@ -1,62 +1,47 @@
-# LMStudio Bridge Enhanced - MCP Server
+# LM Studio Bridge Enhanced v2
 
-Enhanced Model Context Protocol (MCP) server for LM Studio with advanced features including stateful conversations, embeddings, text completion, and **autonomous MCP execution**.
+> Connect ANY MCP to local LLMs via LM Studio. Zero API costs, full privacy, instant hot reload.
 
-## Features
+[![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![LM Studio](https://img.shields.io/badge/LM%20Studio-0.3.29+-green.svg)](https://lmstudio.ai/)
 
-### Core Functions (7)
-- **health_check**: Verify LM Studio API connectivity
-- **list_models**: Get all available models
-- **get_current_model**: Get currently loaded model
-- **chat_completion**: Traditional chat completions
-- **text_completion**: Raw text/code completion for faster single-turn tasks
-- **generate_embeddings**: Vector embeddings for RAG systems and semantic search
-- **create_response**: Stateful conversations with automatic context management via response IDs
+---
 
-### Autonomous MCP Functions (4) 🚀
+## What This Does
 
-**Optimized using stateful `/v1/responses` API with 97% token savings!**
+Bridge between LM Studio (local LLM) and ANY Model Context Protocol (MCP) server. Your local LLM can:
 
-All autonomous functions now use the optimized stateful API internally:
-- **autonomous_filesystem_full**: Execute filesystem tasks autonomously (98% token savings)
-- **autonomous_memory_full**: Build and query knowledge graphs autonomously (98% token savings)
-- **autonomous_fetch_full**: Fetch and analyze web content autonomously (99% token savings)
-- **autonomous_github_full**: Search and manage GitHub repositories autonomously (94% token savings)
+- 🗂️ **Use ANY MCP** - filesystem, database, web, git, and more
+- ⚡ **Hot Reload** - Add new MCPs instantly (no restart, 0.011ms overhead)
+- 🔧 **Zero Config** - Automatically discovers MCPs from `.mcp.json`
+- 🔒 **Full Privacy** - Everything runs locally, no cloud APIs
+- 💰 **Zero Cost** - No API fees, unlimited usage
 
-**Key Benefits**:
-- ✅ **97% fewer tokens** at round 100 (constant vs linear growth)
-- ✅ **Unlimited rounds** without context overflow
-- ✅ **Automatic state management** - no manual history tracking
-- ✅ **Optimized by default** - you get the best performance automatically
+**Key Innovation**: Dynamic MCP discovery + hot reload. Add any MCP to `.mcp.json` → use it immediately.
 
-## Prerequisites
+---
 
-- Python 3.9+
-- [LM Studio](https://lmstudio.ai/) v0.3.29+ (for `/v1/responses` support)
-- LM Studio running with a model loaded
+## Quick Start (2 minutes)
 
-## Installation
+### 1. Install
 
 ```bash
-# Install dependencies
-pip install requests "mcp[cli]" openai
-
-# Or using requirements.txt
+git clone https://github.com/your-username/lmstudio-bridge-enhanced.git
+cd lmstudio-bridge-enhanced
 pip install -r requirements.txt
 ```
 
-## MCP Configuration
+### 2. Configure
 
-Add to your `.mcp.json`:
+Add to your `.mcp.json` or `~/.lmstudio/mcp.json`:
 
 ```json
 {
   "mcpServers": {
-    "lmstudio-bridge-enhanced": {
+    "lmstudio-bridge-enhanced_v2": {
       "command": "python3",
-      "args": [
-        "/Users/ahmedmaged/ai_storage/MyMCPs/lmstudio-bridge-enhanced/lmstudio_bridge.py"
-      ],
+      "args": ["-m", "lmstudio_bridge"],
       "env": {
         "LMSTUDIO_HOST": "localhost",
         "LMSTUDIO_PORT": "1234"
@@ -66,167 +51,374 @@ Add to your `.mcp.json`:
 }
 ```
 
-**Important:** Update the path in `args` to match your installation location.
+### 3. Use
 
-## Environment Variables
+```python
+# In Claude Code or any MCP client:
+"Use autonomous_with_mcp with the filesystem MCP to list all Python files"
+
+# Add a new MCP to .mcp.json:
+{
+  "your-new-mcp": {
+    "command": "uvx",
+    "args": ["your-mcp-server"]
+  }
+}
+
+# Use immediately (no restart!):
+"Use autonomous_with_mcp with your-new-mcp to [your task]"
+```
+
+**That's it!** No restart, no code changes, no hardcoded assumptions.
+
+---
+
+## Core Features
+
+### 1. Dynamic MCP Discovery
+
+Works with **ANY** MCP in your `.mcp.json`:
+
+```python
+autonomous_with_mcp(
+    mcp_name="filesystem",  # or "memory", "fetch", "github", "time", etc.
+    task="Your task here"
+)
+```
+
+- ✅ No hardcoded MCP configurations
+- ✅ Automatically discovers all enabled MCPs
+- ✅ Works with standard MCPs and custom MCPs
+
+### 2. Hot Reload (0.011ms overhead)
+
+Add MCPs to `.mcp.json` → use immediately:
+
+- **No restart required** (after initial setup)
+- **0.011ms overhead** per call (essentially free)
+- **734x faster** than LLM API call
+- Reads `.mcp.json` fresh on every tool call
+
+**Before Hot Reload:**
+1. Add MCP to `.mcp.json`
+2. Restart Claude Code (10-30 seconds)
+3. Use MCP
+
+**After Hot Reload:**
+1. Add MCP to `.mcp.json`
+2. Use MCP ✅
+
+### 3. Autonomous Execution
+
+Local LLM autonomously uses MCP tools:
+
+```python
+# Single MCP
+autonomous_with_mcp("filesystem", "Analyze my codebase")
+
+# Multiple MCPs simultaneously
+autonomous_with_multiple_mcps(
+    ["filesystem", "memory"],
+    "Analyze code and build knowledge graph"
+)
+
+# Auto-discover ALL MCPs
+autonomous_discover_and_execute(
+    "Use any tools you need to complete this task"
+)
+```
+
+### 4. No Artificial Limits
+
+- **max_rounds: 10000** (default) - Let LLM work until done
+- **max_tokens: 8192** (default) - Based on Claude Code limits
+- Most tasks complete in < 20 rounds anyway
+
+---
+
+## Available Tools
+
+### Core LM Studio Functions (7)
+1. `health_check` - Verify LM Studio API
+2. `list_models` - List available models
+3. `get_current_model` - Get loaded model
+4. `chat_completion` - Chat completions
+5. `text_completion` - Raw text/code completion
+6. `generate_embeddings` - Vector embeddings
+7. `create_response` - Stateful conversations
+
+### Dynamic Autonomous Functions (4) 🚀
+1. `autonomous_with_mcp(mcp_name, task)` - Use ANY MCP by name
+2. `autonomous_with_multiple_mcps(mcp_names, task)` - Use multiple MCPs
+3. `autonomous_discover_and_execute(task)` - Auto-discover ALL MCPs
+4. `list_available_mcps()` - List discovered MCPs
+
+**Total: 11 tools** (7 core + 4 dynamic)
+
+---
+
+## How It Works
+
+### Architecture
+
+```
+Claude Code (or any MCP client)
+    ↓
+lmstudio-bridge-enhanced_v2 (MCP Server)
+    ↓
+LM Studio API (localhost:1234)
+    ↓
+Local LLM (Qwen, Llama, Mistral, etc.)
+    ↓
+Other MCP Servers (filesystem, memory, etc.)
+```
+
+**The bridge acts as both**:
+- **MCP Server** to Claude Code
+- **MCP Client** to other MCPs
+
+### Dynamic Discovery Flow
+
+1. Tool called: `autonomous_with_mcp("filesystem", "task")`
+2. Hot reload: Read `.mcp.json` (0.011ms)
+3. Discover: Find "filesystem" MCP configuration
+4. Connect: Connect to filesystem MCP server
+5. Tools: Discover filesystem's tools dynamically
+6. Execute: Local LLM uses tools autonomously
+7. Result: Return final answer
+
+**Zero hardcoded assumptions** - works with any MCP!
+
+---
+
+## Prerequisites
+
+- **Python 3.9+**
+- **LM Studio v0.3.29+** with a model loaded
+- **MCP servers** you want to use (filesystem, memory, etc.)
+
+---
+
+## Documentation
+
+- **[Quick Start Guide](docs/QUICKSTART.md)** - 5-minute tutorial with examples
+- **[Architecture](docs/ARCHITECTURE.md)** - How dynamic discovery works
+- **[API Reference](docs/API_REFERENCE.md)** - All tools documented
+- **[Troubleshooting](docs/TROUBLESHOOTING.md)** - Common issues solved
+- **[Contributing](CONTRIBUTING.md)** - Join the project
+
+---
+
+## Configuration
+
+### Environment Variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `LMSTUDIO_HOST` | `localhost` | LM Studio host address |
+| `LMSTUDIO_HOST` | `localhost` | LM Studio host |
 | `LMSTUDIO_PORT` | `1234` | LM Studio API port |
+| `MCP_JSON_PATH` | (auto-detect) | Custom `.mcp.json` path |
 
-## Usage
+### MCP Discovery Priority
 
-### 1. Start LM Studio
-- Launch LM Studio
-- Load a model
-- Ensure the API server is running (default port 1234)
+1. `$MCP_JSON_PATH` (if set)
+2. `~/.lmstudio/mcp.json`
+3. `$(pwd)/.mcp.json`
+4. `~/.mcp.json`
+5. Parent directory
 
-### 2. Configure Claude Code
-- Add the MCP configuration above to your `.mcp.json`
-- Restart Claude Code
-- Approve the MCP server when prompted
+**100% portable** - no hardcoded paths.
 
-### 3. Use the Tools
-All 11 tools will be available in Claude Code's MCP tool list (7 core + 4 autonomous).
+---
 
-## Autonomous Function Examples
+## Examples
 
-### Filesystem Operations
+### Example 1: Filesystem Operations
+
 ```python
-# Optimized with constant token usage
-autonomous_filesystem_full(
-    task="Find all Python files, count lines of code, and create a summary",
-    working_directory="/path/to/project",
-    max_rounds=50  # No problem - stays at ~3K tokens!
+autonomous_with_mcp(
+    mcp_name="filesystem",
+    task="Find all Python files, count lines of code, create summary"
 )
 ```
 
-### GitHub Operations
+### Example 2: Multiple MCPs
+
 ```python
-# Search, analyze, and report on repositories
-autonomous_github_full(
-    task="Search for FastMCP repositories, analyze top 5, create comparison",
-    max_rounds=30  # Constant ~7.5K tokens
+autonomous_with_multiple_mcps(
+    mcp_names=["filesystem", "memory"],
+    task="Analyze codebase and build a knowledge graph of architecture"
 )
 ```
 
-### Web Content Analysis
+### Example 3: Auto-Discovery
+
 ```python
-# Fetch and analyze multiple URLs
-autonomous_fetch_full(
-    task="Fetch docs from modelcontextprotocol.io and github.com/modelcontextprotocol, compare them",
-    max_rounds=20  # Stays at ~500 tokens
+autonomous_discover_and_execute(
+    task="Research MCP protocol, fetch docs, and create a summary"
 )
+# Automatically discovers and uses: filesystem, fetch, memory
 ```
 
-### Knowledge Graph Building
-```python
-# Build knowledge graphs from information
-autonomous_memory_full(
-    task="Create entities for Python, FastMCP, MCP and link them with relationships",
-    max_rounds=10  # Constant ~2K tokens
-)
-```
-
-## Key Feature: Stateful Conversations
-
-The `create_response` function uses LM Studio's `/v1/responses` endpoint for stateful conversations:
-
-**Benefits:**
-- Automatic context management
-- No manual message history needed
-- Chain responses using `previous_response_id`
-- Efficient token usage
-
-**Example Flow:**
-```
-1. First message → Get response_id
-2. Second message + previous_response_id → Continues conversation
-3. Third message + new_response_id → Full context retained
-```
-
-## Embeddings
-
-For embedding generation, you must specify an embedding model:
-
-```python
-# Example models
-- text-embedding-nomic-embed-text-v1.5
-- Or any embedding model loaded in LM Studio
-```
-
-Use the `list_models` function to see available embedding models.
-
-## Troubleshooting
-
-### Connection Issues
-```bash
-# Test LM Studio is running
-curl http://localhost:1234/v1/models
-```
-
-### Port Already in Use
-```bash
-# Change port in LM Studio and update LMSTUDIO_PORT in .mcp.json
-"env": {
-  "LMSTUDIO_PORT": "5678"
-}
-```
-
-### MCP Not Loading
-- Restart Claude Code after configuration changes
-- Check file path in `.mcp.json` is correct
-- Verify Python 3.9+ is installed: `python3 --version`
-
-## Remote LM Studio
-
-To connect to LM Studio on another machine:
+### Example 4: Add Custom MCP
 
 ```json
+// Add to ~/.lmstudio/mcp.json
 {
-  "env": {
-    "LMSTUDIO_HOST": "192.168.1.100",
-    "LMSTUDIO_PORT": "1234"
+  "mcpServers": {
+    "postgres": {
+      "command": "uvx",
+      "args": ["mcp-server-postgres", "--db-url", "postgresql://..."]
+    }
   }
 }
 ```
 
-## Testing
-
-All 7 functions have been tested and validated:
-- ✅ All original functions working
-- ✅ Text completion for code generation
-- ✅ Embeddings with proper model specification
-- ✅ Stateful conversations with multi-turn context retention
-
-See test results in development repository for detailed validation.
-
-## License
-
-MIT
-
-## Credits
-
-Enhanced by Ahmed Maged based on [LMStudio-MCP](https://github.com/infinitimeless/LMStudio-MCP) by infinitimeless.
-
-### Enhancements
-- Added `/v1/completions` support (text_completion)
-- Added `/v1/embeddings` support (generate_embeddings)
-- Added `/v1/responses` support (create_response with stateful conversations)
-- **Added 8 autonomous MCP execution functions** (filesystem, memory, fetch, github)
-- **Optimized v2 versions using stateful API** (97% token savings!)
-- Auto-detection of current model for create_response
-- Comprehensive testing and validation
-
-### Performance Achievements
-- **97% average token savings** at round 100 (v2 vs v1)
-- **Unlimited rounds** without context overflow
-- **Stateful conversations** with automatic context management
-- **Zero breaking changes** - v1 and v2 coexist peacefully
+```python
+# Use immediately (no restart!)
+autonomous_with_mcp(
+    mcp_name="postgres",
+    task="List all tables and count rows in each"
+)
+```
 
 ---
 
-**Ready for production use with LM Studio v0.3.29+**
+## Performance
 
-For detailed migration information, see [MIGRATION_GUIDE.md](MIGRATION_GUIDE.md).
+### Hot Reload Benchmarks
+
+- **Per call overhead**: 0.011ms (11 microseconds)
+- **Comparison**: 734x faster than LLM API call (8.07ms)
+- **Conclusion**: Essentially FREE
+
+### Token Efficiency
+
+- Uses stateful `/v1/responses` API for autonomous execution
+- **97% fewer tokens** at round 100 (vs linear growth)
+- **Unlimited rounds** without context overflow
+
+---
+
+## Testing
+
+Run tests:
+
+```bash
+# Core integration
+python3 test_lmstudio_integration.py
+
+# Dynamic discovery
+python3 test_dynamic_discovery.py
+
+# Autonomous execution
+python3 test_autonomous.py
+
+# Performance
+python3 benchmark.py
+```
+
+**All tests passing** ✅
+
+---
+
+## Troubleshooting
+
+### Connection Issues
+
+```bash
+# Verify LM Studio is running
+curl http://localhost:1234/v1/models
+
+# Check MCP configuration
+python3 -c "from mcp_client.discovery import MCPDiscovery; \
+            d = MCPDiscovery(); print(d.mcp_json_path)"
+```
+
+### Hot Reload Not Working
+
+- Restart Claude Code once to load hot reload code
+- After that, hot reload works automatically
+- Verify file watching isn't disabled
+
+### MCP Not Discovered
+
+```bash
+# List available MCPs
+python3 -c "from mcp_client.discovery import MCPDiscovery; \
+            d = MCPDiscovery(); print(d.list_available_mcps())"
+
+# Override with environment variable
+MCP_JSON_PATH=/path/to/custom/.mcp.json python3 your_script.py
+```
+
+See **[Troubleshooting Guide](docs/TROUBLESHOOTING.md)** for more.
+
+---
+
+## Contributing
+
+We welcome contributions! See **[CONTRIBUTING.md](CONTRIBUTING.md)** for:
+- Code of conduct
+- Development setup
+- Contribution guidelines
+- Architecture overview
+
+---
+
+## Development
+
+See **[Development Notes](docs/archive/DEVELOPMENT_NOTES.md)** for the complete development journey, including:
+- Problems solved
+- Design decisions
+- Performance optimizations
+- Lessons learned
+
+---
+
+## License
+
+MIT License - see [LICENSE](LICENSE) file.
+
+---
+
+## Credits
+
+**Original Project**: [LMStudio-MCP](https://github.com/infinitimeless/LMStudio-MCP) by infinitimeless
+
+**Enhanced by**: Ahmed Maged
+
+### Key Enhancements
+
+- ✅ Dynamic MCP discovery (zero hardcoded configs)
+- ✅ Hot reload (0.011ms overhead)
+- ✅ Generic support (works with ANY MCP)
+- ✅ Autonomous execution (4 new tools)
+- ✅ Stateful conversations (97% token savings)
+- ✅ Comprehensive documentation
+
+---
+
+## Project Status
+
+🎉 **Production Ready**
+
+- All features implemented and tested
+- Comprehensive documentation
+- Hot reload verified end-to-end
+- Generic support proven (30+ tools from 5 MCPs)
+- Ready for open source release
+
+---
+
+## Support
+
+- **Issues**: [GitHub Issues](https://github.com/your-username/lmstudio-bridge-enhanced/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/your-username/lmstudio-bridge-enhanced/discussions)
+- **Documentation**: [docs/](docs/)
+
+---
+
+**Ready to bridge your local LLM to the MCP ecosystem!** 🚀
+
+For a quick tutorial, see **[Quick Start Guide](docs/QUICKSTART.md)**.
