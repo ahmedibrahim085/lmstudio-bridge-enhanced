@@ -69,8 +69,8 @@ class ModelValidator:
         """
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
-                logger.debug(f"Fetching models from {self.api_base}/v1/models")
-                response = await client.get(f"{self.api_base}/v1/models")
+                logger.debug(f"Fetching models from {self.api_base}/models")
+                response = await client.get(f"{self.api_base}/models")
                 response.raise_for_status()
                 data = response.json()
 
