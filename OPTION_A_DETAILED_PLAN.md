@@ -1629,34 +1629,39 @@ if __name__ == "__main__":
 
 ---
 
-## ⚠️ IMPORTANT: Phase 5 Required for Production
+## ⚠️ IMPORTANT: Phase 0-1 Required Before Starting Option A
 
-**Status**: 🔴 CRITICAL
+**Status**: 🔴 CRITICAL - BLOCKING
 
-After completing Phases 1-4, code reviews from 3 LLMs (Magistral, Qwen3-Coder-30B, Qwen3-Thinking) identified **4 critical production gaps** that must be addressed before production deployment.
+This section was previously labeled "Phase 5" but has been moved to a separate prerequisite document.
 
-**LLM Review Results**:
-- Average Rating: **8.0/10**
-- Production Readiness: **80%**
-- Consensus: "Solid foundation, but critical gaps in streaming, concurrency, and edge cases"
+After comprehensive testing and Qwen 3 code review (October 30, 2025), **critical production-blocking issues** were identified that MUST be fixed BEFORE implementing the multi-model support described in Phases 1-4 of this document.
 
-### Critical Gaps Identified
+**Qwen Review Results**:
+- Overall Rating: **6/10** (Good foundation, significant production risks)
+- Production Readiness: **NOT READY**
+- Recommendation: Do not proceed with Option A until Phase 0-1 complete
 
-1. **No Streaming Support** 🔴 - 83% of production systems use streaming
-2. **Mid-Request Model Switching** 🔴 - Not handled, could cause data corruption
-3. **Concurrent Request Safety** 🟠 - No async/await, potential race conditions
-4. **Cache Expiration** 🟠 - No TTL, could cause memory bloat
+### Critical Issues Identified
 
-### Phase 5 Timeline
+1. **No-TTL Approach** 🔴 - Memory leaks, OOM crashes
+2. **False Persistence Assumption** 🔴 - Models unload despite preloading
+3. **Zero Failure Testing** 🔴 - System breaks under stress
+4. **Missing Error Handling** 🔴 - Silent failures, no recovery
+5. **No Security Testing** 🟠 - Data leakage, unauthorized access risks
+6. **No Performance Testing** 🟠 - Cannot validate production SLAs
 
-- **Critical Path**: 44 hours (~1 week) - Streaming + Cancellation
-- **Recommended Path**: 70 hours (~2 weeks) - Critical + High Priority fixes
+### Phase 0-1 Timeline
 
-**Full Plan**: See `PHASE5_PRODUCTION_HARDENING_PLAN.md` for detailed implementation plan, code examples, and acceptance criteria.
+- **Phase 0**: 3-4 hours - Critical Production Fixes (TTL, health checks, retry logic)
+- **Phase 1**: 5-6 hours - Production Hardening (failure tests, benchmarks, observability)
+- **Total**: 8-10 hours
 
-**Target After Phase 5**:
-- Rating: 9-10/10
-- Production Readiness: 95%+
+**Full Plan**: See `PHASE_0_1_QWEN_CRITICAL_FIXES.md` for detailed implementation plan, code examples, and acceptance criteria.
+
+**Target After Phase 0-1**:
+- Rating: 9/10
+- Production Readiness: ✅ READY to proceed with Option A Phases 1-4
 
 ---
 
