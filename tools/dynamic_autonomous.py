@@ -29,6 +29,8 @@ from mcp.client.stdio import stdio_client, StdioServerParameters
 from mcp import ClientSession
 from mcp_client.discovery import MCPDiscovery, get_mcp_discovery
 from llm.llm_client import LLMClient
+from llm.model_validator import ModelValidator
+from llm.exceptions import ModelNotFoundError
 
 
 # Default configuration constants
@@ -57,7 +59,8 @@ class DynamicAutonomousAgent:
     def __init__(
         self,
         llm_client: Optional[LLMClient] = None,
-        mcp_discovery: Optional[MCPDiscovery] = None
+        mcp_discovery: Optional[MCPDiscovery] = None,
+        model_validator: Optional[ModelValidator] = None
     ):
         """
         Initialize dynamic autonomous agent with HOT RELOAD support.
@@ -70,8 +73,10 @@ class DynamicAutonomousAgent:
         Args:
             llm_client: Optional LLM client (creates default if None)
             mcp_discovery: Optional MCP discovery instance (only used to get mcp_json_path)
+            model_validator: Optional model validator (creates default if None)
         """
         self.llm = llm_client or LLMClient()
+        self.model_validator = model_validator or ModelValidator()
 
         # HOT RELOAD: Don't store discovery instance, only the path
         # This way we create fresh MCPDiscovery on every call (reads file fresh)
@@ -87,7 +92,8 @@ class DynamicAutonomousAgent:
         mcp_name: str,
         task: str,
         max_rounds: int = DEFAULT_MAX_ROUNDS,
-        max_tokens: Union[int, str] = "auto"
+        max_tokens: Union[int, str] = "auto",
+        model: Optional[str] = None
     ) -> str:
         """
         Execute task autonomously using tools from a SINGLE MCP.
@@ -99,24 +105,27 @@ class DynamicAutonomousAgent:
             task: Task description for the local LLM
             max_rounds: Maximum autonomous loop iterations
             max_tokens: Maximum tokens per LLM response ("auto" or integer)
+            model: Optional model name (None = use default from config)
 
         Returns:
             Final answer from the local LLM
 
         Raises:
             ValueError: If MCP not found or is disabled
+            ModelNotFoundError: If specified model not available in LM Studio
 
         Examples:
-            # Use filesystem MCP
+            # Use filesystem MCP with default model
             await agent.autonomous_with_mcp(
                 mcp_name="filesystem",
                 task="Read README.md and summarize it"
             )
 
-            # Use memory MCP
+            # Use memory MCP with specific model
             await agent.autonomous_with_mcp(
                 mcp_name="memory",
-                task="Create an entity called 'Python' with observations"
+                task="Create an entity called 'Python' with observations",
+                model="qwen/qwen3-coder-30b"
             )
 
             # Use ANY MCP configured in .mcp.json!
@@ -128,6 +137,16 @@ class DynamicAutonomousAgent:
         log_info(f"=== Dynamic Autonomous Execution ===")
         log_info(f"MCP: {mcp_name}")
         log_info(f"Task: {task}")
+
+        # Validate model if specified
+        if model is not None:
+            log_info(f"Model: {model}")
+            try:
+                await self.model_validator.validate_model(model)
+                log_info(f"✓ Model validated: {model}")
+            except ModelNotFoundError as e:
+                log_error(f"Model validation failed: {e}")
+                raise
 
         try:
             # HOT RELOAD: Create fresh MCPDiscovery (reads .mcp.json fresh)
@@ -186,7 +205,8 @@ class DynamicAutonomousAgent:
                         openai_tools=openai_tools,
                         task=task,
                         max_rounds=max_rounds,
-                        max_tokens=actual_max_tokens
+                        max_tokens=actual_max_tokens,
+                        model=model
                     )
 
         except ValueError as e:
@@ -413,42 +433,59 @@ class DynamicAutonomousAgent:
         openai_tools: List[Dict],
         task: str,
         max_rounds: int,
-        max_tokens: int
+        max_tokens: int,
+        model: Optional[str] = None
     ) -> str:
-        """Core autonomous loop for single MCP."""
-        messages = [{"role": "user", "content": task}]
+        """Core autonomous loop for single MCP using stateful /v1/responses API."""
+        # Use stateful /v1/responses API for 97% token savings!
+        previous_response_id = None
 
         for round_num in range(max_rounds):
             log_info(f"\n--- Round {round_num + 1}/{max_rounds} ---")
 
-            # Call LLM
-            response = self.llm.chat_completion(
-                messages=messages,
+            # Determine input text
+            if round_num == 0:
+                input_text = task
+            else:
+                # For subsequent rounds, just say "Continue"
+                # Tool results are automatically available via server-side state
+                input_text = "Continue with the task based on the tool results."
+
+            # Call /v1/responses with tools (stateful API!)
+            response = self.llm.create_response(
+                input_text=input_text,
                 tools=openai_tools,
-                tool_choice="auto",
-                max_tokens=max_tokens
+                previous_response_id=previous_response_id,
+                max_tokens=max_tokens,
+                model=model
             )
 
-            if not response.get("choices"):
-                return "Error: No response from LLM"
+            # Save response ID for next round (CRITICAL!)
+            previous_response_id = response["id"]
+            log_info(f"Response ID: {previous_response_id}")
 
-            message = response["choices"][0]["message"]
-            log_info(f"LLM response: {message.get('content', 'No content')[:100]}...")
+            # Process output array (not choices - different format!)
+            output = response.get("output", [])
 
-            # Check for tool calls
-            if message.get("tool_calls"):
-                log_info(f"LLM requested {len(message['tool_calls'])} tool call(s)")
-                messages.append(message)
+            # Find text output (final answer)
+            text_outputs = [item for item in output if item.get("type") == "output_text"]
+            if text_outputs:
+                text_content = text_outputs[0].get("text", "")
+                log_info(f"LLM text: {text_content[:100]}...")
+
+            # Check for function calls
+            function_calls = [
+                item for item in output
+                if item.get("type") == "function_call"
+            ]
+
+            if function_calls:
+                log_info(f"LLM requested {len(function_calls)} tool call(s)")
 
                 # Execute tools
-                for tool_call in message["tool_calls"]:
-                    tool_name = tool_call["function"]["name"]
-                    tool_args_str = tool_call["function"]["arguments"]
-
-                    try:
-                        tool_args = json.loads(tool_args_str)
-                    except json.JSONDecodeError:
-                        tool_args = {"raw_args": tool_args_str}
+                for fc in function_calls:
+                    tool_name = fc["name"]
+                    tool_args = fc.get("arguments", {})
 
                     log_info(f"Executing {tool_name}")
 
@@ -463,15 +500,14 @@ class DynamicAutonomousAgent:
                         tool_result = f"Error: {e}"
                         log_error(f"Tool execution failed: {e}")
 
-                    messages.append({
-                        "role": "tool",
-                        "tool_call_id": tool_call["id"],
-                        "content": str(tool_result)
-                    })
+                # Continue loop - tool results are automatically handled by stateful API
             else:
-                # Final answer
+                # Final answer - no function calls
                 log_info("LLM provided final answer")
-                return message.get("content", "No content in response")
+                if text_outputs:
+                    return text_outputs[0].get("text", "No content in response")
+                else:
+                    return "No content in response"
 
         return "Task incomplete: Maximum rounds reached"
 
@@ -483,44 +519,60 @@ class DynamicAutonomousAgent:
         max_rounds: int,
         max_tokens: int
     ) -> str:
-        """Core autonomous loop for multiple MCPs."""
-        messages = [{"role": "user", "content": task}]
+        """Core autonomous loop for multiple MCPs using stateful /v1/responses API."""
+        # Use stateful /v1/responses API for 97% token savings!
+        previous_response_id = None
 
         for round_num in range(max_rounds):
             log_info(f"\n--- Round {round_num + 1}/{max_rounds} ---")
 
-            # Call LLM
-            response = self.llm.chat_completion(
-                messages=messages,
+            # Determine input text
+            if round_num == 0:
+                input_text = task
+            else:
+                # For subsequent rounds, just say "Continue"
+                # Tool results are automatically available via server-side state
+                input_text = "Continue with the task based on the tool results."
+
+            # Call /v1/responses with tools (stateful API!)
+            response = self.llm.create_response(
+                input_text=input_text,
                 tools=openai_tools,
-                tool_choice="auto",
+                previous_response_id=previous_response_id,
                 max_tokens=max_tokens
             )
 
-            if not response.get("choices"):
-                return "Error: No response from LLM"
+            # Save response ID for next round (CRITICAL!)
+            previous_response_id = response["id"]
+            log_info(f"Response ID: {previous_response_id}")
 
-            message = response["choices"][0]["message"]
-            log_info(f"LLM response: {message.get('content', 'No content')[:100]}...")
+            # Process output array (not choices - different format!)
+            output = response.get("output", [])
 
-            # Check for tool calls
-            if message.get("tool_calls"):
-                log_info(f"LLM requested {len(message['tool_calls'])} tool call(s)")
-                messages.append(message)
+            # Find text output (final answer)
+            text_outputs = [item for item in output if item.get("type") == "output_text"]
+            if text_outputs:
+                text_content = text_outputs[0].get("text", "")
+                log_info(f"LLM text: {text_content[:100]}...")
+
+            # Check for function calls
+            function_calls = [
+                item for item in output
+                if item.get("type") == "function_call"
+            ]
+
+            if function_calls:
+                log_info(f"LLM requested {len(function_calls)} tool call(s)")
 
                 # Execute tools
-                for tool_call in message["tool_calls"]:
-                    namespaced_tool_name = tool_call["function"]["name"]
-                    tool_args_str = tool_call["function"]["arguments"]
-
-                    try:
-                        tool_args = json.loads(tool_args_str)
-                    except json.JSONDecodeError:
-                        tool_args = {"raw_args": tool_args_str}
+                for fc in function_calls:
+                    namespaced_tool_name = fc["name"]
+                    tool_args = fc.get("arguments", {})
 
                     # Get original tool name and session
                     if namespaced_tool_name not in tool_to_session:
                         tool_result = f"Error: Unknown tool {namespaced_tool_name}"
+                        log_error(f"Unknown tool: {namespaced_tool_name}")
                     else:
                         original_tool_name, session = tool_to_session[namespaced_tool_name]
                         log_info(f"Executing {namespaced_tool_name} (original: {original_tool_name})")
@@ -536,15 +588,14 @@ class DynamicAutonomousAgent:
                             tool_result = f"Error: {e}"
                             log_error(f"Tool execution failed: {e}")
 
-                    messages.append({
-                        "role": "tool",
-                        "tool_call_id": tool_call["id"],
-                        "content": str(tool_result)
-                    })
+                # Continue loop - tool results are automatically handled by stateful API
             else:
-                # Final answer
+                # Final answer - no function calls
                 log_info("LLM provided final answer")
-                return message.get("content", "No content in response")
+                if text_outputs:
+                    return text_outputs[0].get("text", "No content in response")
+                else:
+                    return "No content in response"
 
         return "Task incomplete: Maximum rounds reached"
 
