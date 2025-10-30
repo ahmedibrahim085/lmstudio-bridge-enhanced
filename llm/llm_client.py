@@ -29,6 +29,11 @@ HEALTH_CHECK_TIMEOUT = 5
 # For consistency with main autonomous tools (10000 rounds default)
 DEFAULT_AUTONOMOUS_ROUNDS = 10000
 
+# Default max tokens for LLM responses
+# Based on Claude Code's 30K character limit for tool responses
+# 8192 tokens ≈ 24K-32K chars, safely under the limit
+DEFAULT_MAX_TOKENS = 8192
+
 # Retry configuration for transient errors
 # Based on investigation findings: HTTP 500 errors are rare and transient
 DEFAULT_MAX_RETRIES = 2  # Retry up to 2 times (3 total attempts)
@@ -68,7 +73,7 @@ class LLMClient:
         self,
         messages: List[Dict[str, str]],
         temperature: float = 0.7,
-        max_tokens: int = 1024,
+        max_tokens: int = DEFAULT_MAX_TOKENS,
         tools: Optional[List[Dict[str, Any]]] = None,
         tool_choice: str = "auto",
         timeout: int = DEFAULT_LLM_TIMEOUT,
@@ -160,7 +165,7 @@ class LLMClient:
         self,
         prompt: str,
         temperature: float = 0.7,
-        max_tokens: int = 1024,
+        max_tokens: int = DEFAULT_MAX_TOKENS,
         stop_sequences: Optional[List[str]] = None,
         timeout: int = DEFAULT_LLM_TIMEOUT
     ) -> Dict[str, Any]:
@@ -276,7 +281,6 @@ class LLMClient:
         input_text: str,
         tools: Optional[List[Dict[str, Any]]] = None,
         previous_response_id: Optional[str] = None,
-        reasoning_effort: str = "medium",
         stream: bool = False,
         model: Optional[str] = None,
         timeout: int = DEFAULT_LLM_TIMEOUT,
@@ -295,7 +299,6 @@ class LLMClient:
             input_text: User input text
             tools: Optional list of tools in OpenAI format (will be converted to LM Studio format)
             previous_response_id: Optional ID from previous response for conversation continuity
-            reasoning_effort: Reasoning level ('low', 'medium', 'high')
             stream: Whether to stream response
             model: Optional specific model
             timeout: Request timeout in seconds (default 55s, safely under Claude Code's 60s MCP timeout)
@@ -335,10 +338,6 @@ class LLMClient:
         # Add tools in LM Studio's flattened format
         if tools:
             payload["tools"] = self.convert_tools_to_responses_format(tools)
-
-        # Add reasoning configuration
-        if reasoning_effort in ["low", "medium", "high"]:
-            payload["reasoning"] = {"effort": reasoning_effort}
 
         # Retry loop with exponential backoff
         last_exception = None
