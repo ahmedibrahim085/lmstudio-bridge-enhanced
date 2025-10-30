@@ -639,6 +639,8 @@ async def test_validate_nonexistent_model_raises():
 
 ## Phase 2: Core Tool Interface Updates (2.5-3 hours)
 
+⚠️ **PREREQUISITE**: Complete Phase 1 (and Phase 0-1 before that).
+
 ### Overview
 Add model parameter to autonomous tools with proper validation and error handling.
 
