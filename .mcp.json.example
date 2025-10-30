@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "lmstudio-bridge-enhanced": {
+      "disabled": false,
+      "command": "python3",
+      "args": [
+        "/Users/ahmedmaged/ai_storage/MyMCPs/lmstudio-bridge-enhanced/lmstudio_bridge.py"
+      ],
+      "env": {
+        "LMSTUDIO_HOST": "localhost",
+        "LMSTUDIO_PORT": "1234"
+      }
+    }
+  }
+}
