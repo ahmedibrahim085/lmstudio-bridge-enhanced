@@ -42,7 +42,10 @@ def register_dynamic_autonomous_tools(mcp, llm_client: Optional[LLMClient] = Non
             Field(
                 description="Maximum tokens per LLM response ('auto' for default, or integer to override)"
             )
-        ] = "auto"
+        ] = "auto",
+        model: Annotated[Optional[str], Field(
+            description="Optional model name to use (None = use default model from config, 'default' = use default, or specify model like 'qwen/qwen3-coder-30b')"
+        )] = None
     ) -> str:
         """
         Execute task autonomously using tools from a SINGLE MCP.
@@ -57,27 +60,33 @@ def register_dynamic_autonomous_tools(mcp, llm_client: Optional[LLMClient] = Non
             task: Task description for the local LLM
             max_rounds: Maximum autonomous loop iterations (default: DEFAULT_MAX_ROUNDS=10000, no artificial limit - local LLM works until task complete)
             max_tokens: Maximum tokens per LLM response ("auto" or integer)
+            model: Optional model name to use (None = use default model from config, 'default' = use default, or specify model like 'qwen/qwen3-coder-30b')
 
         Returns:
             Final answer from the local LLM after autonomous tool usage
 
+        Raises:
+            ModelNotFoundError: If specified model is not available in LM Studio
+
         Examples:
-            # Use filesystem MCP
+            # Use filesystem MCP with default model
             autonomous_with_mcp(
                 mcp_name="filesystem",
                 task="Read README.md and summarize the key features"
             )
 
-            # Use memory MCP
+            # Use memory MCP with specific model
             autonomous_with_mcp(
                 mcp_name="memory",
-                task="Create an entity called 'Python' with observations about its features"
+                task="Create an entity called 'Python' with observations about its features",
+                model="qwen/qwen3-coder-30b"
             )
 
-            # Use fetch MCP
+            # Use fetch MCP with default model explicitly
             autonomous_with_mcp(
                 mcp_name="fetch",
-                task="Fetch https://example.com and summarize the content"
+                task="Fetch https://example.com and summarize the content",
+                model="default"
             )
 
             # Use ANY custom MCP you add to .mcp.json!
@@ -90,7 +99,8 @@ def register_dynamic_autonomous_tools(mcp, llm_client: Optional[LLMClient] = Non
             mcp_name=mcp_name,
             task=task,
             max_rounds=max_rounds,
-            max_tokens=max_tokens
+            max_tokens=max_tokens,
+            model=model
         )
 
     @mcp.tool()
@@ -112,7 +122,10 @@ def register_dynamic_autonomous_tools(mcp, llm_client: Optional[LLMClient] = Non
             Field(
                 description="Maximum tokens per LLM response ('auto' for default, or integer to override)"
             )
-        ] = "auto"
+        ] = "auto",
+        model: Annotated[Optional[str], Field(
+            description="Optional model name to use (None = use default model from config, 'default' = use default, or specify model like 'qwen/qwen3-coder-30b')"
+        )] = None
     ) -> str:
         """
         Execute task autonomously using tools from MULTIPLE MCPs simultaneously!
@@ -128,21 +141,26 @@ def register_dynamic_autonomous_tools(mcp, llm_client: Optional[LLMClient] = Non
             task: Task description for the local LLM
             max_rounds: Maximum autonomous loop iterations (default: DEFAULT_MAX_ROUNDS=10000, no artificial limit - local LLM works until task complete)
             max_tokens: Maximum tokens per LLM response ("auto" or integer)
+            model: Optional model name to use (None = use default model from config, 'default' = use default, or specify model like 'qwen/qwen3-coder-30b')
 
         Returns:
             Final answer from the local LLM after using tools from multiple MCPs
 
+        Raises:
+            ModelNotFoundError: If specified model is not available in LM Studio
+
         Examples:
-            # Use filesystem + memory MCPs
+            # Use filesystem + memory MCPs with default model
             autonomous_with_multiple_mcps(
                 mcp_names=["filesystem", "memory"],
                 task="Read all Python files in tools/ and create a knowledge graph of the codebase structure"
             )
 
-            # Use filesystem + fetch + memory MCPs
+            # Use filesystem + fetch + memory MCPs with specific model
             autonomous_with_multiple_mcps(
                 mcp_names=["filesystem", "fetch", "memory"],
-                task="Read local docs, fetch online docs from example.com, compare them, and build a knowledge graph"
+                task="Read local docs, fetch online docs from example.com, compare them, and build a knowledge graph",
+                model="qwen/qwen3-coder-30b"
             )
 
             # Use filesystem + github + memory MCPs
@@ -155,7 +173,8 @@ def register_dynamic_autonomous_tools(mcp, llm_client: Optional[LLMClient] = Non
             mcp_names=mcp_names,
             task=task,
             max_rounds=max_rounds,
-            max_tokens=max_tokens
+            max_tokens=max_tokens,
+            model=model
         )
 
     @mcp.tool()
@@ -174,7 +193,10 @@ def register_dynamic_autonomous_tools(mcp, llm_client: Optional[LLMClient] = Non
             Field(
                 description="Maximum tokens per LLM response ('auto' for default, or integer to override)"
             )
-        ] = "auto"
+        ] = "auto",
+        model: Annotated[Optional[str], Field(
+            description="Optional model name to use (None = use default model from config, 'default' = use default, or specify model like 'qwen/qwen3-coder-30b')"
+        )] = None
     ) -> str:
         """
         Execute task with ALL available MCPs discovered from .mcp.json!
@@ -189,19 +211,24 @@ def register_dynamic_autonomous_tools(mcp, llm_client: Optional[LLMClient] = Non
             task: Task description for the local LLM
             max_rounds: Maximum autonomous loop iterations (default: DEFAULT_MAX_ROUNDS=10000, no artificial limit - local LLM works until task complete)
             max_tokens: Maximum tokens per LLM response ("auto" or integer)
+            model: Optional model name to use (None = use default model from config, 'default' = use default, or specify model like 'qwen/qwen3-coder-30b')
 
         Returns:
             Final answer from the local LLM after using any tools from any MCPs
 
+        Raises:
+            ModelNotFoundError: If specified model is not available in LM Studio
+
         Examples:
-            # Let LLM use ANY tool from ANY MCP!
+            # Let LLM use ANY tool from ANY MCP with default model!
             autonomous_discover_and_execute(
                 task="Read my codebase, fetch relevant docs online, build a knowledge graph, and create comprehensive documentation"
             )
 
-            # LLM has access to EVERYTHING!
+            # LLM has access to EVERYTHING with specific model!
             autonomous_discover_and_execute(
-                task="Analyze this project, compare with similar GitHub repos, fetch best practices from web, and suggest improvements"
+                task="Analyze this project, compare with similar GitHub repos, fetch best practices from web, and suggest improvements",
+                model="qwen/qwen3-coder-30b"
             )
 
             # Works with ANY MCPs in .mcp.json!
@@ -212,7 +239,8 @@ def register_dynamic_autonomous_tools(mcp, llm_client: Optional[LLMClient] = Non
         return await agent.autonomous_discover_and_execute(
             task=task,
             max_rounds=max_rounds,
-            max_tokens=max_tokens
+            max_tokens=max_tokens,
+            model=model
         )
 
     @mcp.tool()
