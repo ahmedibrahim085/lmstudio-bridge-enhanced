@@ -115,19 +115,17 @@ class CompletionTools:
         self,
         input_text: str,
         previous_response_id: Optional[str] = None,
-        reasoning_effort: str = "medium",
         stream: bool = False,
         model: Optional[str] = None
     ) -> str:
         """Create a response using LM Studio's stateful /v1/responses endpoint.
 
         This endpoint provides stateful conversations where you can reference previous
-        responses without managing message history manually. Supports reasoning and streaming.
+        responses without managing message history manually.
 
         Args:
             input_text: The user's input text
             previous_response_id: Optional ID from a previous response to continue conversation
-            reasoning_effort: Level of reasoning effort - "low", "medium", or "high" (default "medium")
             stream: Whether to stream the response (default False)
             model: Model to use (default: uses currently loaded model)
 
@@ -138,7 +136,6 @@ class CompletionTools:
             response = self.llm.create_response(
                 input_text=input_text,
                 previous_response_id=previous_response_id,
-                reasoning_effort=reasoning_effort,
                 stream=stream,
                 model=model
             )
@@ -210,19 +207,17 @@ def register_completion_tools(mcp, llm_client: Optional[LLMClient] = None):
     async def create_response(
         input_text: str,
         previous_response_id: Optional[str] = None,
-        reasoning_effort: str = "medium",
         stream: bool = False,
         model: Optional[str] = None
     ) -> str:
         """Create a response using LM Studio's stateful /v1/responses endpoint.
 
         This endpoint provides stateful conversations where you can reference previous
-        responses without managing message history manually. Supports reasoning and streaming.
+        responses without managing message history manually.
 
         Args:
             input_text: The user's input text
             previous_response_id: Optional ID from a previous response to continue conversation
-            reasoning_effort: Level of reasoning effort - "low", "medium", or "high" (default "medium")
             stream: Whether to stream the response (default False)
             model: Model to use (default: uses currently loaded model)
 
@@ -230,7 +225,7 @@ def register_completion_tools(mcp, llm_client: Optional[LLMClient] = None):
             JSON string with response including ID for future reference
         """
         return await tools.create_response(
-            input_text, previous_response_id, reasoning_effort, stream, model
+            input_text, previous_response_id, stream, model
         )
 
 

@@ -265,16 +265,15 @@ async def generate_embeddings(text: Union[str, List[str]], model: str = "default
         return json.dumps(error_response)
 
 @mcp.tool()
-async def create_response(input_text: str, previous_response_id: Optional[str] = None, reasoning_effort: str = "medium", stream: bool = False, model: Optional[str] = None) -> str:
+async def create_response(input_text: str, previous_response_id: Optional[str] = None, stream: bool = False, model: Optional[str] = None) -> str:
     """Create a response using LM Studio's stateful /v1/responses endpoint.
 
     This endpoint provides stateful conversations where you can reference previous
-    responses without managing message history manually. Supports reasoning and streaming.
+    responses without managing message history manually.
 
     Args:
         input_text: The user's input text
         previous_response_id: Optional ID from a previous response to continue conversation
-        reasoning_effort: Level of reasoning effort - "low", "medium", or "high" (default "medium")
         stream: Whether to stream the response (default False)
         model: Model to use (default: uses currently loaded model)
 
@@ -299,10 +298,6 @@ async def create_response(input_text: str, previous_response_id: Optional[str] =
         # Add previous response ID if provided (for conversation continuity)
         if previous_response_id:
             payload["previous_response_id"] = previous_response_id
-
-        # Add reasoning configuration
-        if reasoning_effort in ["low", "medium", "high"]:
-            payload["reasoning"] = {"effort": reasoning_effort}
 
         log_info(f"Sending stateful response request to LM Studio")
 
