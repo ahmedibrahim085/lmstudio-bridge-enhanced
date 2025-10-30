@@ -7,6 +7,15 @@ from .message_manager import (
     ToolCallTracker,
     MessageFormatter
 )
+from .exceptions import (
+    LLMError,
+    LLMTimeoutError,
+    LLMRateLimitError,
+    LLMValidationError,
+    LLMConnectionError,
+    LLMResponseError,
+    ModelNotFoundError,
+)
 
 __all__ = [
     "LLMClient",
@@ -14,5 +23,12 @@ __all__ = [
     "Message",
     "ConversationHistory",
     "ToolCallTracker",
-    "MessageFormatter"
+    "MessageFormatter",
+    "LLMError",
+    "LLMTimeoutError",
+    "LLMRateLimitError",
+    "LLMValidationError",
+    "LLMConnectionError",
+    "LLMResponseError",
+    "ModelNotFoundError",
 ]
