@@ -21,7 +21,7 @@ import json
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from llm.llm_client import LLMClient
+from llm.llm_client import LLMClient, DEFAULT_MAX_TOKENS
 from tools.autonomous import AutonomousExecutionTools
 
 
@@ -135,7 +135,7 @@ class LMStudioAPITester:
 
             response = self.llm.chat_completion(
                 messages=messages,
-                max_tokens=50
+                max_tokens=DEFAULT_MAX_TOKENS
             )
 
             if response and 'choices' in response:
@@ -180,7 +180,7 @@ class LMStudioAPITester:
 
             response = self.llm.text_completion(
                 prompt=prompt,
-                max_tokens=50,
+                max_tokens=DEFAULT_MAX_TOKENS,
                 stop_sequences=["\n\n"]
             )
 
