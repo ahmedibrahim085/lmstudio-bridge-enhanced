@@ -21,6 +21,7 @@ from tools.completions import register_completion_tools
 from tools.embeddings import register_embeddings_tools
 from tools.autonomous import register_autonomous_tools
 from tools.dynamic_autonomous_register import register_dynamic_autonomous_tools
+from tools.lms_cli_tools import register_lms_cli_tools
 
 
 # Initialize FastMCP server
@@ -67,6 +68,10 @@ def initialize_server():
     # Dynamic autonomous tools (truly dynamic MCP discovery from .mcp.json!)
     register_dynamic_autonomous_tools(mcp, llm_client)
     logger.info("Registered dynamic autonomous tools (MCP discovery enabled)")
+
+    # LMS CLI tools (model lifecycle management)
+    register_lms_cli_tools(mcp)
+    logger.info("Registered LMS CLI tools (model management enabled)")
 
     log_info("Server initialization complete")
 
