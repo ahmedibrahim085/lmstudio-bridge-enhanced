@@ -20,6 +20,7 @@ from tools.health import register_health_tools
 from tools.completions import register_completion_tools
 from tools.embeddings import register_embeddings_tools
 from tools.autonomous import register_autonomous_tools
+from tools.dynamic_autonomous_register import register_dynamic_autonomous_tools
 
 
 # Initialize FastMCP server
@@ -62,6 +63,10 @@ def initialize_server():
     # Autonomous execution tools (connects to other MCPs)
     register_autonomous_tools(mcp, llm_client)
     logger.info("Registered autonomous execution tools")
+
+    # Dynamic autonomous tools (truly dynamic MCP discovery from .mcp.json!)
+    register_dynamic_autonomous_tools(mcp, llm_client)
+    logger.info("Registered dynamic autonomous tools (MCP discovery enabled)")
 
     log_info("Server initialization complete")
 
