@@ -8,7 +8,7 @@ This registers the truly dynamic MCP tools with FastMCP.
 from typing import List, Union, Optional, Annotated
 from pydantic import Field
 from llm.llm_client import LLMClient
-from tools.dynamic_autonomous import DynamicAutonomousAgent
+from tools.dynamic_autonomous import DynamicAutonomousAgent, DEFAULT_MAX_ROUNDS
 
 
 def register_dynamic_autonomous_tools(mcp, llm_client: Optional[LLMClient] = None):
@@ -35,8 +35,8 @@ def register_dynamic_autonomous_tools(mcp, llm_client: Optional[LLMClient] = Non
         )],
         max_rounds: Annotated[int, Field(
             ge=1,
-            description="Maximum rounds for autonomous loop (default: 100)"
-        )] = 100,
+            description="Maximum rounds for autonomous loop (default: 10000, no artificial limit - lets local LLM work until task complete)"
+        )] = DEFAULT_MAX_ROUNDS,
         max_tokens: Annotated[
             Union[int, str],
             Field(
@@ -55,7 +55,7 @@ def register_dynamic_autonomous_tools(mcp, llm_client: Optional[LLMClient] = Non
         Args:
             mcp_name: Name of the MCP to use (must be enabled in .mcp.json)
             task: Task description for the local LLM
-            max_rounds: Maximum autonomous loop iterations (default: 100)
+            max_rounds: Maximum autonomous loop iterations (default: DEFAULT_MAX_ROUNDS=10000, no artificial limit - local LLM works until task complete)
             max_tokens: Maximum tokens per LLM response ("auto" or integer)
 
         Returns:
@@ -105,8 +105,8 @@ def register_dynamic_autonomous_tools(mcp, llm_client: Optional[LLMClient] = Non
         )],
         max_rounds: Annotated[int, Field(
             ge=1,
-            description="Maximum rounds for autonomous loop (default: 100)"
-        )] = 100,
+            description="Maximum rounds for autonomous loop (default: 10000, no artificial limit - lets local LLM work until task complete)"
+        )] = DEFAULT_MAX_ROUNDS,
         max_tokens: Annotated[
             Union[int, str],
             Field(
@@ -126,7 +126,7 @@ def register_dynamic_autonomous_tools(mcp, llm_client: Optional[LLMClient] = Non
         Args:
             mcp_names: List of MCP names to use (must be enabled in .mcp.json)
             task: Task description for the local LLM
-            max_rounds: Maximum autonomous loop iterations (default: 100)
+            max_rounds: Maximum autonomous loop iterations (default: DEFAULT_MAX_ROUNDS=10000, no artificial limit - local LLM works until task complete)
             max_tokens: Maximum tokens per LLM response ("auto" or integer)
 
         Returns:
@@ -167,8 +167,8 @@ def register_dynamic_autonomous_tools(mcp, llm_client: Optional[LLMClient] = Non
         )],
         max_rounds: Annotated[int, Field(
             ge=1,
-            description="Maximum rounds for autonomous loop (default: 100)"
-        )] = 100,
+            description="Maximum rounds for autonomous loop (default: 10000, no artificial limit - lets local LLM work until task complete)"
+        )] = DEFAULT_MAX_ROUNDS,
         max_tokens: Annotated[
             Union[int, str],
             Field(
@@ -187,7 +187,7 @@ def register_dynamic_autonomous_tools(mcp, llm_client: Optional[LLMClient] = Non
 
         Args:
             task: Task description for the local LLM
-            max_rounds: Maximum autonomous loop iterations (default: 100)
+            max_rounds: Maximum autonomous loop iterations (default: DEFAULT_MAX_ROUNDS=10000, no artificial limit - local LLM works until task complete)
             max_tokens: Maximum tokens per LLM response ("auto" or integer)
 
         Returns:

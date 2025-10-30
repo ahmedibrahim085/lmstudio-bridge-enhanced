@@ -31,6 +31,12 @@ from mcp_client.discovery import MCPDiscovery, get_mcp_discovery
 from llm.llm_client import LLMClient
 
 
+# Default configuration constants
+# These align with the philosophy of letting the local LLM work until task complete
+DEFAULT_MAX_ROUNDS = 10000  # No artificial limit - let LLM work until done
+DEFAULT_MAX_TOKENS = 8192   # Based on Claude Code's 30K character limit
+
+
 def log_info(message: str):
     """Log informational messages to stderr"""
     print(f"INFO: {message}", file=sys.stderr)
@@ -80,7 +86,7 @@ class DynamicAutonomousAgent:
         self,
         mcp_name: str,
         task: str,
-        max_rounds: int = 100,
+        max_rounds: int = DEFAULT_MAX_ROUNDS,
         max_tokens: Union[int, str] = "auto"
     ) -> str:
         """
@@ -196,7 +202,7 @@ class DynamicAutonomousAgent:
         self,
         mcp_names: List[str],
         task: str,
-        max_rounds: int = 100,
+        max_rounds: int = DEFAULT_MAX_ROUNDS,
         max_tokens: Union[int, str] = "auto"
     ) -> str:
         """
@@ -352,7 +358,7 @@ class DynamicAutonomousAgent:
     async def autonomous_discover_and_execute(
         self,
         task: str,
-        max_rounds: int = 100,
+        max_rounds: int = DEFAULT_MAX_ROUNDS,
         max_tokens: Union[int, str] = "auto"
     ) -> str:
         """
