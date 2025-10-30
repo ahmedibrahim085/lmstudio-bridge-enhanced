@@ -201,11 +201,13 @@ Execute task autonomously using tools from a SINGLE MCP.
 - `task` (str, required): Task description (1-10000 chars)
 - `max_rounds` (int, optional): Max autonomous loop iterations (default: 10000)
 - `max_tokens` (int | str, optional): Max tokens per LLM response (default: "auto" = 4096)
+- `model` (str, optional): ✨ **NEW** - Specific model to use (default: None = use default model)
 
 **Returns**: `str` - Final answer from local LLM
 
 **Example**:
 ```
+# Use default model
 autonomous_with_mcp(
     mcp_name="filesystem",
     task="Find all Python files in tools/ and count lines of code",
@@ -213,6 +215,20 @@ autonomous_with_mcp(
     max_tokens=8192
 )
 # Returns: "Found 15 Python files with 3,456 total lines of code."
+
+# Use specific model (multi-model support)
+autonomous_with_mcp(
+    mcp_name="filesystem",
+    task="Analyze code structure and identify patterns",
+    model="mistralai/magistral-small-2509"  # Use reasoning model
+)
+
+# Use coding model for implementation
+autonomous_with_mcp(
+    mcp_name="filesystem",
+    task="Generate helper functions based on analysis",
+    model="qwen/qwen3-coder-30b"  # Use coding model
+)
 ```
 
 **Available MCPs** (from your `.mcp.json`):
@@ -242,16 +258,25 @@ Execute task autonomously using tools from MULTIPLE MCPs simultaneously.
 - `task` (str, required): Task description
 - `max_rounds` (int, optional): Max iterations (default: 10000)
 - `max_tokens` (int | str, optional): Max tokens (default: "auto")
+- `model` (str, optional): ✨ **NEW** - Specific model to use (default: None = use default model)
 
 **Returns**: `str` - Final answer from local LLM
 
 **Example**:
 ```
+# Use default model
 autonomous_with_multiple_mcps(
     mcp_names=["filesystem", "memory"],
     task="Read all Python files in tools/ and create a knowledge graph of the codebase structure"
 )
 # Returns: "Created knowledge graph with 15 files, 47 classes, and 183 functions."
+
+# Use specific model for multi-MCP task
+autonomous_with_multiple_mcps(
+    mcp_names=["filesystem", "fetch", "memory"],
+    task="Read local docs, fetch online docs, compare and build knowledge graph",
+    model="mistralai/magistral-small-2509"  # Reasoning model for complex analysis
+)
 ```
 
 **Multi-MCP examples**:
@@ -291,15 +316,23 @@ Execute task with ALL available MCPs discovered from `.mcp.json`.
 - `task` (str, required): Task description
 - `max_rounds` (int, optional): Max iterations (default: 10000)
 - `max_tokens` (int | str, optional): Max tokens (default: "auto")
+- `model` (str, optional): ✨ **NEW** - Specific model to use (default: None = use default model)
 
 **Returns**: `str` - Final answer from local LLM
 
 **Example**:
 ```
+# Use default model with all MCPs
 autonomous_discover_and_execute(
     task="Analyze my codebase, fetch relevant docs online, build a knowledge graph, and create comprehensive documentation"
 )
 # Local LLM automatically uses filesystem, fetch, and memory MCPs!
+
+# Use specific model with all MCPs
+autonomous_discover_and_execute(
+    task="Comprehensive codebase analysis and documentation",
+    model="qwen/qwen3-coder-30b"  # Use powerful coding model
+)
 ```
 
 **What it does**:
@@ -414,6 +447,104 @@ autonomous_with_mcp("filesystem", "complex task", max_tokens=8192)
 # Very large context
 autonomous_with_mcp("filesystem", "analyze entire codebase", max_tokens=16384)
 ```
+
+---
+
+### model ✨ NEW
+
+**Optional parameter for multi-model support** - Select specific LM Studio model for the task.
+
+**Type**: `str | None`
+
+**Default**: `None` (uses default model from config)
+
+**Purpose**: Different models excel at different tasks:
+- **Reasoning models** (Magistral, Qwen-Thinking) → Analysis, planning, complex problem-solving
+- **Coding models** (Qwen-Coder, DeepSeek-Coder) → Code generation, refactoring, debugging
+- **General models** → Balanced performance for mixed tasks
+
+**How to use**:
+
+1. **Check available models**:
+```python
+list_models()
+# Returns: Available models (3):
+# 1. qwen/qwen3-coder-30b
+# 2. mistralai/magistral-small-2509
+# 3. deepseek/deepseek-coder-33b
+```
+
+2. **Use specific model**:
+```python
+# Reasoning model for analysis
+autonomous_with_mcp(
+    mcp_name="filesystem",
+    task="Analyze codebase architecture and identify design patterns",
+    model="mistralai/magistral-small-2509"
+)
+
+# Coding model for implementation
+autonomous_with_mcp(
+    mcp_name="filesystem",
+    task="Generate unit tests for all functions in utils/",
+    model="qwen/qwen3-coder-30b"
+)
+
+# Default model (omit parameter)
+autonomous_with_mcp(
+    mcp_name="filesystem",
+    task="List Python files"
+    # Uses default model - backward compatible!
+)
+```
+
+3. **Error handling**:
+```python
+# Invalid model name
+autonomous_with_mcp(
+    mcp_name="filesystem",
+    task="task",
+    model="nonexistent-model"
+)
+# Returns: "Error: Model 'nonexistent-model' not found. Available: qwen/qwen3-coder-30b, mistralai/magistral-small-2509"
+```
+
+**Best practices**:
+- ✅ Use model names exactly as shown by `list_models()`
+- ✅ Match model to task type (reasoning vs coding vs general)
+- ✅ Omit parameter for simple tasks (uses default)
+- ✅ Load model in LM Studio before use
+- ❌ Don't guess model names (they must be exact)
+- ❌ Don't use for every task (default often sufficient)
+
+**Model selection guide**:
+
+| Task Type | Recommended Model | Why |
+|-----------|------------------|-----|
+| Code analysis, architecture review | Magistral, Qwen-Thinking | Better reasoning |
+| Code generation, refactoring | Qwen-Coder, DeepSeek-Coder | Specialized for code |
+| Testing, debugging | Qwen-Coder | Understands test patterns |
+| Documentation | General models | Balanced capability |
+| File operations | Default model | Simple tasks |
+
+**Workflow example** (Multi-model pipeline):
+```python
+# Step 1: Reasoning model analyzes
+analysis = autonomous_with_mcp(
+    "filesystem",
+    "Analyze project structure and identify missing tests",
+    model="mistralai/magistral-small-2509"  # Reasoning
+)
+
+# Step 2: Coding model generates tests
+tests = autonomous_with_mcp(
+    "filesystem",
+    f"Based on this analysis: {analysis}, generate missing unit tests",
+    model="qwen/qwen3-coder-30b"  # Coding
+)
+```
+
+**Backward compatibility**: Existing code without `model` parameter continues to work unchanged!
 
 ---
 
