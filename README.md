@@ -15,10 +15,13 @@ Bridge between LM Studio (local LLM) and ANY Model Context Protocol (MCP) server
 - 🗂️ **Use ANY MCP** - filesystem, database, web, git, and more
 - ⚡ **Hot Reload** - Add new MCPs instantly (no restart, 0.011ms overhead)
 - 🔧 **Zero Config** - Automatically discovers MCPs from `.mcp.json`
+- 🎯 **Multi-Model Support** ✨ NEW - Switch models per task (reasoning vs coding)
 - 🔒 **Full Privacy** - Everything runs locally, no cloud APIs
 - 💰 **Zero Cost** - No API fees, unlimited usage
 
-**Key Innovation**: Dynamic MCP discovery + hot reload. Add any MCP to `.mcp.json` → use it immediately.
+**Key Innovations**:
+1. Dynamic MCP discovery + hot reload - Add any MCP to `.mcp.json` → use immediately
+2. Multi-model support - Choose the right model for each task automatically
 
 ---
 
@@ -133,6 +136,49 @@ autonomous_discover_and_execute(
 - **max_rounds: 10000** (default) - Let LLM work until done
 - **max_tokens: 8192** (default) - Based on Claude Code limits
 - Most tasks complete in < 20 rounds anyway
+
+### 5. Multi-Model Support ✨ NEW
+
+Choose the right model for each task:
+
+```python
+# Reasoning model for analysis
+autonomous_with_mcp(
+    mcp_name="filesystem",
+    task="Analyze codebase architecture and identify design patterns",
+    model="mistralai/magistral-small-2509"
+)
+
+# Coding model for implementation
+autonomous_with_mcp(
+    mcp_name="filesystem",
+    task="Generate unit tests for all functions",
+    model="qwen/qwen3-coder-30b"
+)
+
+# Default model (omit parameter)
+autonomous_with_mcp(
+    mcp_name="filesystem",
+    task="List Python files"
+)
+```
+
+**Benefits**:
+- 🎯 **Match model to task** - Use reasoning models for analysis, coding models for implementation
+- 🔄 **Multi-model pipelines** - Chain different models in workflows
+- ✅ **Backward compatible** - Existing code works unchanged
+- 🚀 **Easy validation** - Clear error messages if model not found
+
+**Quickstart**:
+```python
+# 1. List available models
+list_models()
+
+# 2. Use specific model
+autonomous_with_mcp("filesystem", "task", model="model-name")
+
+# 3. That's it!
+```
 
 ---
 
