@@ -219,6 +219,7 @@ class LLMClient:
         temperature: float = 0.7,
         max_tokens: int = DEFAULT_MAX_TOKENS,
         stop_sequences: Optional[List[str]] = None,
+        model: Optional[str] = None,
         timeout: int = DEFAULT_LLM_TIMEOUT
     ) -> Dict[str, Any]:
         """Generate a raw text completion from the local LLM.
@@ -230,6 +231,7 @@ class LLMClient:
             temperature: Controls randomness (0.0 to 2.0)
             max_tokens: Maximum tokens to generate
             stop_sequences: Optional list of stop sequences
+            model: Model to use (default: uses self.model, required when multiple models loaded)
             timeout: Request timeout in seconds (default 58s, safely under Claude Code's 60s MCP timeout)
 
         Returns:
@@ -247,6 +249,9 @@ class LLMClient:
             "temperature": temperature,
             "max_tokens": max_tokens
         }
+
+        # Add model parameter (required when multiple models loaded)
+        payload["model"] = model or self.model
 
         # Add stop sequences if provided
         if stop_sequences:
