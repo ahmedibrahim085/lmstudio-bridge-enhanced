@@ -17,8 +17,12 @@ from utils.validation import (
     validate_working_directory,  # Keep for filesystem/security checks
     ValidationError
 )
+from utils.lms_helper import LMSHelper
 import json
 import os
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class AutonomousExecutionTools:
@@ -202,6 +206,26 @@ class AutonomousExecutionTools:
             # Ensure working_dirs is a list for consistent handling
             if isinstance(working_dirs, str):
                 working_dirs = [working_dirs]
+
+            # 2.5. PROACTIVE MODEL PRELOADING (Fallback mechanism)
+            # Ensure model is loaded before starting autonomous execution
+            # This prevents HTTP 404 errors from JIT model auto-unloading
+            model_to_use = self.llm.model
+
+            if LMSHelper.is_installed():
+                logger.info(f"LMS CLI detected - ensuring model loaded: {model_to_use}")
+                try:
+                    if LMSHelper.ensure_model_loaded(model_to_use):
+                        logger.info(f"✅ Model '{model_to_use}' preloaded and kept loaded (prevents 404)")
+                    else:
+                        logger.warning(f"⚠️  Could not preload model '{model_to_use}' with LMS CLI")
+                except Exception as e:
+                    logger.warning(f"⚠️  Error during model preload: {e}")
+            else:
+                logger.warning(
+                    "⚠️  LMS CLI not installed - model may auto-unload causing intermittent 404 errors. "
+                    "Install for better reliability: brew install lmstudio-ai/lms/lms"
+                )
 
             # 3. Connect to filesystem MCP with working directory/directories
             # Pass all directories as separate arguments

@@ -31,6 +31,7 @@ from mcp_client.discovery import MCPDiscovery, get_mcp_discovery
 from llm.llm_client import LLMClient
 from llm.model_validator import ModelValidator
 from llm.exceptions import ModelNotFoundError
+from utils.lms_helper import LMSHelper
 
 
 # Default configuration constants
@@ -431,6 +432,25 @@ class DynamicAutonomousAgent:
         """
         log_info("=== Auto-Discovery Autonomous Execution ===")
         log_info("Discovering ALL available MCPs from .mcp.json...")
+
+        # PROACTIVE MODEL PRELOADING (Fallback mechanism)
+        # Ensure model is loaded before starting autonomous execution
+        model_to_use = model or self.llm.model
+
+        if LMSHelper.is_installed():
+            log_info(f"LMS CLI detected - ensuring model loaded: {model_to_use}")
+            try:
+                if LMSHelper.ensure_model_loaded(model_to_use):
+                    log_info(f"✅ Model '{model_to_use}' preloaded and kept loaded (prevents 404)")
+                else:
+                    log_info(f"⚠️  Could not preload model '{model_to_use}' with LMS CLI")
+            except Exception as e:
+                log_info(f"⚠️  Error during model preload: {e}")
+        else:
+            log_info(
+                "⚠️  LMS CLI not installed - model may auto-unload causing intermittent 404 errors. "
+                "Install for better reliability: brew install lmstudio-ai/lms/lms"
+            )
 
         # Validate model if specified
         if model is not None:
