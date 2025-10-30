@@ -12,6 +12,14 @@ import time
 import logging
 from typing import List, Dict, Any, Optional, Union
 from config import get_config
+from llm.exceptions import (
+    LLMError,
+    LLMTimeoutError,
+    LLMConnectionError,
+    LLMResponseError,
+    LLMRateLimitError,
+)
+from utils.error_handling import retry_with_backoff
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -39,6 +47,73 @@ DEFAULT_MAX_TOKENS = 8192
 DEFAULT_MAX_RETRIES = 2  # Retry up to 2 times (3 total attempts)
 DEFAULT_RETRY_DELAY = 1.0  # Initial delay in seconds
 DEFAULT_RETRY_BACKOFF = 2.0  # Exponential backoff multiplier
+
+
+def _handle_request_exception(e: Exception, operation: str = "LLM request") -> None:
+    """Convert requests exceptions to our custom exception hierarchy.
+
+    Args:
+        e: The exception from requests library
+        operation: Description of the operation that failed
+
+    Raises:
+        LLMTimeoutError: For timeout errors
+        LLMConnectionError: For connection errors
+        LLMRateLimitError: For rate limit errors (HTTP 429)
+        LLMResponseError: For other HTTP errors
+        LLMError: For other unexpected errors
+    """
+    if isinstance(e, requests.exceptions.Timeout):
+        raise LLMTimeoutError(
+            f"{operation} timed out. LM Studio may be overloaded or unresponsive.",
+            original_exception=e
+        )
+
+    elif isinstance(e, requests.exceptions.ConnectionError):
+        raise LLMConnectionError(
+            f"{operation} failed: Could not connect to LM Studio. "
+            f"Is LM Studio running?",
+            original_exception=e
+        )
+
+    elif isinstance(e, requests.exceptions.HTTPError):
+        status_code = e.response.status_code if e.response else None
+
+        if status_code == 429:
+            raise LLMRateLimitError(
+                f"{operation} failed: Rate limit exceeded. Please try again later.",
+                original_exception=e
+            )
+        elif status_code == 500:
+            raise LLMResponseError(
+                f"{operation} failed: LM Studio internal error (HTTP 500). "
+                f"This is usually transient - retry may succeed.",
+                original_exception=e
+            )
+        elif status_code == 404:
+            raise LLMResponseError(
+                f"{operation} failed: Endpoint not found (HTTP 404). "
+                f"Check that LM Studio API is running correctly.",
+                original_exception=e
+            )
+        else:
+            raise LLMResponseError(
+                f"{operation} failed: HTTP {status_code} error.",
+                original_exception=e
+            )
+
+    elif isinstance(e, requests.exceptions.RequestException):
+        raise LLMError(
+            f"{operation} failed: {str(e)}",
+            original_exception=e
+        )
+
+    else:
+        # Unexpected error type
+        raise LLMError(
+            f"{operation} failed with unexpected error: {str(e)}",
+            original_exception=e
+        )
 
 
 class LLMClient:
@@ -69,6 +144,11 @@ class LLMClient:
         """
         return f"{self.api_base}/{path.lstrip('/')}"
 
+    @retry_with_backoff(
+        max_retries=DEFAULT_MAX_RETRIES + 1,  # +1 for initial attempt = 3 total
+        base_delay=DEFAULT_RETRY_DELAY,
+        exceptions=(LLMResponseError, LLMTimeoutError)  # Only retry these
+    )
     def chat_completion(
         self,
         messages: List[Dict[str, str]],
@@ -76,14 +156,11 @@ class LLMClient:
         max_tokens: int = DEFAULT_MAX_TOKENS,
         tools: Optional[List[Dict[str, Any]]] = None,
         tool_choice: str = "auto",
-        timeout: int = DEFAULT_LLM_TIMEOUT,
-        max_retries: int = DEFAULT_MAX_RETRIES,
-        retry_delay: float = DEFAULT_RETRY_DELAY,
-        retry_backoff: float = DEFAULT_RETRY_BACKOFF
+        timeout: int = DEFAULT_LLM_TIMEOUT
     ) -> Dict[str, Any]:
         """Generate a chat completion from the local LLM.
 
-        Includes automatic retry logic for transient HTTP 500 errors with exponential backoff.
+        Automatically retries on transient errors (HTTP 500, timeouts) with exponential backoff.
 
         Args:
             messages: List of message dictionaries with 'role' and 'content'
@@ -92,15 +169,16 @@ class LLMClient:
             tools: Optional list of tools in OpenAI format
             tool_choice: Tool selection strategy ('auto', 'none', or specific tool)
             timeout: Request timeout in seconds (default 55s, safely under Claude Code's 60s MCP timeout)
-            max_retries: Maximum number of retries for transient errors (default 2)
-            retry_delay: Initial delay between retries in seconds (default 1.0)
-            retry_backoff: Exponential backoff multiplier (default 2.0)
 
         Returns:
             Response dictionary from LLM API
 
         Raises:
-            requests.RequestException: If API call fails after all retries
+            LLMTimeoutError: If request times out
+            LLMConnectionError: If cannot connect to LM Studio
+            LLMRateLimitError: If rate limit exceeded
+            LLMResponseError: If LM Studio returns an error
+            LLMError: For other unexpected errors
         """
         payload = {
             "messages": messages,
@@ -117,50 +195,23 @@ class LLMClient:
             payload["tools"] = tools
             payload["tool_choice"] = tool_choice
 
-        # Retry loop with exponential backoff
-        last_exception = None
-        current_delay = retry_delay
+        try:
+            response = requests.post(
+                self._get_endpoint("chat/completions"),
+                json=payload,
+                timeout=timeout
+            )
+            response.raise_for_status()
+            return response.json()
 
-        for attempt in range(max_retries + 1):  # +1 for initial attempt
-            try:
-                response = requests.post(
-                    self._get_endpoint("chat/completions"),
-                    json=payload,
-                    timeout=timeout
-                )
+        except Exception as e:
+            _handle_request_exception(e, "Chat completion")
 
-                response.raise_for_status()
-
-                # Log successful retry if this wasn't the first attempt
-                if attempt > 0:
-                    logger.info(f"Request succeeded on retry attempt {attempt}")
-
-                return response.json()
-
-            except requests.exceptions.HTTPError as e:
-                # Only retry on HTTP 500 (Internal Server Error)
-                if e.response.status_code == 500 and attempt < max_retries:
-                    logger.warning(
-                        f"HTTP 500 error on attempt {attempt + 1}/{max_retries + 1}. "
-                        f"Retrying in {current_delay}s... "
-                        f"(tools: {len(tools) if tools else 0})"
-                    )
-                    time.sleep(current_delay)
-                    current_delay *= retry_backoff  # Exponential backoff
-                    last_exception = e
-                    continue
-                else:
-                    # Don't retry for other status codes or if max retries reached
-                    raise
-
-            except requests.exceptions.RequestException as e:
-                # Don't retry for non-HTTP errors (connection, timeout, etc.)
-                raise
-
-        # If we get here, all retries failed
-        logger.error(f"Request failed after {max_retries + 1} attempts")
-        raise last_exception
-
+    @retry_with_backoff(
+        max_retries=DEFAULT_MAX_RETRIES + 1,
+        base_delay=DEFAULT_RETRY_DELAY,
+        exceptions=(LLMResponseError, LLMTimeoutError)
+    )
     def text_completion(
         self,
         prompt: str,
@@ -170,6 +221,8 @@ class LLMClient:
         timeout: int = DEFAULT_LLM_TIMEOUT
     ) -> Dict[str, Any]:
         """Generate a raw text completion from the local LLM.
+
+        Automatically retries on transient errors with exponential backoff.
 
         Args:
             prompt: Text prompt to complete
@@ -182,7 +235,11 @@ class LLMClient:
             Response dictionary from LLM API
 
         Raises:
-            requests.RequestException: If API call fails
+            LLMTimeoutError: If request times out
+            LLMConnectionError: If cannot connect to LM Studio
+            LLMRateLimitError: If rate limit exceeded
+            LLMResponseError: If LM Studio returns an error
+            LLMError: For other unexpected errors
         """
         payload = {
             "prompt": prompt,
@@ -194,14 +251,17 @@ class LLMClient:
         if stop_sequences:
             payload["stop"] = stop_sequences
 
-        response = requests.post(
-            self._get_endpoint("completions"),
-            json=payload,
-            timeout=timeout
-        )
+        try:
+            response = requests.post(
+                self._get_endpoint("completions"),
+                json=payload,
+                timeout=timeout
+            )
+            response.raise_for_status()
+            return response.json()
 
-        response.raise_for_status()
-        return response.json()
+        except Exception as e:
+            _handle_request_exception(e, "Text completion")
 
     @staticmethod
     def convert_tools_to_responses_format(tools: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -240,6 +300,11 @@ class LLMClient:
                 flattened.append(tool)
         return flattened
 
+    @retry_with_backoff(
+        max_retries=DEFAULT_MAX_RETRIES + 1,
+        base_delay=DEFAULT_RETRY_DELAY,
+        exceptions=(LLMResponseError, LLMTimeoutError)
+    )
     def generate_embeddings(
         self,
         text: Union[str, List[str]],
@@ -247,6 +312,8 @@ class LLMClient:
         timeout: int = DEFAULT_LLM_TIMEOUT
     ) -> Dict[str, Any]:
         """Generate vector embeddings for text.
+
+        Automatically retries on transient errors with exponential backoff.
 
         Args:
             text: Single text or list of texts to embed
@@ -257,7 +324,11 @@ class LLMClient:
             Response dictionary with embeddings data
 
         Raises:
-            requests.RequestException: If API call fails
+            LLMTimeoutError: If request times out
+            LLMConnectionError: If cannot connect to LM Studio
+            LLMRateLimitError: If rate limit exceeded
+            LLMResponseError: If LM Studio returns an error
+            LLMError: For other unexpected errors
         """
         payload = {"input": text}
 
@@ -267,15 +338,23 @@ class LLMClient:
         elif self.model and self.model != "default":
             payload["model"] = self.model
 
-        response = requests.post(
-            self._get_endpoint("embeddings"),
-            json=payload,
-            timeout=timeout
-        )
+        try:
+            response = requests.post(
+                self._get_endpoint("embeddings"),
+                json=payload,
+                timeout=timeout
+            )
+            response.raise_for_status()
+            return response.json()
 
-        response.raise_for_status()
-        return response.json()
+        except Exception as e:
+            _handle_request_exception(e, "Generate embeddings")
 
+    @retry_with_backoff(
+        max_retries=DEFAULT_MAX_RETRIES + 1,
+        base_delay=DEFAULT_RETRY_DELAY,
+        exceptions=(LLMResponseError, LLMTimeoutError)
+    )
     def create_response(
         self,
         input_text: str,
@@ -283,17 +362,14 @@ class LLMClient:
         previous_response_id: Optional[str] = None,
         stream: bool = False,
         model: Optional[str] = None,
-        timeout: int = DEFAULT_LLM_TIMEOUT,
-        max_retries: int = DEFAULT_MAX_RETRIES,
-        retry_delay: float = DEFAULT_RETRY_DELAY,
-        retry_backoff: float = DEFAULT_RETRY_BACKOFF
+        timeout: int = DEFAULT_LLM_TIMEOUT
     ) -> Dict[str, Any]:
         """Create a stateful response with optional function calling.
 
         This method uses LM Studio's /v1/responses API, which provides stateful
         conversations and supports function calling with a flattened tool format.
 
-        Includes automatic retry logic for transient HTTP 500 errors with exponential backoff.
+        Automatically retries on transient errors (HTTP 500, timeouts) with exponential backoff.
 
         Args:
             input_text: User input text
@@ -302,15 +378,16 @@ class LLMClient:
             stream: Whether to stream response
             model: Optional specific model
             timeout: Request timeout in seconds (default 55s, safely under Claude Code's 60s MCP timeout)
-            max_retries: Maximum number of retries for transient errors (default 2)
-            retry_delay: Initial delay between retries in seconds (default 1.0)
-            retry_backoff: Exponential backoff multiplier (default 2.0)
 
         Returns:
             Response dictionary with response ID and output array
 
         Raises:
-            requests.RequestException: If API call fails after all retries
+            LLMTimeoutError: If request times out
+            LLMConnectionError: If cannot connect to LM Studio
+            LLMRateLimitError: If rate limit exceeded
+            LLMResponseError: If LM Studio returns an error
+            LLMError: For other unexpected errors
 
         Example:
             >>> # First call with tools
@@ -339,49 +416,17 @@ class LLMClient:
         if tools:
             payload["tools"] = self.convert_tools_to_responses_format(tools)
 
-        # Retry loop with exponential backoff
-        last_exception = None
-        current_delay = retry_delay
+        try:
+            response = requests.post(
+                self._get_endpoint("responses"),
+                json=payload,
+                timeout=timeout
+            )
+            response.raise_for_status()
+            return response.json()
 
-        for attempt in range(max_retries + 1):  # +1 for initial attempt
-            try:
-                response = requests.post(
-                    self._get_endpoint("responses"),
-                    json=payload,
-                    timeout=timeout
-                )
-
-                response.raise_for_status()
-
-                # Log successful retry if this wasn't the first attempt
-                if attempt > 0:
-                    logger.info(f"Request succeeded on retry attempt {attempt}")
-
-                return response.json()
-
-            except requests.exceptions.HTTPError as e:
-                # Only retry on HTTP 500 (Internal Server Error)
-                if e.response.status_code == 500 and attempt < max_retries:
-                    logger.warning(
-                        f"HTTP 500 error on attempt {attempt + 1}/{max_retries + 1}. "
-                        f"Retrying in {current_delay}s... "
-                        f"(tools: {len(tools) if tools else 0})"
-                    )
-                    time.sleep(current_delay)
-                    current_delay *= retry_backoff  # Exponential backoff
-                    last_exception = e
-                    continue
-                else:
-                    # Don't retry for other status codes or if max retries reached
-                    raise
-
-            except requests.exceptions.RequestException as e:
-                # Don't retry for non-HTTP errors (connection, timeout, etc.)
-                raise
-
-        # If we get here, all retries failed
-        logger.error(f"Request failed after {max_retries + 1} attempts")
-        raise last_exception
+        except Exception as e:
+            _handle_request_exception(e, "Create response")
 
     def list_models(self) -> List[str]:
         """List all available models in LM Studio.
@@ -390,13 +435,19 @@ class LLMClient:
             List of model IDs
 
         Raises:
-            requests.RequestException: If API call fails
+            LLMTimeoutError: If request times out
+            LLMConnectionError: If cannot connect to LM Studio
+            LLMResponseError: If LM Studio returns an error
+            LLMError: For other unexpected errors
         """
-        response = requests.get(self._get_endpoint("models"))
-        response.raise_for_status()
+        try:
+            response = requests.get(self._get_endpoint("models"))
+            response.raise_for_status()
+            models = response.json().get("data", [])
+            return [model["id"] for model in models]
 
-        models = response.json().get("data", [])
-        return [model["id"] for model in models]
+        except Exception as e:
+            _handle_request_exception(e, "List models")
 
     def get_model_info(self, model_id: Optional[str] = None) -> Dict[str, Any]:
         """Get basic model information from LM Studio.
@@ -411,27 +462,36 @@ class LLMClient:
             Dictionary with model information
 
         Raises:
-            requests.RequestException: If API call fails
+            LLMTimeoutError: If request times out
+            LLMConnectionError: If cannot connect to LM Studio
+            LLMResponseError: If LM Studio returns an error
+            LLMError: For other unexpected errors
             ValueError: If model not found
         """
-        response = requests.get(self._get_endpoint("models"))
-        response.raise_for_status()
+        try:
+            response = requests.get(self._get_endpoint("models"))
+            response.raise_for_status()
+            models = response.json().get("data", [])
 
-        models = response.json().get("data", [])
+            # If no model_id specified, get the first available (currently loaded)
+            if not model_id:
+                if models:
+                    return models[0]
+                else:
+                    raise ValueError("No models loaded in LM Studio")
 
-        # If no model_id specified, get the first available (currently loaded)
-        if not model_id:
-            if models:
-                return models[0]
-            else:
-                raise ValueError("No models loaded in LM Studio")
+            # Find specific model
+            for model in models:
+                if model.get("id") == model_id:
+                    return model
 
-        # Find specific model
-        for model in models:
-            if model.get("id") == model_id:
-                return model
+            raise ValueError(f"Model '{model_id}' not found in LM Studio")
 
-        raise ValueError(f"Model '{model_id}' not found in LM Studio")
+        except (ValueError, KeyError, IndexError):
+            # Re-raise data validation errors as-is
+            raise
+        except Exception as e:
+            _handle_request_exception(e, "Get model info")
 
     def get_default_max_tokens(self) -> int:
         """Get default max_tokens based on Claude Code's tool response limits.
@@ -459,15 +519,17 @@ class LLMClient:
         """Check if LM Studio API is accessible.
 
         Returns:
-            True if API is accessible
+            True if API is accessible, False otherwise
 
-        Raises:
-            requests.RequestException: If API is not accessible
+        Note:
+            This method returns False on any error instead of raising exceptions,
+            making it safe to use for health checks without try/except blocks.
         """
         try:
             response = requests.get(self._get_endpoint("models"), timeout=HEALTH_CHECK_TIMEOUT)
             return response.status_code == 200
-        except requests.RequestException:
+        except Exception:
+            # Catch all exceptions and return False - this is a health check
             return False
 
 
