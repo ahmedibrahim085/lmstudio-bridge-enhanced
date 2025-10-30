@@ -223,7 +223,8 @@ class DynamicAutonomousAgent:
         mcp_names: List[str],
         task: str,
         max_rounds: int = DEFAULT_MAX_ROUNDS,
-        max_tokens: Union[int, str] = "auto"
+        max_tokens: Union[int, str] = "auto",
+        model: Optional[str] = None
     ) -> str:
         """
         Execute task autonomously using tools from MULTIPLE MCPs simultaneously!
@@ -237,21 +238,26 @@ class DynamicAutonomousAgent:
             task: Task description for the local LLM
             max_rounds: Maximum autonomous loop iterations
             max_tokens: Maximum tokens per LLM response ("auto" or integer)
+            model: Optional model name (None = use default from config)
 
         Returns:
             Final answer from the local LLM
 
+        Raises:
+            ModelNotFoundError: If specified model not available in LM Studio
+
         Examples:
-            # Use filesystem + memory MCPs
+            # Use filesystem + memory MCPs with default model
             await agent.autonomous_with_multiple_mcps(
                 mcp_names=["filesystem", "memory"],
                 task="Read all Python files and create a knowledge graph of the codebase structure"
             )
 
-            # Use filesystem + fetch + memory MCPs
+            # Use filesystem + fetch + memory MCPs with specific model
             await agent.autonomous_with_multiple_mcps(
                 mcp_names=["filesystem", "fetch", "memory"],
-                task="Read local docs, fetch online docs, compare them, and build a knowledge graph"
+                task="Read local docs, fetch online docs, compare them, and build a knowledge graph",
+                model="qwen/qwen3-coder-30b"
             )
 
             # Use ALL available MCPs!
@@ -263,6 +269,16 @@ class DynamicAutonomousAgent:
         log_info(f"=== Dynamic Multi-MCP Autonomous Execution ===")
         log_info(f"MCPs: {', '.join(mcp_names)}")
         log_info(f"Task: {task}")
+
+        # Validate model if specified
+        if model is not None:
+            log_info(f"Model: {model}")
+            try:
+                await self.model_validator.validate_model(model)
+                log_info(f"✓ Model validated: {model}")
+            except ModelNotFoundError as e:
+                log_error(f"Model validation failed: {e}")
+                raise
 
         try:
             # HOT RELOAD: Create fresh MCPDiscovery (reads .mcp.json fresh)
@@ -363,7 +379,8 @@ class DynamicAutonomousAgent:
                     openai_tools=all_openai_tools,
                     task=task,
                     max_rounds=max_rounds,
-                    max_tokens=actual_max_tokens
+                    max_tokens=actual_max_tokens,
+                    model=model
                 )
 
         except ValueError as e:
@@ -379,7 +396,8 @@ class DynamicAutonomousAgent:
         self,
         task: str,
         max_rounds: int = DEFAULT_MAX_ROUNDS,
-        max_tokens: Union[int, str] = "auto"
+        max_tokens: Union[int, str] = "auto",
+        model: Optional[str] = None
     ) -> str:
         """
         Execute task with ALL available MCPs discovered from .mcp.json!
@@ -391,23 +409,38 @@ class DynamicAutonomousAgent:
             task: Task description for the local LLM
             max_rounds: Maximum autonomous loop iterations
             max_tokens: Maximum tokens per LLM response ("auto" or integer)
+            model: Optional model name (None = use default from config)
 
         Returns:
             Final answer from the local LLM
 
+        Raises:
+            ModelNotFoundError: If specified model not available in LM Studio
+
         Examples:
-            # Let LLM use ANY tool from ANY MCP!
+            # Let LLM use ANY tool from ANY MCP with default model!
             await agent.autonomous_discover_and_execute(
                 task="Read my codebase, fetch relevant docs online, build a knowledge graph, and create comprehensive documentation"
             )
 
-            # LLM has access to EVERYTHING!
+            # LLM has access to EVERYTHING with specific model!
             await agent.autonomous_discover_and_execute(
-                task="Analyze this project, compare with GitHub repos, fetch best practices, and suggest improvements"
+                task="Analyze this project, compare with GitHub repos, fetch best practices, and suggest improvements",
+                model="qwen/qwen3-coder-30b"
             )
         """
         log_info("=== Auto-Discovery Autonomous Execution ===")
         log_info("Discovering ALL available MCPs from .mcp.json...")
+
+        # Validate model if specified
+        if model is not None:
+            log_info(f"Model: {model}")
+            try:
+                await self.model_validator.validate_model(model)
+                log_info(f"✓ Model validated: {model}")
+            except ModelNotFoundError as e:
+                log_error(f"Model validation failed: {e}")
+                raise
 
         # HOT RELOAD: Create fresh MCPDiscovery (reads .mcp.json fresh)
         discovery = MCPDiscovery(self.mcp_json_path)
@@ -424,7 +457,8 @@ class DynamicAutonomousAgent:
             mcp_names=available_mcps,
             task=task,
             max_rounds=max_rounds,
-            max_tokens=max_tokens
+            max_tokens=max_tokens,
+            model=model
         )
 
     async def _autonomous_loop(
@@ -517,7 +551,8 @@ class DynamicAutonomousAgent:
         openai_tools: List[Dict],
         task: str,
         max_rounds: int,
-        max_tokens: int
+        max_tokens: int,
+        model: Optional[str] = None
     ) -> str:
         """Core autonomous loop for multiple MCPs using stateful /v1/responses API."""
         # Use stateful /v1/responses API for 97% token savings!
@@ -539,7 +574,8 @@ class DynamicAutonomousAgent:
                 input_text=input_text,
                 tools=openai_tools,
                 previous_response_id=previous_response_id,
-                max_tokens=max_tokens
+                max_tokens=max_tokens,
+                model=model
             )
 
             # Save response ID for next round (CRITICAL!)
