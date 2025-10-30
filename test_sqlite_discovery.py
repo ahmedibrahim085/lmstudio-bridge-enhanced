@@ -2,6 +2,15 @@
 """
 Test if newly added sqlite-test MCP is discovered from LM Studio's mcp.json
 WITHOUT restarting anything.
+
+NOTE: sqlite-test is a TEST CASE MCP used to verify dynamic MCP discovery.
+It proves that:
+- ANY MCP can be added to .mcp.json
+- The system discovers it WITHOUT code changes
+- Hot reload works (no restart needed after initial setup)
+
+sqlite-test is NOT a permanent part of the system - it's just a test to
+demonstrate that the system is truly generic and works with ANY MCP.
 """
 
 import sys
