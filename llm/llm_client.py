@@ -368,6 +368,7 @@ class LLMClient:
         previous_response_id: Optional[str] = None,
         stream: bool = False,
         model: Optional[str] = None,
+        max_tokens: Optional[int] = None,
         timeout: int = DEFAULT_LLM_TIMEOUT
     ) -> Dict[str, Any]:
         """Create a stateful response with optional function calling.
@@ -408,11 +409,18 @@ class LLMClient:
             ...     previous_response_id=response1["id"]
             ... )
         """
+        # Resolve "default" to actual model name
+        model_to_use = self.model if model == "default" or model is None else model
+
         payload = {
             "input": input_text,
-            "model": model or self.model,
+            "model": model_to_use,
             "stream": stream
         }
+
+        # Add optional parameters
+        if max_tokens is not None:
+            payload["max_tokens"] = max_tokens
 
         # Add previous response for conversation continuity
         if previous_response_id:
