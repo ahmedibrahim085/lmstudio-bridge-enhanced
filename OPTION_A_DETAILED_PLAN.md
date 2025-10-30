@@ -49,6 +49,8 @@ After comprehensive testing and Qwen 3 code review (October 30, 2025), **critica
 **Review Date**: October 30, 2025
 **Reviewers**: Qwen3-Coder, Qwen3-Thinking, Magistral
 
+⚠️ **NOTE**: For Qwen's critical production-blocking findings (TTL configuration, health checks, retry logic, failure testing, performance benchmarks), see `PHASE_0_1_QWEN_CRITICAL_FIXES.md`. Those MUST be completed before starting Option A phases below.
+
 ### ✅ Critical Issues Fixed
 
 #### 1. Previous Response ID Bug (COMPLETED ✅)
