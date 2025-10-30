@@ -1,666 +1,248 @@
-# Option A: Production-Hardened Implementation Plan
+# Option A: Hardened MVP Implementation Plan
 
-**Multi-Model Support + Qwen Critical Fixes for LM Studio Bridge Enhanced**
+**Multi-Model Support for LM Studio Bridge Enhanced**
 
-**Plan Updated**: October 30, 2025 (Post-Qwen Review & Testing Cycle)
-**Original Plan**: Option A Hardened MVP
-**Status**: 🔴 **CRITICAL PRODUCTION FIXES REQUIRED FIRST**
+---
+
+## ⚠️ CRITICAL: Complete Phase 0-1 FIRST
+
+**Status**: 🔴 **BLOCKED** - Cannot start until Phase 0-1 complete
+
+After comprehensive testing and Qwen 3 code review (October 30, 2025), **critical production-blocking issues** were identified that MUST be fixed before implementing multi-model support.
+
+**Required Prerequisite**: Complete `PHASE_0_1_QWEN_CRITICAL_FIXES.md` (8-10 hours)
+- Phase 0: Critical Production Fixes (3-4h) - TTL, health checks, retry logic
+- Phase 1: Production Hardening (5-6h) - Failure tests, benchmarks, observability
+
+**Current Production Readiness**: ❌ NOT READY (Qwen rating: 6/10)
+**After Phase 0-1**: ✅ READY (Target rating: 9/10)
+
+**Do not proceed with Option A until Phase 0-1 is complete and approved by Qwen review.**
 
 ---
 
 ## Executive Summary
 
-**Critical Update**: Qwen 3 LLM review (October 30, 2025) identified **production-blocking issues** in current LMS CLI fallback implementation that must be fixed before adding multi-model support.
+**Objective**: Add robust multi-model support to autonomous tools with production-ready validation and error handling.
 
-**Current Status**:
-- ✅ **LMS CLI Fallback Integration**: COMPLETE (tested with 20/20 tests passing)
-- ✅ **Automatic Model Preloading**: WORKING (all 6 autonomous functions)
-- ✅ **3 Critical Bugs**: FIXED (command syntax, model resolution, max_tokens)
-- ❌ **Production Readiness**: NOT READY (Qwen rating: 6/10)
+**Approach**: Hardened MVP - Simple but solid implementation with proper validation, error handling, and testing.
 
-**New Approach**: Fix critical production gaps FIRST (Phases 0-1), THEN add multi-model support (Phases 2-5)
+**Timeline**: 8-10 hours (4 phases)
 
-**Timeline**: 18-22 hours total (was 8-10 hours)
-- **Phase 0**: Critical Production Fixes (3-4 hours) 🔴 **MUST DO FIRST**
-- **Phase 1**: Production Hardening (5-6 hours) 🟠 **HIGH PRIORITY**
-- **Phase 2**: Model Validation Layer (2-2.5 hours)
-- **Phase 3**: Core Tool Interface Updates (3-3.5 hours)
-- **Phase 4**: Documentation & Examples (1.5-2 hours)
-- **Phase 5**: Final Testing & Polish (2-2.5 hours)
-
-**Team**: Claude Code + Qwen 3 (reviewer/validator) + 3 Local LLMs (for multi-model phases)
+**Team**: Claude Code + 3 Local LLMs (Qwen3-Coder, Qwen3-Thinking, Magistral)
 
 ---
 
-## Qwen Review Findings Summary
+## Option A Goals
+
+✅ **Model parameter support** - Pass model to autonomous tools
+✅ **Validation layer** - Verify model exists before use
+✅ **Error handling framework** - Graceful failures with retry logic
+✅ **Backward compatibility** - Optional parameter, defaults work
+✅ **Production ready** - Tests, docs, logging
+✅ **Keep it simple** - No architectural changes, minimal complexity
+
+---
+
+## LLM Review Feedback & Critical Updates
 
 **Review Date**: October 30, 2025
-**Reviewer**: Qwen 3 (4B Thinking Model) via LM Studio
-**Files Reviewed**: COMPREHENSIVE_TEST_RESULTS_FINAL.md, Implementation Code
-**Overall Rating**: 6/10 (Good foundation, significant production risks)
-**Status**: ❌ **NOT production-ready**
+**Reviewers**: Qwen3-Coder, Qwen3-Thinking, Magistral
 
-### What's Already Complete ✅
+### ✅ Critical Issues Fixed
 
-| Component | Status | Notes |
-|-----------|--------|-------|
-| **LMS CLI Fallback** | ✅ DONE | Automatic preloading in all 6 autonomous functions |
-| **Model Preloading** | ✅ DONE | Models stay loaded (currently with no TTL - needs fix!) |
-| **Bug Fixes** | ✅ DONE | 3 critical bugs fixed (--keep-loaded, model resolution, max_tokens) |
-| **Testing** | ✅ DONE | 20/20 tests passing (API, CLI, autonomous, dynamic MCP) |
-| **Documentation** | ✅ DONE | 5 comprehensive documents (2500+ lines) |
+#### 1. Previous Response ID Bug (COMPLETED ✅)
+**Issue**: `previous_response_id` was always null, breaking stateful conversations
+**Fix Applied**: Updated both `_autonomous_loop` methods to use `create_response()` with proper `previous_response_id` tracking
+**Impact**: 97% token savings restored, conversations maintain proper state
 
-### Critical Issues Identified by Qwen 🚨
+#### 2. Missing Imports in Code Examples
+**Issue** (Qwen3-Coder): Code examples missing required imports
+**Fix**: Added imports section to each code example
 
-| Issue | Severity | Impact | Current State |
-|-------|----------|--------|---------------|
-| **No-TTL Approach** | 🔴 Critical | Memory leaks, OOM crashes | Implemented incorrectly |
-| **False Persistence Assumption** | 🔴 Critical | Model unloads despite preloading | Architectural flaw |
-| **Zero Failure Testing** | 🔴 Critical | System breaks under stress | No tests exist |
-| **Missing Error Handling** | 🔴 Critical | Silent failures, no recovery | No retry logic |
-| **No Security Testing** | 🟠 High | Data leakage, unauthorized access | Not tested |
-| **No Performance Testing** | 🟠 High | Cannot validate production SLAs | No benchmarks |
-
-### Reordered Priority
-
-**OLD Order** (wrong):
-1. Add multi-model support
-2. Add validation
-3. Add error handling
-4. Documentation
-
-**NEW Order** (correct, based on Qwen + dependencies):
-1. **Fix TTL configuration** (blocks everything)
-2. **Add health checks** (validates assumptions)
-3. **Add retry logic & error handling** (prevents failures)
-4. **Add failure scenario tests** (validates robustness)
-5. **Add performance tests** (validates production readiness)
-6. THEN add multi-model support
-
----
-
-## Phase 0: Critical Production Fixes (3-4 hours) 🔴
-
-**Priority**: MUST complete before any other work
-**Owner**: Claude Code
-**Reviewer**: Qwen 3
-**Blockers**: None
-**Status**: ⏳ PENDING
-
-### Overview
-
-Fix the 3 most critical production-blocking issues identified by Qwen that make current implementation unsafe for production.
-
----
-
-### Task 0.1: Fix TTL Configuration (CRITICAL)
-
-**Time**: 1 hour
-**Severity**: 🔴 CRITICAL - Causes memory leaks and OOM
-**Status**: ⏳ PENDING
-
-#### Problem (from Qwen Review)
-
+**Required imports for all modules**:
 ```python
-# Current (BROKEN) - No TTL = infinite loading
-if not keep_loaded:
-    cmd.extend(["--ttl", "300"])  # Only adds TTL when NOT keeping
+# Standard library
+from datetime import datetime
+from functools import wraps
+from typing import List, Optional, Dict, Any, Union
+import asyncio
+import logging
 
-# Result: Models stay loaded forever → Memory leak → OOM crash
-```
+# Third-party
+import httpx
 
-**Why This Is Dangerous**:
-- Models never unload → eventually fill all RAM
-- No mechanism to free memory for other models
-- Unscalable for production (multiple models/users)
-- **FALSE ASSUMPTION**: No TTL ≠ OS can still kill process
-
-#### Solution
-
-```python
-# utils/lms_helper.py
-
-# Add configuration
+# Local
+from llm.exceptions import *
 from config import get_config
-
-DEFAULT_MODEL_TTL = 600  # 10 minutes (configurable)
-TEMP_MODEL_TTL = 300     # 5 minutes for temporary models
-
-@classmethod
-def load_model(cls, model_name: str, keep_loaded: bool = True, ttl: Optional[int] = None) -> bool:
-    """
-    Load model with configurable TTL.
-
-    Args:
-        model_name: Model to load
-        keep_loaded: If True, use longer TTL (10m); if False, use shorter TTL (5m)
-        ttl: Optional explicit TTL override
-
-    Returns:
-        True if loaded successfully
-    """
-    if not cls.is_installed():
-        logger.warning("LMS CLI not available")
-        return False
-
-    try:
-        cmd = ["lms", "load", model_name, "--yes"]
-
-        # ALWAYS use TTL (never infinite loading)
-        if ttl is not None:
-            actual_ttl = ttl
-        elif keep_loaded:
-            actual_ttl = DEFAULT_MODEL_TTL  # 10 minutes
-        else:
-            actual_ttl = TEMP_MODEL_TTL      # 5 minutes
-
-        cmd.extend(["--ttl", str(actual_ttl)])
-
-        logger.info(f"Loading model '{model_name}' with TTL={actual_ttl}s")
-
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=60
-        )
-
-        if result.returncode == 0:
-            logger.info(f"✅ Model loaded: {model_name} (TTL={actual_ttl}s)")
-            return True
-        else:
-            logger.error(f"Failed to load model: {result.stderr}")
-            return False
-
-    except Exception as e:
-        logger.error(f"Error loading model: {e}")
-        return False
 ```
 
-**Config File Addition** (`config.py`):
+#### 3. Backward Compatibility Plan
+**Issue** (Qwen3-Thinking): No explicit backward compatibility section
+**Fix**: Added comprehensive backward compatibility requirements
 
+**Backward Compatibility Requirements**:
+- ✅ `model=None` must work (uses default model from config)
+- ✅ Existing code without `model` parameter continues to work
+- ✅ All existing tests pass without modification
+- ✅ No breaking changes to tool signatures (parameter is optional)
+- ✅ Default behavior unchanged when parameter not provided
+
+**Testing Strategy**:
 ```python
-class LMSConfig:
-    """LMS CLI configuration."""
-    default_model_ttl: int = 600    # 10 minutes
-    temp_model_ttl: int = 300       # 5 minutes
-    max_model_ttl: int = 3600       # 1 hour maximum
-```
-
-**Acceptance Criteria**:
-- [ ] ALL models loaded with explicit TTL
-- [ ] No models can have infinite TTL
-- [ ] TTL configurable via config
-- [ ] Logging shows TTL value
-- [ ] Documentation updated
-
-**Testing**:
-```python
-def test_model_has_ttl():
-    """Verify all models get explicit TTL."""
-    LMSHelper.load_model("test-model", keep_loaded=True)
-    # Verify lms command includes --ttl parameter
-    assert "--ttl" in captured_command
-    assert "600" in captured_command  # Default TTL
-
-def test_custom_ttl():
-    """Verify custom TTL works."""
-    LMSHelper.load_model("test-model", ttl=1800)
-    assert "1800" in captured_command
-```
-
----
-
-### Task 0.2: Add Health Check Verification
-
-**Time**: 1 hour
-**Severity**: 🔴 CRITICAL - Catches false positives
-**Status**: ⏳ PENDING
-
-#### Problem (from Qwen Review)
-
-```python
-# Current (BROKEN)
-if LMSHelper.ensure_model_loaded(model_to_use):
-    logger.info("✅ Model preloaded")  # But is it REALLY loaded?
-    # System proceeds without verification
-```
-
-**Why This Fails**:
-- `ensure_model_loaded()` returns True even if model isn't actually loaded
-- No verification that model is available
-- False positive causes 404 errors in production
-- #1 cause of production failures per Qwen
-
-#### Solution
-
-```python
-# utils/lms_helper.py
-
-@classmethod
-def verify_model_loaded(cls, model_name: str) -> bool:
-    """
-    Verify model is actually loaded (not just CLI state).
-
-    Args:
-        model_name: Model to verify
-
-    Returns:
-        True if model is actually loaded
-    """
-    try:
-        loaded_models = cls.list_loaded_models()
-        if not loaded_models:
-            return False
-
-        # Check if model is in loaded list
-        for model in loaded_models:
-            if model.get('identifier') == model_name:
-                logger.debug(f"Model '{model_name}' verified loaded")
-                return True
-
-        logger.warning(f"Model '{model_name}' not found in loaded models")
-        return False
-
-    except Exception as e:
-        logger.error(f"Error verifying model: {e}")
-        return False
-
-
-@classmethod
-def ensure_model_loaded_with_verification(cls, model_name: str, ttl: Optional[int] = None) -> bool:
-    """
-    Ensure model is loaded AND verify it's actually available.
-
-    This prevents false positives where CLI reports success but model isn't loaded.
-
-    Args:
-        model_name: Model to ensure loaded
-        ttl: Optional TTL override
-
-    Returns:
-        True if model is loaded and verified
-
-    Raises:
-        ModelLoadError: If model fails to load or verify
-    """
-    # Step 1: Check if already loaded
-    if cls.is_model_loaded(model_name):
-        logger.debug(f"Model '{model_name}' already loaded")
-        return True
-
-    # Step 2: Load model
-    logger.info(f"Loading model '{model_name}'...")
-    if not cls.load_model(model_name, keep_loaded=True, ttl=ttl):
-        raise ModelLoadError(f"Failed to load model '{model_name}'")
-
-    # Step 3: VERIFY model is actually loaded (CRITICAL)
-    import time
-    time.sleep(2)  # Give LM Studio time to load
-
-    if not cls.verify_model_loaded(model_name):
-        raise ModelLoadError(
-            f"Model '{model_name}' reported loaded but verification failed. "
-            "This usually means LM Studio is under memory pressure."
-        )
-
-    logger.info(f"✅ Model '{model_name}' loaded and verified")
-    return True
-
-
-class ModelLoadError(Exception):
-    """Raised when model fails to load or verify."""
-    pass
-```
-
-**Update Autonomous Tools** (`tools/autonomous.py` and `tools/dynamic_autonomous.py`):
-
-```python
-# Replace all calls to ensure_model_loaded with ensure_model_loaded_with_verification
-
-# OLD (BROKEN):
-if LMSHelper.ensure_model_loaded(model_to_use):
-    logger.info("✅ Model preloaded")
-
-# NEW (FIXED):
-try:
-    LMSHelper.ensure_model_loaded_with_verification(model_to_use)
-    logger.info("✅ Model preloaded and VERIFIED")
-except ModelLoadError as e:
-    logger.error(f"❌ Model load failed: {e}")
-    raise
-```
-
-**Acceptance Criteria**:
-- [ ] Health check verifies model actually loaded
-- [ ] False positives caught
-- [ ] Clear error when verification fails
-- [ ] All autonomous functions use new method
-- [ ] Tests cover verification failure
-
-**Testing**:
-```python
-def test_verification_catches_false_positive():
-    """Verify health check catches when model not actually loaded."""
-    # Mock: CLI says success, but model not in loaded list
-    with mock.patch('LMSHelper.load_model', return_value=True):
-        with mock.patch('LMSHelper.verify_model_loaded', return_value=False):
-            with pytest.raises(ModelLoadError):
-                LMSHelper.ensure_model_loaded_with_verification("test-model")
-```
-
----
-
-### Task 0.3: Add Retry Logic with Exponential Backoff
-
-**Time**: 1-1.5 hours
-**Severity**: 🔴 CRITICAL - Handles 90% of transient failures
-**Status**: ⏳ PENDING
-
-#### Problem (from Qwen Review)
-
-```python
-# Current (BROKEN) - No retry logic
-if LMSHelper.ensure_model_loaded(model_to_use):
-    # Works once, fails on transient errors (network, memory pressure)
-```
-
-**Why This Fails**:
-- 90% of model load failures are transient (per Qwen)
-- Network latency, temporary resource constraints
-- No recovery = 100% failure rate
-- Production systems MUST retry
-
-#### Solution
-
-Already have `utils/error_handling.py` with `retry_with_backoff`, need to apply it:
-
-```python
-# utils/lms_helper.py
-
-from utils.error_handling import retry_with_backoff
-
-@classmethod
-@retry_with_backoff(
-    max_retries=3,
-    base_delay=1.0,
-    exceptions=(subprocess.TimeoutExpired, subprocess.CalledProcessError, ModelLoadError)
+# Test 1: Without model parameter (backward compat)
+result = await agent.autonomous_with_mcp(
+    "filesystem",
+    "List files"
+    # No model parameter - should use default
 )
-def ensure_model_loaded_with_verification(cls, model_name: str, ttl: Optional[int] = None) -> bool:
-    """
-    Ensure model loaded with automatic retry on transient failures.
+assert result  # Should work
 
-    Retries up to 3 times with exponential backoff (1s, 2s, 4s).
-    """
-    # ... implementation from Task 0.2 ...
+# Test 2: With model=None explicitly
+result = await agent.autonomous_with_mcp(
+    "filesystem",
+    "List files",
+    model=None  # Explicitly None - should use default
+)
+assert result  # Should work
+
+# Test 3: With specific model
+result = await agent.autonomous_with_mcp(
+    "filesystem",
+    "List files",
+    model="qwen/qwen3-coder-30b"  # Specific model
+)
+assert result  # Should work with specified model
 ```
 
-**Add Circuit Breaker** (prevent cascading failures):
+#### 4. Review Checkpoints Clarified
+**Issue** (Qwen3-Thinking): No explicit review checkpoints after each phase
+**Fix**: Added formal phase completion reviews
 
-```python
-# utils/lms_helper.py
+**Phase Completion Review Process**:
+After each phase, ALL 3 LLMs must review and approve:
+- ✅ All tasks in phase completed
+- ✅ All acceptance criteria met
+- ✅ All tests passing
+- ✅ No regressions introduced
+- ✅ Documentation updated
+- ✅ Ready for next phase
 
-class LMSCircuitBreaker:
-    """Circuit breaker for LMS CLI operations."""
+**Sign-off required from**:
+- Qwen3-Coder (code quality)
+- Qwen3-Thinking (logical completeness)
+- Magistral (architecture soundness)
 
-    def __init__(self, failure_threshold: int = 5, recovery_timeout: int = 60):
-        self.failure_count = 0
-        self.failure_threshold = failure_threshold
-        self.recovery_timeout = recovery_timeout
-        self.circuit_open_time: Optional[float] = None
+#### 5. Multi-Model Edge Cases
+**Issue** (Qwen3-Thinking): Missing edge case handling for concurrent model requests
+**Fix**: Added edge case handling plan
 
-    def call(self, func, *args, **kwargs):
-        """Execute function with circuit breaker protection."""
-        if self.is_open():
-            if time.time() - self.circuit_open_time > self.recovery_timeout:
-                logger.info("Circuit breaker: Attempting recovery")
-                self.reset()
-            else:
-                raise CircuitBreakerOpen(
-                    f"LMS CLI circuit breaker is open. "
-                    f"Retry after {int(self.recovery_timeout - (time.time() - self.circuit_open_time))}s"
-                )
+**Edge Cases to Handle**:
+1. **Concurrent requests with different models**: Out of scope for MVP (Phase 1 doesn't support concurrency)
+2. **Model not loaded but exists**: ModelValidator returns clear error
+3. **Model name typo**: ModelNotFoundError with list of available models
+4. **Network failure during validation**: Retry with exponential backoff
+5. **Model validation cache stale**: 60s TTL ensures freshness
 
-        try:
-            result = func(*args, **kwargs)
-            self.on_success()
-            return result
-        except Exception as e:
-            self.on_failure()
-            raise
+**Future Enhancement** (Option C):
+- Concurrent model execution with connection pooling
+- Model selection strategies
+- Automatic fallback to alternative models
 
-    def is_open(self) -> bool:
-        return self.circuit_open_time is not None
+#### 6. Phase 2 Timeline Adjustment
+**Issue** (Qwen3-Coder): Phase 2 estimate too optimistic
+**Fix**: Adjusted from 2.5-3h to 3-3.5h
 
-    def on_success(self):
-        self.failure_count = 0
+**Revised Timeline**:
+- Phase 1: 2-2.5h (unchanged)
+- Phase 2: 3-3.5h (increased by 30-60 min)
+- Phase 3: 1.5-2h (unchanged)
+- Phase 4: 2-2.5h (unchanged)
+- **New Total**: 9-11.5 hours (was 8-10 hours)
 
-    def on_failure(self):
-        self.failure_count += 1
-        if self.failure_count >= self.failure_threshold:
-            logger.error(f"Circuit breaker: OPEN after {self.failure_count} failures")
-            self.circuit_open_time = time.time()
-
-    def reset(self):
-        self.failure_count = 0
-        self.circuit_open_time = None
-
-
-class CircuitBreakerOpen(Exception):
-    """Raised when circuit breaker is open."""
-    pass
-
-
-# Add circuit breaker instance
-_circuit_breaker = LMSCircuitBreaker()
-
-
-@classmethod
-def load_model(cls, model_name: str, keep_loaded: bool = True, ttl: Optional[int] = None) -> bool:
-    """Load model with circuit breaker protection."""
-    return _circuit_breaker.call(cls._load_model_impl, model_name, keep_loaded, ttl)
-```
-
-**Acceptance Criteria**:
-- [ ] Retry logic applied to model loading
-- [ ] Exponential backoff working (1s, 2s, 4s)
-- [ ] Circuit breaker prevents cascading failures
-- [ ] Clear logging of retry attempts
-- [ ] Tests cover retry scenarios
-
-**Testing**:
-```python
-def test_retry_succeeds_on_second_attempt():
-    """Verify retry logic recovers from transient failure."""
-    attempts = []
-
-    def flaky_load(model_name):
-        attempts.append(1)
-        if len(attempts) < 2:
-            raise subprocess.TimeoutExpired("lms", 5)
-        return True
-
-    with mock.patch('LMSHelper._load_model_impl', side_effect=flaky_load):
-        result = LMSHelper.load_model("test-model")
-        assert result is True
-        assert len(attempts) == 2  # Failed once, succeeded second time
-
-def test_circuit_breaker_opens_after_failures():
-    """Verify circuit breaker opens after threshold failures."""
-    for _ in range(5):  # Trigger 5 failures
-        try:
-            LMSHelper.load_model("failing-model")
-        except:
-            pass
-
-    # Circuit should be open now
-    with pytest.raises(CircuitBreakerOpen):
-        LMSHelper.load_model("test-model")
-```
+#### 7. Added Logging Throughout
+**Issue** (Qwen3-Coder suggestion): Add traceability via logging
+**Fix**: All code examples include `logger.info()` and `logger.error()` calls
 
 ---
 
-### Phase 0 Completion Criteria
+## Updated Success Criteria
 
-**All 3 tasks must be completed before proceeding to Phase 1**
+### Must Have (Critical)
+- [x] `previous_response_id` bug fixed
+- [ ] All imports defined in code examples
+- [ ] Backward compatibility verified (3 test scenarios)
+- [ ] Phase completion reviews after each phase
+- [ ] Edge cases documented and handled
+- [ ] All 3 LLMs approve final implementation
 
-- [ ] Task 0.1: TTL configuration fixed (all models have explicit TTL)
-- [ ] Task 0.2: Health check verification added (catches false positives)
-- [ ] Task 0.3: Retry logic + circuit breaker implemented
-- [ ] All tests passing
-- [ ] Qwen review approves fixes
-- [ ] No regressions in existing tests
+### Should Have (Important)
+- [ ] Logging added throughout for traceability
+- [ ] Model alias support (nice-to-have)
+- [ ] Performance benchmarks vs old implementation
 
-**Deliverables**:
-- Updated `utils/lms_helper.py` with TTL fix, verification, retry, circuit breaker
-- Updated `tools/autonomous.py` to use new verification method
-- Updated `tools/dynamic_autonomous.py` to use new verification method
-- Updated `config.py` with TTL configuration
-- New tests for retry logic and circuit breaker
-- Updated documentation
+### Nice to Have (Optional)
+- [ ] Cross-tool validation tests
+- [ ] Concurrent request handling (defer to Option C)
 
 ---
 
-## Phase 1: Production Hardening (5-6 hours) 🟠
-
-**Priority**: HIGH - Must complete before multi-model support
-**Owner**: Claude Code
-**Reviewer**: Qwen 3
-**Depends On**: Phase 0 complete
-**Status**: ⏳ PENDING
+## Phase 1: Model Validation Layer (2-2.5 hours)
 
 ### Overview
-
-Add missing failure testing, performance benchmarks, and observability that Qwen identified as critical gaps.
-
----
-
-### Task 1.1: Add Failure Scenario Tests
-
-**Time**: 2-2.5 hours
-**Severity**: 🔴 CRITICAL - Zero failure tests currently
-**Status**: ⏳ PENDING
-
-#### Missing Tests (from Qwen Review)
-
-Create comprehensive failure scenario test suite covering model loading failures, concurrent operations, resource exhaustion, and edge cases.
-
-**File**: `tests/test_failure_scenarios.py` (NEW)
-
-**Test Categories**:
-1. Model Loading Failures (5+ tests)
-2. Concurrent Operations (3+ tests)
-3. Resource Exhaustion (3+ tests)
-4. Edge Cases (5+ tests)
-5. Network & Timeout Failures (4+ tests)
-
-**Acceptance Criteria**:
-- [ ] 20+ failure scenario tests added
-- [ ] All tests pass
-- [ ] Coverage for model loading failures
-- [ ] Coverage for concurrent operations
-- [ ] Coverage for resource exhaustion
-- [ ] Coverage for edge cases
-- [ ] Test coverage > 95%
-
----
-
-### Task 1.2: Add Performance Benchmarks
-
-**Time**: 1.5-2 hours
-**Severity**: 🟠 HIGH - Cannot validate production SLAs
-**Status**: ⏳ PENDING
-
-#### Missing Benchmarks (from Qwen Review)
-
-Create production performance benchmark suite measuring latency, throughput, and memory usage.
-
-**File**: `tests/benchmark_production_performance.py` (NEW)
-
-**Benchmark Categories**:
-1. Model Load Time (cold start, warm start)
-2. Verification Overhead
-3. Autonomous Execution Latency (P50, P95, P99)
-4. Throughput (requests/second)
-5. Memory Usage Under Load
-
-**Acceptance Criteria**:
-- [ ] Performance benchmarks added
-- [ ] Latency benchmarks (P50, P95, P99)
-- [ ] Throughput benchmarks (> 0.5 req/s)
-- [ ] Memory usage benchmarks (< 500MB for 3 models)
-- [ ] All benchmarks pass acceptance criteria
-- [ ] Results documented
-
----
-
-### Task 1.3: Add Structured Logging & Metrics
-
-**Time**: 1.5-2 hours
-**Severity**: 🟠 HIGH - Essential for production debugging
-**Status**: ⏳ PENDING
-
-#### Solution
-
-Implement structured logging with Loguru and Prometheus metrics for production observability.
-
-**File**: `utils/observability.py` (NEW)
-
-**Components**:
-1. Structured logging with JSON format
-2. Prometheus metrics (counters, histograms, gauges)
-3. Context-aware logging
-4. Metrics collector class
-
-**Acceptance Criteria**:
-- [ ] Structured logging implemented
-- [ ] Prometheus metrics exposed
-- [ ] All operations logged with context
-- [ ] Metrics dashboard created (Grafana)
-- [ ] Log aggregation working
-
----
-
-### Phase 1 Completion Criteria
-
-- [ ] Task 1.1: 20+ failure scenario tests added and passing
-- [ ] Task 1.2: Performance benchmarks created and passing
-- [ ] Task 1.3: Structured logging and metrics implemented
-- [ ] Test coverage > 95%
-- [ ] All benchmarks meet acceptance criteria
-- [ ] Metrics visible in monitoring system
-- [ ] Qwen review approves hardening
-
-**Deliverables**:
-- `tests/test_failure_scenarios.py` (NEW)
-- `tests/benchmark_production_performance.py` (NEW)
-- `utils/observability.py` (NEW)
-- Updated `utils/lms_helper.py` with metrics
-- Grafana dashboard JSON
-- Documentation for monitoring
-
----
-
-## Phase 2: Model Validation Layer (2-2.5 hours)
-
-**Priority**: MEDIUM - Multi-model support foundation
-**Owner**: Claude Code
-**Reviewer**: Qwen3-Coder
-**Depends On**: Phase 0 and Phase 1 complete
-**Status**: ⏳ PENDING
-
-### Overview
-
-Create robust model validation infrastructure using the production-hardened error handling from Phase 0.
+Create robust model validation infrastructure before touching core autonomous tools.
 
 ### Tasks
 
-#### 2.1 Create Exception Hierarchy
+#### 1.1 Create Exception Hierarchy
 **Owner**: Claude Code
 **Reviewer**: Qwen3-Coder
 **Time**: 30 minutes
 
 **File**: `llm/exceptions.py` (NEW)
+
+**Implementation**:
+```python
+"""Exception hierarchy for LLM operations."""
+
+from datetime import datetime
+from typing import Optional, List
+
+class LLMError(Exception):
+    """Base exception for LLM-related errors."""
+    def __init__(self, message: str, original_exception: Optional[Exception] = None):
+        super().__init__(message)
+        self.original_exception = original_exception
+        self.timestamp = datetime.utcnow()
+
+class LLMTimeoutError(LLMError):
+    """Raised when LLM request times out."""
+    pass
+
+class LLMRateLimitError(LLMError):
+    """Raised when LLM rate limit is exceeded."""
+    pass
+
+class LLMValidationError(LLMError):
+    """Raised when LLM response validation fails."""
+    pass
+
+class LLMConnectionError(LLMError):
+    """Raised when LLM connection fails."""
+    pass
+
+class LLMResponseError(LLMError):
+    """Raised when LLM response format is invalid."""
+    pass
+
+class ModelNotFoundError(LLMValidationError):
+    """Raised when requested model is not available."""
+    def __init__(self, model_name: str, available_models: List[str]):
+        self.model_name = model_name
+        self.available_models = available_models
+        message = f"Model '{model_name}' not found. Available: {', '.join(available_models)}"
+        super().__init__(message)
+```
 
 **Acceptance Criteria**:
 - [ ] All 6 exception classes defined
@@ -668,14 +250,119 @@ Create robust model validation infrastructure using the production-hardened erro
 - [ ] ModelNotFoundError includes available_models
 - [ ] Docstrings complete
 
+**Review Checkpoint**: Qwen3-Coder reviews exception hierarchy design
+
 ---
 
-#### 2.2 Create Error Handling Utilities
+#### 1.2 Create Error Handling Utilities
 **Owner**: Claude Code
 **Reviewer**: Qwen3-Thinking
 **Time**: 45 minutes
 
-**File**: `utils/error_handling.py` (ALREADY EXISTS - extend it)
+**File**: `utils/error_handling.py` (NEW)
+
+**Implementation**:
+```python
+"""Error handling utilities for LLM operations."""
+
+import time
+from functools import wraps
+from typing import Callable, Any, Optional
+import logging
+
+logger = logging.getLogger(__name__)
+
+def retry_with_backoff(
+    max_retries: int = 3,
+    base_delay: float = 1.0,
+    max_delay: float = 60.0,
+    exceptions: tuple = (Exception,)
+):
+    """
+    Retry decorator with exponential backoff.
+
+    Args:
+        max_retries: Maximum number of retry attempts
+        base_delay: Initial delay in seconds
+        max_delay: Maximum delay in seconds
+        exceptions: Tuple of exceptions to catch and retry
+
+    Returns:
+        Decorated function with retry logic
+    """
+    def decorator(func: Callable) -> Callable:
+        @wraps(func)
+        async def async_wrapper(*args, **kwargs) -> Any:
+            last_exception = None
+            for attempt in range(max_retries):
+                try:
+                    return await func(*args, **kwargs)
+                except exceptions as e:
+                    last_exception = e
+                    if attempt == max_retries - 1:
+                        logger.error(f"Max retries ({max_retries}) reached for {func.__name__}")
+                        raise
+
+                    delay = min(base_delay * (2 ** attempt), max_delay)
+                    logger.warning(f"Attempt {attempt + 1} failed, retrying in {delay}s: {e}")
+                    await asyncio.sleep(delay)
+
+            raise last_exception
+
+        @wraps(func)
+        def sync_wrapper(*args, **kwargs) -> Any:
+            last_exception = None
+            for attempt in range(max_retries):
+                try:
+                    return func(*args, **kwargs)
+                except exceptions as e:
+                    last_exception = e
+                    if attempt == max_retries - 1:
+                        logger.error(f"Max retries ({max_retries}) reached for {func.__name__}")
+                        raise
+
+                    delay = min(base_delay * (2 ** attempt), max_delay)
+                    logger.warning(f"Attempt {attempt + 1} failed, retrying in {delay}s: {e}")
+                    time.sleep(delay)
+
+            raise last_exception
+
+        return async_wrapper if asyncio.iscoroutinefunction(func) else sync_wrapper
+
+    return decorator
+
+
+def fallback_strategy(
+    fallback_func: Callable,
+    fallback_args: Optional[tuple] = None,
+    fallback_kwargs: Optional[dict] = None
+):
+    """
+    Decorator that provides fallback when main function fails.
+
+    Args:
+        fallback_func: Function to call on failure
+        fallback_args: Args for fallback function
+        fallback_kwargs: Kwargs for fallback function
+
+    Returns:
+        Decorated function with fallback logic
+    """
+    def decorator(func: Callable) -> Callable:
+        @wraps(func)
+        async def wrapper(*args, **kwargs) -> Any:
+            try:
+                return await func(*args, **kwargs)
+            except Exception as e:
+                logger.warning(f"{func.__name__} failed, using fallback: {e}")
+                f_args = fallback_args or ()
+                f_kwargs = fallback_kwargs or {}
+                return await fallback_func(*f_args, **f_kwargs)
+
+        return wrapper
+
+    return decorator
+```
 
 **Acceptance Criteria**:
 - [ ] retry_with_backoff supports both async and sync
@@ -684,14 +371,124 @@ Create robust model validation infrastructure using the production-hardened erro
 - [ ] fallback_strategy decorator works
 - [ ] Type hints complete
 
+**Review Checkpoint**: Qwen3-Thinking reviews error handling patterns
+
 ---
 
-#### 2.3 Implement Model Validator
+#### 1.3 Implement Model Validator
 **Owner**: Qwen3-Coder (design) → Claude Code (implementation)
 **Reviewer**: Magistral
 **Time**: 45 minutes
 
 **File**: `llm/model_validator.py` (NEW)
+
+**Design Requirements** (from Qwen3-Coder):
+1. Fetch available models from LM Studio API
+2. Cache model list (TTL: 60 seconds)
+3. Validate model name against cached list
+4. Return clear error with available models if not found
+5. Handle API failures gracefully
+
+**Implementation**:
+```python
+"""Model validation for LM Studio."""
+
+import asyncio
+from typing import List, Optional
+from datetime import datetime, timedelta
+import logging
+import httpx
+
+from llm.exceptions import ModelNotFoundError, LLMConnectionError
+from utils.error_handling import retry_with_backoff
+from config import get_config
+
+logger = logging.getLogger(__name__)
+
+class ModelValidator:
+    """Validates model availability against LM Studio API."""
+
+    def __init__(self, api_base: Optional[str] = None):
+        config = get_config()
+        self.api_base = api_base or config.lmstudio.api_base
+        self._cache: Optional[List[str]] = None
+        self._cache_timestamp: Optional[datetime] = None
+        self._cache_ttl = timedelta(seconds=60)
+
+    @retry_with_backoff(max_retries=3, base_delay=1.0)
+    async def _fetch_models(self) -> List[str]:
+        """Fetch available models from LM Studio API."""
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.get(f"{self.api_base}/v1/models")
+                response.raise_for_status()
+                data = response.json()
+
+                # Extract model IDs from response
+                models = [model["id"] for model in data.get("data", [])]
+                logger.debug(f"Fetched {len(models)} models from LM Studio")
+                return models
+
+        except httpx.HTTPError as e:
+            logger.error(f"Failed to fetch models from LM Studio: {e}")
+            raise LLMConnectionError(f"Could not connect to LM Studio API", e)
+
+    async def get_available_models(self, use_cache: bool = True) -> List[str]:
+        """
+        Get list of available models.
+
+        Args:
+            use_cache: Whether to use cached model list
+
+        Returns:
+            List of available model IDs
+        """
+        now = datetime.utcnow()
+
+        # Check cache validity
+        if use_cache and self._cache is not None and self._cache_timestamp is not None:
+            if now - self._cache_timestamp < self._cache_ttl:
+                logger.debug("Using cached model list")
+                return self._cache
+
+        # Fetch fresh model list
+        models = await self._fetch_models()
+        self._cache = models
+        self._cache_timestamp = now
+
+        return models
+
+    async def validate_model(self, model_name: Optional[str]) -> bool:
+        """
+        Validate if model exists in LM Studio.
+
+        Args:
+            model_name: Model ID to validate (None means use default)
+
+        Returns:
+            True if model exists or None (default)
+
+        Raises:
+            ModelNotFoundError: If model not found
+        """
+        # None means use default model (always valid)
+        if model_name is None or model_name == "default":
+            return True
+
+        available_models = await self.get_available_models()
+
+        if model_name not in available_models:
+            raise ModelNotFoundError(model_name, available_models)
+
+        logger.info(f"Model '{model_name}' validated successfully")
+        return True
+
+    def clear_cache(self):
+        """Clear model cache."""
+        self._cache = None
+        self._cache_timestamp = None
+        logger.debug("Model cache cleared")
+```
 
 **Acceptance Criteria**:
 - [ ] Fetches models from /v1/models endpoint
@@ -701,17 +498,105 @@ Create robust model validation infrastructure using the production-hardened erro
 - [ ] Handles API failures gracefully
 - [ ] Logging at appropriate levels
 
+**Review Checkpoint**: Magistral reviews validation architecture
+
 ---
 
-#### 2.4 Create Tests for Validation Layer
+#### 1.4 Create Tests for Validation Layer
 **Owner**: Claude Code
 **Reviewer**: Qwen3-Thinking
 **Time**: 30 minutes
 
 **Files**:
 - `tests/test_exceptions.py` (NEW)
-- `tests/test_error_handling.py` (extend existing)
+- `tests/test_error_handling.py` (NEW)
 - `tests/test_model_validator.py` (NEW)
+
+**Test Coverage Requirements**:
+
+`tests/test_exceptions.py`:
+```python
+"""Tests for LLM exception hierarchy."""
+
+import pytest
+from llm.exceptions import (
+    LLMError, LLMTimeoutError, ModelNotFoundError
+)
+
+def test_base_exception_stores_original():
+    """Base exception should store original exception."""
+    original = ValueError("original error")
+    error = LLMError("wrapped", original)
+    assert error.original_exception is original
+
+def test_model_not_found_includes_available():
+    """ModelNotFoundError should include available models."""
+    available = ["model1", "model2"]
+    error = ModelNotFoundError("model3", available)
+    assert error.model_name == "model3"
+    assert error.available_models == available
+    assert "model1" in str(error)
+
+# ... 5 more tests
+```
+
+`tests/test_error_handling.py`:
+```python
+"""Tests for error handling utilities."""
+
+import pytest
+import asyncio
+from utils.error_handling import retry_with_backoff, fallback_strategy
+
+@pytest.mark.asyncio
+async def test_retry_success_on_second_attempt():
+    """Should retry and succeed on second attempt."""
+    attempts = []
+
+    @retry_with_backoff(max_retries=3, base_delay=0.1)
+    async def flaky_function():
+        attempts.append(1)
+        if len(attempts) < 2:
+            raise ValueError("Temporary error")
+        return "success"
+
+    result = await flaky_function()
+    assert result == "success"
+    assert len(attempts) == 2
+
+# ... 8 more tests
+```
+
+`tests/test_model_validator.py`:
+```python
+"""Tests for model validator."""
+
+import pytest
+from llm.model_validator import ModelValidator
+from llm.exceptions import ModelNotFoundError
+
+@pytest.mark.asyncio
+async def test_validate_existing_model():
+    """Should validate existing model successfully."""
+    validator = ModelValidator()
+    # Assumes LM Studio running with at least one model
+    models = await validator.get_available_models()
+    if models:
+        result = await validator.validate_model(models[0])
+        assert result is True
+
+@pytest.mark.asyncio
+async def test_validate_nonexistent_model_raises():
+    """Should raise ModelNotFoundError for invalid model."""
+    validator = ModelValidator()
+    with pytest.raises(ModelNotFoundError) as exc_info:
+        await validator.validate_model("nonexistent-model-xyz")
+
+    assert "nonexistent-model-xyz" in str(exc_info.value)
+    assert len(exc_info.value.available_models) > 0
+
+# ... 7 more tests
+```
 
 **Acceptance Criteria**:
 - [ ] All exception classes tested
@@ -721,9 +606,11 @@ Create robust model validation infrastructure using the production-hardened erro
 - [ ] Cache behavior tested
 - [ ] Test coverage > 90%
 
+**Review Checkpoint**: Qwen3-Thinking reviews test completeness
+
 ---
 
-### Phase 2 Completion Review
+### Phase 1 Completion Review
 
 **Reviewer**: All 3 LLMs
 **Time**: 15 minutes
@@ -738,34 +625,129 @@ Create robust model validation infrastructure using the production-hardened erro
 
 **Deliverables**:
 - `llm/exceptions.py`
-- Extended `utils/error_handling.py`
+- `utils/error_handling.py`
 - `llm/model_validator.py`
 - `tests/test_exceptions.py`
-- Extended `tests/test_error_handling.py`
+- `tests/test_error_handling.py`
 - `tests/test_model_validator.py`
 
 ---
 
-## Phase 3: Core Tool Interface Updates (3-3.5 hours)
-
-**Priority**: MEDIUM - Multi-model implementation
-**Owner**: Claude Code
-**Reviewer**: Qwen3-Coder
-**Depends On**: Phase 2 complete
-**Status**: ⏳ PENDING
+## Phase 2: Core Tool Interface Updates (2.5-3 hours)
 
 ### Overview
-
-Add model parameter to autonomous tools with proper validation and error handling using production-hardened infrastructure.
+Add model parameter to autonomous tools with proper validation and error handling.
 
 ### Tasks
 
-#### 3.1 Update DynamicAutonomousAgent Class
+#### 2.1 Update DynamicAutonomousAgent Class
 **Owner**: Claude Code
 **Reviewer**: Qwen3-Coder
 **Time**: 1 hour
 
 **File**: `tools/dynamic_autonomous.py`
+
+**Changes Required**:
+
+1. Add ModelValidator import and initialization:
+```python
+from llm.model_validator import ModelValidator
+from llm.exceptions import ModelNotFoundError, LLMConnectionError
+
+class DynamicAutonomousAgent:
+    def __init__(self, mcp_discovery=None, llm_client=None):
+        # ... existing code ...
+        self.model_validator = ModelValidator()
+```
+
+2. Update `autonomous_with_mcp` method signature and implementation:
+```python
+async def autonomous_with_mcp(
+    self,
+    mcp_name: str,
+    task: str,
+    max_rounds: int = DEFAULT_MAX_ROUNDS,
+    max_tokens: Union[int, str] = "auto",
+    model: Optional[str] = None  # NEW PARAMETER
+) -> str:
+    """
+    Execute task autonomously using single MCP with optional model selection.
+
+    Args:
+        mcp_name: Name of MCP to use
+        task: Task description
+        max_rounds: Maximum autonomous loop iterations
+        max_tokens: Maximum tokens per response
+        model: Optional model to use (None uses default)
+
+    Returns:
+        Final answer from LLM
+
+    Raises:
+        ModelNotFoundError: If specified model not available
+        LLMConnectionError: If cannot connect to LM Studio
+    """
+    try:
+        # Validate model if specified
+        if model is not None:
+            await self.model_validator.validate_model(model)
+            logger.info(f"Using model: {model}")
+
+        # Create fresh discovery (hot reload)
+        discovery = MCPDiscovery(self.mcp_json_path)
+
+        # Get connection params
+        params = discovery.get_connection_params(mcp_name)
+
+        # Create LLM client with specific model or use default
+        llm = LLMClient(model=model) if model else self.llm
+
+        # Rest of implementation remains the same
+        # ... (autonomous loop logic unchanged)
+
+    except ModelNotFoundError as e:
+        logger.error(f"Model validation failed: {e}")
+        return f"Error: {str(e)}"
+    except LLMConnectionError as e:
+        logger.error(f"LM Studio connection failed: {e}")
+        return f"Error: Could not connect to LM Studio. Is it running?"
+    except Exception as e:
+        logger.exception(f"Unexpected error in autonomous_with_mcp")
+        return f"Error: {str(e)}"
+```
+
+3. Update `autonomous_with_multiple_mcps` method (similar pattern):
+```python
+async def autonomous_with_multiple_mcps(
+    self,
+    mcp_names: List[str],
+    task: str,
+    max_rounds: int = DEFAULT_MAX_ROUNDS,
+    max_tokens: Union[int, str] = "auto",
+    model: Optional[str] = None  # NEW PARAMETER
+) -> str:
+    """Execute task using multiple MCPs with optional model selection."""
+    # Same validation pattern as above
+    if model is not None:
+        await self.model_validator.validate_model(model)
+
+    llm = LLMClient(model=model) if model else self.llm
+
+    # ... rest unchanged
+```
+
+4. Update `autonomous_discover_and_execute` method (similar pattern):
+```python
+async def autonomous_discover_and_execute(
+    self,
+    task: str,
+    max_rounds: int = DEFAULT_MAX_ROUNDS,
+    max_tokens: Union[int, str] = "auto",
+    model: Optional[str] = None  # NEW PARAMETER
+) -> str:
+    """Execute task with ALL MCPs and optional model selection."""
+    # Same validation pattern
+```
 
 **Acceptance Criteria**:
 - [ ] All 3 methods have model parameter
@@ -775,14 +757,67 @@ Add model parameter to autonomous tools with proper validation and error handlin
 - [ ] Logging includes model name
 - [ ] Docstrings updated
 
+**Review Checkpoint**: Qwen3-Coder reviews implementation
+
 ---
 
-#### 3.2 Update Tool Registration
+#### 2.2 Update Tool Registration
 **Owner**: Claude Code
 **Reviewer**: Qwen3-Thinking
 **Time**: 45 minutes
 
 **File**: `tools/dynamic_autonomous_register.py`
+
+**Changes Required**:
+
+Update all 3 tool signatures to expose model parameter:
+
+```python
+@mcp.tool()
+async def autonomous_with_mcp(
+    mcp_name: Annotated[str, Field(
+        description="Name of the MCP to use (e.g., 'filesystem', 'memory', 'fetch', 'github')"
+    )],
+    task: Annotated[str, Field(
+        description="Task for the local LLM to execute autonomously",
+        min_length=1,
+        max_length=10000
+    )],
+    max_rounds: Annotated[int, Field(
+        description="Maximum rounds for autonomous loop (default: 10000, no artificial limit)",
+        ge=1
+    )] = DEFAULT_MAX_ROUNDS,
+    max_tokens: Annotated[Union[int, str], Field(
+        description="Maximum tokens per LLM response ('auto' for default, or integer to override)"
+    )] = "auto",
+    model: Annotated[Optional[str], Field(
+        description="Optional: Model to use for this task (e.g., 'qwen/qwen3-coder-30b'). If not specified, uses default model from config."
+    )] = None  # NEW PARAMETER
+) -> str:
+    """
+    Execute task autonomously using tools from a SINGLE MCP with optional model selection.
+
+    ... (existing docstring content) ...
+
+    Args:
+        mcp_name: Name of the MCP to use
+        task: Task description
+        max_rounds: Maximum rounds (default: 10000)
+        max_tokens: Maximum tokens per response ('auto' or integer)
+        model: Optional model to use (None uses default)
+
+    ... (rest of docstring) ...
+    """
+    return await agent.autonomous_with_mcp(
+        mcp_name=mcp_name,
+        task=task,
+        max_rounds=max_rounds,
+        max_tokens=max_tokens,
+        model=model  # NEW PARAMETER
+    )
+
+# Repeat for autonomous_with_multiple_mcps and autonomous_discover_and_execute
+```
 
 **Acceptance Criteria**:
 - [ ] All 3 tool functions have model parameter
@@ -791,14 +826,56 @@ Add model parameter to autonomous tools with proper validation and error handlin
 - [ ] Docstrings updated with examples
 - [ ] Parameter passed to agent methods
 
+**Review Checkpoint**: Qwen3-Thinking reviews API design
+
 ---
 
-#### 3.3 Update LLMClient Error Handling
+#### 2.3 Update LLMClient Error Handling
 **Owner**: Claude Code
 **Reviewer**: Qwen3-Coder
 **Time**: 30 minutes
 
 **File**: `llm/llm_client.py`
+
+**Changes Required**:
+
+1. Add exception imports:
+```python
+from llm.exceptions import (
+    LLMConnectionError, LLMTimeoutError, LLMResponseError
+)
+from utils.error_handling import retry_with_backoff
+```
+
+2. Add retry decorator to chat_completion:
+```python
+@retry_with_backoff(
+    max_retries=3,
+    base_delay=1.0,
+    exceptions=(httpx.TimeoutException, httpx.ConnectError)
+)
+async def chat_completion(
+    self,
+    messages: list,
+    temperature: float = 0.7,
+    max_tokens: int = DEFAULT_MAX_TOKENS,
+    tools: Optional[list] = None,
+    tool_choice: Optional[str] = None,
+) -> dict:
+    """Chat completion with automatic retry on transient failures."""
+    try:
+        # ... existing implementation ...
+
+    except httpx.TimeoutException as e:
+        logger.error(f"LM Studio request timed out: {e}")
+        raise LLMTimeoutError("Request timed out", e)
+    except httpx.ConnectError as e:
+        logger.error(f"Could not connect to LM Studio: {e}")
+        raise LLMConnectionError("Connection failed", e)
+    except Exception as e:
+        logger.exception("Unexpected error in chat_completion")
+        raise LLMResponseError(f"Unexpected error: {str(e)}", e)
+```
 
 **Acceptance Criteria**:
 - [ ] Retry decorator applied
@@ -807,14 +884,97 @@ Add model parameter to autonomous tools with proper validation and error handlin
 - [ ] Original exception preserved
 - [ ] Logging appropriate
 
+**Review Checkpoint**: Qwen3-Coder reviews error handling
+
 ---
 
-#### 3.4 Integration Testing
+#### 2.4 Integration Testing
 **Owner**: Claude Code
 **Reviewer**: Magistral
-**Time**: 1 hour
+**Time**: 45 minutes
 
 **File**: `tests/test_multi_model_integration.py` (NEW)
+
+**Test Scenarios**:
+
+```python
+"""Integration tests for multi-model support."""
+
+import pytest
+import asyncio
+from tools.dynamic_autonomous import DynamicAutonomousAgent
+from llm.exceptions import ModelNotFoundError
+
+@pytest.mark.asyncio
+async def test_autonomous_with_specific_model():
+    """Should execute task with specified model."""
+    agent = DynamicAutonomousAgent()
+
+    # Get available models first
+    models = await agent.model_validator.get_available_models()
+    if not models:
+        pytest.skip("No models available in LM Studio")
+
+    # Use first available model
+    result = await agent.autonomous_with_mcp(
+        mcp_name="filesystem",
+        task="List files in current directory and count them",
+        max_rounds=20,
+        model=models[0]
+    )
+
+    assert result is not None
+    assert "Error" not in result or "files" in result.lower()
+
+@pytest.mark.asyncio
+async def test_autonomous_with_invalid_model():
+    """Should fail gracefully with invalid model."""
+    agent = DynamicAutonomousAgent()
+
+    result = await agent.autonomous_with_mcp(
+        mcp_name="filesystem",
+        task="Test task",
+        model="nonexistent-model-xyz"
+    )
+
+    assert "Error" in result
+    assert "not found" in result.lower()
+
+@pytest.mark.asyncio
+async def test_autonomous_without_model_uses_default():
+    """Should use default model when model=None."""
+    agent = DynamicAutonomousAgent()
+
+    result = await agent.autonomous_with_mcp(
+        mcp_name="filesystem",
+        task="What is the current directory?",
+        max_rounds=10
+        # model=None (default)
+    )
+
+    assert result is not None
+    # Should work with default model
+
+@pytest.mark.asyncio
+async def test_multiple_mcps_with_model():
+    """Should work with multiple MCPs and specific model."""
+    agent = DynamicAutonomousAgent()
+
+    models = await agent.model_validator.get_available_models()
+    if not models:
+        pytest.skip("No models available")
+
+    result = await agent.autonomous_with_multiple_mcps(
+        mcp_names=["filesystem", "memory"],
+        task="Read current directory and create a knowledge graph entity about the project",
+        max_rounds=30,
+        model=models[0]
+    )
+
+    assert result is not None
+
+# ... 5 more integration tests
+```
 
 **Acceptance Criteria**:
 - [ ] Tests cover all 3 autonomous methods
@@ -824,9 +984,11 @@ Add model parameter to autonomous tools with proper validation and error handlin
 - [ ] All tests pass
 - [ ] Test coverage > 85%
 
+**Review Checkpoint**: Magistral reviews test coverage and scenarios
+
 ---
 
-### Phase 3 Completion Review
+### Phase 2 Completion Review
 
 **Reviewer**: All 3 LLMs
 **Time**: 15 minutes
@@ -847,24 +1009,59 @@ Add model parameter to autonomous tools with proper validation and error handlin
 
 ---
 
-## Phase 4: Documentation & Examples (1.5-2 hours)
-
-**Priority**: MEDIUM
-**Owner**: Claude Code
-**Reviewer**: Qwen3-Thinking
-**Depends On**: Phase 3 complete
-**Status**: ⏳ PENDING
+## Phase 3: Documentation & Examples (1.5-2 hours)
 
 ### Overview
-
 Comprehensive documentation for multi-model feature with examples and troubleshooting.
 
 ### Tasks
 
-#### 4.1 Update API Reference
+#### 3.1 Update API Reference
+**Owner**: Claude Code
+**Reviewer**: Qwen3-Thinking
 **Time**: 30 minutes
 
 **File**: `docs/API_REFERENCE.md`
+
+**Updates Required**:
+
+1. Add model parameter to all tool signatures
+2. Add examples using model parameter
+3. Document available models discovery
+4. Add troubleshooting section
+
+**Example Addition**:
+```markdown
+### Using Specific Models
+
+All autonomous tools now support an optional `model` parameter:
+
+**Example: Use reasoning model for RAG task**
+```python
+# Use reasoning model for exploration
+autonomous_with_mcp(
+    mcp_name="filesystem",
+    task="Analyze codebase structure and identify key patterns",
+    model="mistralai/magistral-small-2509"
+)
+```
+
+**Example: Use coding model for implementation**
+```python
+# Use coding model for implementation
+autonomous_with_mcp(
+    mcp_name="filesystem",
+    task="Implement helper function based on analysis",
+    model="qwen/qwen3-coder-30b"
+)
+```
+
+**Discovering Available Models**
+```python
+# List available models in LM Studio
+list_models()
+```
+```
 
 **Acceptance Criteria**:
 - [ ] All tool signatures updated
@@ -872,12 +1069,54 @@ Comprehensive documentation for multi-model feature with examples and troublesho
 - [ ] Examples clear and practical
 - [ ] Troubleshooting section added
 
+**Review Checkpoint**: Qwen3-Thinking reviews clarity and completeness
+
 ---
 
-#### 4.2 Update README
+#### 3.2 Update README
+**Owner**: Claude Code
+**Reviewer**: Qwen3-Coder
 **Time**: 30 minutes
 
 **File**: `README.md`
+
+**Updates Required**:
+
+1. Add "Multi-Model Support" section to features
+2. Add quickstart example
+3. Update use cases section
+
+**Example Addition**:
+```markdown
+## Multi-Model Support ✨
+
+Use different models for different tasks in the same workflow!
+
+### Quick Example
+
+```python
+# Step 1: Use reasoning model to explore
+autonomous_with_mcp(
+    "filesystem",
+    "Analyze project structure",
+    model="mistralai/magistral-small-2509"
+)
+
+# Step 2: Use coding model to implement
+autonomous_with_mcp(
+    "filesystem",
+    "Generate utility functions",
+    model="qwen/qwen3-coder-30b"
+)
+```
+
+### Benefits
+
+- **Specialized models** - Use reasoning models for planning, coding models for implementation
+- **Performance** - Choose faster models for simple tasks, powerful models for complex ones
+- **Cost optimization** - Balance speed vs capability
+- **Experimentation** - Compare different models on same task
+```
 
 **Acceptance Criteria**:
 - [ ] Multi-model section prominent
@@ -885,12 +1124,86 @@ Comprehensive documentation for multi-model feature with examples and troublesho
 - [ ] Benefits explained
 - [ ] Quick to understand
 
+**Review Checkpoint**: Qwen3-Coder reviews presentation
+
 ---
 
-#### 4.3 Create Multi-Model Guide
+#### 3.3 Create Multi-Model Guide
+**Owner**: Qwen3-Thinking (outline) → Claude Code (implementation)
+**Reviewer**: Magistral
 **Time**: 45 minutes
 
 **File**: `docs/MULTI_MODEL_GUIDE.md` (NEW)
+
+**Outline** (from Qwen3-Thinking):
+
+```markdown
+# Multi-Model Usage Guide
+
+## Table of Contents
+1. Overview
+2. When to Use Multiple Models
+3. Available Models
+4. Practical Examples
+5. Best Practices
+6. Performance Considerations
+7. Troubleshooting
+
+## 1. Overview
+What is multi-model support and why it's useful...
+
+## 2. When to Use Multiple Models
+
+### Scenario 1: RAG + Implementation
+- Reasoning model explores codebase
+- Coding model implements features
+
+### Scenario 2: Planning + Execution
+- Reasoning model creates plan
+- Fast model executes steps
+
+### Scenario 3: Review + Fix
+- Powerful model reviews code
+- Specialized model fixes issues
+
+## 3. Available Models
+
+### How to List Models
+```python
+list_models()
+```
+
+### Model Categories
+- **Reasoning models**: mistralai/magistral, o1-preview
+- **Coding models**: qwen/qwen3-coder, deepseek-coder
+- **General models**: llama3, mixtral
+- **Fast models**: phi-3, gemma
+
+## 4. Practical Examples
+
+[10+ detailed examples]
+
+## 5. Best Practices
+
+- Choose model based on task complexity
+- Use faster models for iteration
+- Use powerful models for final review
+- Monitor token usage
+- Cache expensive operations
+
+## 6. Performance Considerations
+
+- Model loading time
+- Token generation speed
+- Memory usage
+- Context length
+
+## 7. Troubleshooting
+
+- Model not found
+- Model selection errors
+- Performance issues
+```
 
 **Acceptance Criteria**:
 - [ ] Comprehensive coverage
@@ -899,21 +1212,82 @@ Comprehensive documentation for multi-model feature with examples and troublesho
 - [ ] Troubleshooting complete
 - [ ] Easy to navigate
 
+**Review Checkpoint**: Magistral reviews guide completeness
+
 ---
 
-#### 4.4 Update TROUBLESHOOTING.md
+#### 3.4 Update TROUBLESHOOTING.md
+**Owner**: Claude Code
+**Reviewer**: Qwen3-Coder
 **Time**: 15 minutes
 
 **File**: `docs/TROUBLESHOOTING.md`
+
+**Add New Section**:
+
+```markdown
+## Multi-Model Issues
+
+### Issue: "Model not found"
+
+**Symptoms**:
+```
+Error: Model 'qwen/qwen3-coder' not found. Available: ['llama3', 'mixtral']
+```
+
+**Causes**:
+1. Model not loaded in LM Studio
+2. Typo in model name
+3. Model ID format incorrect
+
+**Solutions**:
+
+1. **Check loaded models**:
+   ```python
+   list_models()
+   ```
+
+2. **Load model in LM Studio**:
+   - Open LM Studio
+   - Search for model
+   - Click "Load"
+   - Wait for loading to complete
+
+3. **Use exact model ID**:
+   ```python
+   # Correct
+   model="qwen/qwen3-coder-30b"
+
+   # Wrong
+   model="qwen3-coder"  # Missing organization prefix
+   ```
+
+### Issue: "Model parameter ignored"
+
+**Cause**: Using old version of lmstudio-bridge-enhanced
+
+**Solution**: Update to v2.0.0+
+
+### Issue: "Wrong model used"
+
+**Symptoms**: Task uses default model instead of specified model
+
+**Solutions**:
+1. Check model parameter spelled correctly
+2. Verify model loaded in LM Studio
+3. Check LM Studio logs for errors
+```
 
 **Acceptance Criteria**:
 - [ ] Common issues covered
 - [ ] Solutions clear
 - [ ] Examples provided
 
+**Review Checkpoint**: Qwen3-Coder reviews troubleshooting clarity
+
 ---
 
-### Phase 4 Completion Review
+### Phase 3 Completion Review
 
 **Reviewer**: All 3 LLMs
 **Time**: 10 minutes
@@ -934,22 +1308,83 @@ Comprehensive documentation for multi-model feature with examples and troublesho
 
 ---
 
-## Phase 5: Final Testing & Polish (2-2.5 hours)
-
-**Priority**: HIGH - Production readiness validation
-**Owner**: Claude Code
-**Reviewer**: All 3 LLMs
-**Depends On**: Phase 4 complete
-**Status**: ⏳ PENDING
+## Phase 4: Final Testing & Polish (2-2.5 hours)
 
 ### Overview
-
 Comprehensive testing, performance validation, and final polish before release.
 
 ### Tasks
 
-#### 5.1 End-to-End Testing
+#### 4.1 End-to-End Testing
+**Owner**: Claude Code
+**Reviewer**: Qwen3-Coder
 **Time**: 1 hour
+
+**Test Scenarios**:
+
+1. **Multi-Model Workflow Test**:
+```python
+# Load 2 different models in LM Studio first
+# Test: Reasoning model → Coding model workflow
+
+# Step 1: Reasoning model explores
+result1 = autonomous_with_mcp(
+    "filesystem",
+    "Analyze project structure and identify missing tests",
+    model="mistralai/magistral-small-2509"
+)
+
+# Step 2: Coding model generates tests
+result2 = autonomous_with_mcp(
+    "filesystem",
+    f"Based on this analysis: {result1}, generate unit tests",
+    model="qwen/qwen3-coder-30b"
+)
+
+# Verify both results valid
+assert result1 and result2
+assert "Error" not in result1
+assert "Error" not in result2
+```
+
+2. **Model Validation Test**:
+```python
+# Test: Invalid model handling
+result = autonomous_with_mcp(
+    "filesystem",
+    "Test task",
+    model="nonexistent-model"
+)
+
+assert "Error" in result
+assert "not found" in result.lower()
+assert "Available" in result  # Should list available models
+```
+
+3. **Backward Compatibility Test**:
+```python
+# Test: Works without model parameter
+result = autonomous_with_mcp(
+    "filesystem",
+    "List current directory"
+    # No model parameter - should use default
+)
+
+assert result
+assert "Error" not in result
+```
+
+4. **Multiple MCPs + Model Test**:
+```python
+# Test: Model parameter with multiple MCPs
+result = autonomous_with_multiple_mcps(
+    ["filesystem", "memory"],
+    "Analyze code and create knowledge graph",
+    model="qwen/qwen3-coder-30b"
+)
+
+assert result
+```
 
 **Acceptance Criteria**:
 - [ ] All scenarios pass
@@ -957,30 +1392,131 @@ Comprehensive testing, performance validation, and final polish before release.
 - [ ] Backward compatibility verified
 - [ ] Performance acceptable
 
+**Review Checkpoint**: Qwen3-Coder reviews test results
+
 ---
 
-#### 5.2 Performance Benchmarking
+#### 4.2 Performance Benchmarking
+**Owner**: Qwen3-Thinking (design) → Claude Code (implementation)
+**Reviewer**: Magistral
 **Time**: 45 minutes
+
+**File**: `tests/benchmark_multi_model.py` (NEW)
+
+**Benchmarks to Measure**:
+
+1. Model validation overhead
+2. Model switching cost
+3. Different model performance comparison
+
+```python
+"""Benchmark multi-model support performance."""
+
+import asyncio
+import time
+from tools.dynamic_autonomous import DynamicAutonomousAgent
+from llm.model_validator import ModelValidator
+
+async def benchmark_validation_overhead():
+    """Measure model validation overhead."""
+    validator = ModelValidator()
+
+    # Warm up cache
+    await validator.get_available_models()
+
+    # Benchmark cached validation
+    start = time.perf_counter()
+    for _ in range(100):
+        await validator.validate_model("qwen/qwen3-coder-30b")
+    end = time.perf_counter()
+
+    avg_time = (end - start) / 100 * 1000  # Convert to ms
+    print(f"Validation overhead (cached): {avg_time:.4f} ms")
+
+    # Should be < 0.1ms with cache
+    assert avg_time < 0.1
+
+async def benchmark_model_comparison():
+    """Compare different models on same task."""
+    agent = DynamicAutonomousAgent()
+
+    models = await agent.model_validator.get_available_models()
+    if len(models) < 2:
+        print("Skipping: Need 2+ models loaded")
+        return
+
+    task = "Count to 10"
+
+    results = {}
+    for model in models[:2]:  # Test first 2 models
+        start = time.perf_counter()
+        result = await agent.autonomous_with_mcp(
+            "filesystem",
+            task,
+            max_rounds=10,
+            model=model
+        )
+        end = time.perf_counter()
+
+        results[model] = {
+            "time": end - start,
+            "result": result
+        }
+        print(f"\nModel: {model}")
+        print(f"Time: {results[model]['time']:.2f}s")
+
+    return results
+
+if __name__ == "__main__":
+    asyncio.run(benchmark_validation_overhead())
+    asyncio.run(benchmark_model_comparison())
+```
 
 **Acceptance Criteria**:
 - [ ] Validation overhead < 0.1ms
 - [ ] Benchmarks run successfully
 - [ ] Results documented
 
+**Review Checkpoint**: Magistral reviews performance results
+
 ---
 
-#### 5.3 Documentation Review
+#### 4.3 Documentation Review
+**Owner**: All 3 LLMs (collaborative)
 **Time**: 30 minutes
 
-**Acceptance Criteria**:
-- [ ] Code examples work
-- [ ] Logical flow clear
-- [ ] Architecture decisions explained
+**Review Checklist**:
+
+1. **Qwen3-Coder** reviews:
+   - [ ] Code examples work
+   - [ ] Syntax correct
+   - [ ] Examples cover common use cases
+
+2. **Qwen3-Thinking** reviews:
+   - [ ] Logical flow
+   - [ ] Completeness
+   - [ ] Ease of understanding
+
+3. **Magistral** reviews:
+   - [ ] Architecture decisions explained
+   - [ ] Best practices sound
+   - [ ] Troubleshooting comprehensive
+
+**Deliverable**: Consolidated feedback document
 
 ---
 
-#### 5.4 Final Polish
+#### 4.4 Final Polish
+**Owner**: Claude Code
+**Reviewer**: Qwen3-Coder
 **Time**: 15 minutes
+
+**Tasks**:
+1. Address documentation feedback
+2. Fix any typos or inconsistencies
+3. Ensure all examples tested
+4. Update version numbers
+5. Prepare CHANGELOG entry
 
 **Acceptance Criteria**:
 - [ ] All feedback addressed
@@ -988,9 +1524,11 @@ Comprehensive testing, performance validation, and final polish before release.
 - [ ] Examples verified
 - [ ] CHANGELOG.md updated
 
+**Review Checkpoint**: Final sign-off from all LLMs
+
 ---
 
-### Phase 5 Completion Review
+### Phase 4 Completion Review
 
 **Reviewer**: All 3 LLMs
 **Time**: 15 minutes
@@ -1010,109 +1548,189 @@ Comprehensive testing, performance validation, and final polish before release.
 
 ---
 
-## Updated Timeline Summary
+## Task Assignment Matrix
 
-| Phase | Description | Duration | Dependencies | Status |
-|-------|-------------|----------|--------------|--------|
-| **Phase 0** | Critical Production Fixes | 3-4 hours | None (START HERE) | ⏳ PENDING |
-| **Phase 1** | Production Hardening | 5-6 hours | Phase 0 complete | ⏳ PENDING |
-| **Phase 2** | Model Validation Layer | 2-2.5 hours | Phase 1 complete | ⏳ PENDING |
-| **Phase 3** | Core Tool Interface | 3-3.5 hours | Phase 2 complete | ⏳ PENDING |
-| **Phase 4** | Documentation & Examples | 1.5-2 hours | Phase 3 complete | ⏳ PENDING |
-| **Phase 5** | Final Testing & Polish | 2-2.5 hours | Phase 4 complete | ⏳ PENDING |
-| **TOTAL** | **18-22 hours** | **(was 8-10h)** | | |
+| Phase | Task | Owner | Reviewer | Duration |
+|-------|------|-------|----------|----------|
+| **Phase 1: Validation Layer** | | | | **2-2.5h** |
+| 1.1 | Exception Hierarchy | Claude Code | Qwen3-Coder | 30m |
+| 1.2 | Error Handling Utils | Claude Code | Qwen3-Thinking | 45m |
+| 1.3 | Model Validator | Qwen3-Coder → Claude | Magistral | 45m |
+| 1.4 | Validation Tests | Claude Code | Qwen3-Thinking | 30m |
+| **Phase 2: Core Interface** | | | | **2.5-3h** |
+| 2.1 | Update Agent Class | Claude Code | Qwen3-Coder | 1h |
+| 2.2 | Update Registration | Claude Code | Qwen3-Thinking | 45m |
+| 2.3 | Update LLMClient | Claude Code | Qwen3-Coder | 30m |
+| 2.4 | Integration Tests | Claude Code | Magistral | 45m |
+| **Phase 3: Documentation** | | | | **1.5-2h** |
+| 3.1 | API Reference | Claude Code | Qwen3-Thinking | 30m |
+| 3.2 | README | Claude Code | Qwen3-Coder | 30m |
+| 3.3 | Multi-Model Guide | Qwen3-Thinking → Claude | Magistral | 45m |
+| 3.4 | Troubleshooting | Claude Code | Qwen3-Coder | 15m |
+| **Phase 4: Testing & Polish** | | | | **2-2.5h** |
+| 4.1 | E2E Testing | Claude Code | Qwen3-Coder | 1h |
+| 4.2 | Benchmarking | Qwen3-Thinking → Claude | Magistral | 45m |
+| 4.3 | Doc Review | All 3 LLMs | - | 30m |
+| 4.4 | Final Polish | Claude Code | Qwen3-Coder | 15m |
 
----
-
-## Success Criteria (Updated)
-
-### Phase 0 Success (MUST ACHIEVE)
-- [ ] All models have explicit TTL (no infinite loading)
-- [ ] Health check verification catches false positives
-- [ ] Retry logic handles transient failures
-- [ ] Circuit breaker prevents cascading failures
-- [ ] Qwen rating improves from 6/10 to 8/10
-
-### Phase 1 Success (MUST ACHIEVE)
-- [ ] 20+ failure scenario tests passing
-- [ ] Performance benchmarks meet SLAs
-- [ ] Structured logging and metrics working
-- [ ] Test coverage > 95%
-- [ ] Qwen rating improves to 9/10
-
-### Phases 2-5 Success (Original Multi-Model Goals)
-- [ ] Multi-model support working
-- [ ] Backward compatible
-- [ ] Documentation complete
-- [ ] Production ready
-- [ ] Qwen rating 9-10/10
+**Total Duration**: 8-10 hours
 
 ---
 
-## LLM Review Feedback & Critical Updates
+## Review Cycle Framework
 
-**Review Date**: October 30, 2025
-**Reviewers**: Qwen3-Coder, Qwen3-Thinking, Magistral
+### Review Types
 
-### ✅ Critical Issues Fixed (Already Done)
+1. **Design Review** (before implementation)
+   - Reviewer: Gets design/plan from implementer
+   - Validates: Architecture, patterns, edge cases
+   - Duration: 10-15 minutes
+   - Output: Approval or feedback
 
-#### 1. Previous Response ID Bug (COMPLETED ✅)
-**Issue**: `previous_response_id` was always null, breaking stateful conversations
-**Fix Applied**: Updated both `_autonomous_loop` methods to use `create_response()` with proper `previous_response_id` tracking
-**Impact**: 97% token savings restored, conversations maintain proper state
+2. **Implementation Review** (after coding)
+   - Reviewer: Gets code from implementer
+   - Validates: Correctness, quality, tests
+   - Duration: 15-20 minutes
+   - Output: Approval or change requests
 
-#### 2. Missing Imports in Code Examples
-**Issue** (Qwen3-Coder): Code examples missing required imports
-**Fix**: All code examples in this plan include proper imports
+3. **Collaborative Review** (for complex tasks)
+   - Multiple LLMs review together
+   - Validates: Completeness, consistency
+   - Duration: 20-30 minutes
+   - Output: Consensus approval
 
-#### 3. Backward Compatibility Plan
-**Issue** (Qwen3-Thinking): No explicit backward compatibility section
-**Fix**: Comprehensive backward compatibility requirements added
+### Review Checkpoints
 
-**Backward Compatibility Requirements**:
-- ✅ `model=None` must work (uses default model from config)
-- ✅ Existing code without `model` parameter continues to work
-- ✅ All existing tests pass without modification
-- ✅ No breaking changes to tool signatures (parameter is optional)
-- ✅ Default behavior unchanged when parameter not provided
+**After Each Task**:
+- Implementer notifies reviewer
+- Reviewer examines deliverable
+- Reviewer provides feedback (approve/request changes)
+- Implementer addresses feedback if needed
 
----
+**After Each Phase**:
+- All LLMs review phase deliverables together
+- Validate phase completion criteria met
+- Sign off before moving to next phase
 
-## Risk Mitigation (Updated)
-
-### Risk 1: Timeline Doubled (8h → 18-22h)
-**Mitigation**: Critical fixes are non-negotiable for production
-**Justification**: Qwen identified production-blocking issues
-**Reality**: 6/10 rating confirms issues are real, not over-engineering
-
-### Risk 2: Breaking Changes from Fixes
-**Mitigation**: Comprehensive test suite catches regressions
-**Validation**: Run existing 20 tests after each phase
-**Safety Net**: All phases have completion reviews
-
-### Risk 3: Complexity Increase
-**Mitigation**: Phases 0-1 actually simplify architecture by fixing assumptions
-**Benefit**: Proper error handling reduces complexity in long run
-**Trade-off**: Worth it for production reliability
+**Final Review**:
+- All LLMs review complete implementation
+- Validate all requirements met
+- Final sign-off for release
 
 ---
 
-## Next Steps
+## ⚠️ IMPORTANT: Phase 5 Required for Production
 
-1. **STOP** any work on multi-model support
-2. **START** Phase 0 immediately (TTL fix, health checks, retry logic)
-3. **VALIDATE** Qwen approves Phase 0 before Phase 1
-4. **CONTINUE** to Phases 1-5 only after production hardening complete
-5. **REVIEW** with Qwen after Phase 0 and Phase 1
+**Status**: 🔴 CRITICAL
+
+After completing Phases 1-4, code reviews from 3 LLMs (Magistral, Qwen3-Coder-30B, Qwen3-Thinking) identified **4 critical production gaps** that must be addressed before production deployment.
+
+**LLM Review Results**:
+- Average Rating: **8.0/10**
+- Production Readiness: **80%**
+- Consensus: "Solid foundation, but critical gaps in streaming, concurrency, and edge cases"
+
+### Critical Gaps Identified
+
+1. **No Streaming Support** 🔴 - 83% of production systems use streaming
+2. **Mid-Request Model Switching** 🔴 - Not handled, could cause data corruption
+3. **Concurrent Request Safety** 🟠 - No async/await, potential race conditions
+4. **Cache Expiration** 🟠 - No TTL, could cause memory bloat
+
+### Phase 5 Timeline
+
+- **Critical Path**: 44 hours (~1 week) - Streaming + Cancellation
+- **Recommended Path**: 70 hours (~2 weeks) - Critical + High Priority fixes
+
+**Full Plan**: See `PHASE5_PRODUCTION_HARDENING_PLAN.md` for detailed implementation plan, code examples, and acceptance criteria.
+
+**Target After Phase 5**:
+- Rating: 9-10/10
+- Production Readiness: 95%+
+
+---
+
+## Success Criteria
+
+### Technical Requirements ✅
+- [ ] Model parameter added to all 3 autonomous tools
+- [ ] Model validation implemented
+- [ ] Error handling robust
+- [ ] Backward compatible (model=None works)
+- [ ] All tests pass (>90% coverage)
+- [ ] Performance acceptable (<0.1ms validation overhead)
+
+### Documentation Requirements ✅
+- [ ] API Reference updated
+- [ ] README updated
+- [ ] Multi-Model Guide created
+- [ ] Troubleshooting updated
+- [ ] Examples tested and working
+
+### Quality Requirements ✅
+- [ ] Code reviewed by 3 LLMs
+- [ ] No regressions introduced
+- [ ] Consistent with existing codebase
+- [ ] Production-ready quality
+
+### Timeline Requirements ✅
+- [ ] Total time: 8-10 hours
+- [ ] All phases completed
+- [ ] Review cycles included
+
+---
+
+## Deliverables Summary
+
+### New Files (7)
+1. `llm/exceptions.py` - Exception hierarchy
+2. `utils/error_handling.py` - Retry/fallback utilities
+3. `llm/model_validator.py` - Model validation
+4. `tests/test_exceptions.py` - Exception tests
+5. `tests/test_error_handling.py` - Error handling tests
+6. `tests/test_model_validator.py` - Validator tests
+7. `tests/test_multi_model_integration.py` - Integration tests
+8. `tests/benchmark_multi_model.py` - Performance benchmarks
+9. `docs/MULTI_MODEL_GUIDE.md` - Usage guide
+
+### Modified Files (5)
+1. `tools/dynamic_autonomous.py` - Add model parameter
+2. `tools/dynamic_autonomous_register.py` - Expose model in tools
+3. `llm/llm_client.py` - Add error handling
+4. `docs/API_REFERENCE.md` - Document model parameter
+5. `README.md` - Add multi-model section
+6. `docs/TROUBLESHOOTING.md` - Add multi-model issues
+
+### Total: 14 files (9 new + 5 modified)
+
+---
+
+## Risk Mitigation
+
+### Risk 1: Model Validation Overhead
+**Mitigation**: 60-second cache for model list
+**Validation**: Benchmark shows <0.1ms overhead
+
+### Risk 2: Breaking Changes
+**Mitigation**: Optional parameter, backward compatible
+**Validation**: Existing tests still pass
+
+### Risk 3: Error Handling Complexity
+**Mitigation**: Simple exception hierarchy, clear messages
+**Validation**: Comprehensive tests
+
+### Risk 4: Timeline Overrun
+**Mitigation**: Break into small tasks, frequent reviews
+**Validation**: Track time per task
 
 ---
 
 ## Post-Implementation
 
 ### After Completion
-1. Run full test suite (all 20+ tests)
+1. Run full test suite
 2. Update CHANGELOG.md
-3. Tag release (v2.1.0 - production-hardened + multi-model)
+3. Tag release (v2.0.0)
 4. Announce feature to users
 5. Monitor for issues
 
@@ -1121,14 +1739,12 @@ Comprehensive testing, performance validation, and final polish before release.
 - Model performance analytics
 - Concurrent multi-model execution
 - Model fallback strategies
-- Streaming support (from previous Phase 5 review)
 
 ---
 
-**Plan Version**: 2.0 (Post-Qwen Review & Testing Cycle)
+**Plan Version**: 1.0
 **Created**: October 30, 2025
-**Updated**: October 30, 2025
-**Authors**: Claude Code (based on Qwen 3 critical review + testing results)
-**Status**: Ready for Implementation (Phase 0 first!)
-**Estimated Duration**: 18-22 hours
-**Target Release**: v2.1.0 (production-hardened + multi-model)
+**Authors**: Claude Code + Qwen3-Coder + Qwen3-Thinking + Magistral
+**Status**: Ready for Implementation
+**Estimated Duration**: 8-10 hours
+**Target Release**: v2.0.0
