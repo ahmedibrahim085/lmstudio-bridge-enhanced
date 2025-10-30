@@ -28,6 +28,10 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
+# TTL Configuration
+DEFAULT_MODEL_TTL = 600  # 10 minutes (configurable)
+TEMP_MODEL_TTL = 300     # 5 minutes for temporary models
+
 
 class LMSHelper:
     """Helper for LM Studio CLI operations (optional)."""
@@ -117,14 +121,14 @@ ALTERNATIVE:
         print("⚠️  " * 40 + "\n")
 
     @classmethod
-    def load_model(cls, model_name: str, keep_loaded: bool = True) -> bool:
+    def load_model(cls, model_name: str, keep_loaded: bool = True, ttl: Optional[int] = None) -> bool:
         """
-        Load a model using LMS CLI.
+        Load a model using LMS CLI with configurable TTL.
 
         Args:
             model_name: Name of model to load
-            keep_loaded: If True, prevents auto-unload (no TTL)
-                        If False, sets TTL to 300 seconds (5 minutes)
+            keep_loaded: If True, use longer TTL (10m); if False, use shorter TTL (5m)
+            ttl: Optional explicit TTL override in seconds
 
         Returns:
             True if successful, False otherwise
@@ -136,10 +140,16 @@ ALTERNATIVE:
         try:
             cmd = ["lms", "load", model_name, "--yes"]  # --yes suppresses confirmations
 
-            # If keep_loaded=False, add TTL to allow auto-unload
-            # If keep_loaded=True, omit TTL (model stays loaded indefinitely)
-            if not keep_loaded:
-                cmd.extend(["--ttl", "300"])  # 5 minutes TTL
+            # ALWAYS use TTL (never infinite loading) - CRITICAL FIX for memory leaks
+            if ttl is not None:
+                actual_ttl = ttl
+            elif keep_loaded:
+                actual_ttl = DEFAULT_MODEL_TTL  # 10 minutes
+            else:
+                actual_ttl = TEMP_MODEL_TTL      # 5 minutes
+
+            cmd.extend(["--ttl", str(actual_ttl)])
+            logger.info(f"Loading model '{model_name}' with TTL={actual_ttl}s")
 
             result = subprocess.run(
                 cmd,
@@ -149,7 +159,7 @@ ALTERNATIVE:
             )
 
             if result.returncode == 0:
-                logger.info(f"✅ Model loaded: {model_name} (keep_loaded={keep_loaded})")
+                logger.info(f"✅ Model loaded: {model_name} (TTL={actual_ttl}s)")
                 return True
             else:
                 logger.error(f"Failed to load model: {result.stderr}")
@@ -269,6 +279,75 @@ ALTERNATIVE:
         # Not loaded - load it now
         logger.info(f"Loading model: {model_name}")
         return cls.load_model(model_name, keep_loaded=True)
+
+    @classmethod
+    def verify_model_loaded(cls, model_name: str) -> bool:
+        """
+        Verify model is actually loaded (not just CLI state).
+
+        This is a health check to catch false positives where CLI reports
+        success but model isn't actually available (memory pressure, etc).
+
+        Args:
+            model_name: Name of model to verify
+
+        Returns:
+            True if model is confirmed loaded, False otherwise
+        """
+        try:
+            loaded_models = cls.list_loaded_models()
+            if not loaded_models:
+                return False
+
+            for model in loaded_models:
+                if model.get('identifier') == model_name:
+                    logger.debug(f"Model '{model_name}' verified loaded")
+                    return True
+
+            logger.warning(f"Model '{model_name}' not found in loaded models")
+            return False
+        except Exception as e:
+            logger.error(f"Error verifying model: {e}")
+            return False
+
+    @classmethod
+    def ensure_model_loaded_with_verification(cls, model_name: str, ttl: Optional[int] = None) -> bool:
+        """
+        Ensure model is loaded AND verify it's actually available.
+
+        This is the production-hardened version that includes health checks
+        to catch false positives from the load command.
+
+        Args:
+            model_name: Name of model to ensure is loaded
+            ttl: Optional TTL override
+
+        Returns:
+            True if model is loaded and verified
+
+        Raises:
+            Exception: If model loading or verification fails
+        """
+        if cls.is_model_loaded(model_name):
+            logger.debug(f"Model '{model_name}' already loaded")
+            return True
+
+        logger.info(f"Loading model '{model_name}'...")
+        if not cls.load_model(model_name, keep_loaded=True, ttl=ttl):
+            raise Exception(f"Failed to load model '{model_name}'")
+
+        # Give LM Studio time to fully load the model
+        import time
+        time.sleep(2)
+
+        if not cls.verify_model_loaded(model_name):
+            raise Exception(
+                f"Model '{model_name}' reported loaded but verification failed. "
+                "This usually means LM Studio is under memory pressure."
+            )
+
+        logger.info(f"✅ Model '{model_name}' loaded and verified")
+        return True
 
     @classmethod
     def get_server_status(cls) -> Optional[Dict[str, Any]]:
