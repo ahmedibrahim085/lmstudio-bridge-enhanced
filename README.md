@@ -13,29 +13,21 @@ Enhanced Model Context Protocol (MCP) server for LM Studio with advanced feature
 - **generate_embeddings**: Vector embeddings for RAG systems and semantic search
 - **create_response**: Stateful conversations with automatic context management via response IDs
 
-### Autonomous MCP Functions (8) 🚀
+### Autonomous MCP Functions (4) 🚀
 
-**NEW: Optimized v2 versions using stateful `/v1/responses` API (97% token savings!)**
+**Optimized using stateful `/v1/responses` API with 97% token savings!**
 
-#### Recommended: V2 Functions (Optimized)
-- **autonomous_filesystem_full_v2**: Execute filesystem tasks autonomously (98% token savings)
-- **autonomous_memory_full_v2**: Build and query knowledge graphs autonomously (98% token savings)
-- **autonomous_fetch_full_v2**: Fetch and analyze web content autonomously (99% token savings)
-- **autonomous_github_full_v2**: Search and manage GitHub repositories autonomously (94% token savings)
+All autonomous functions now use the optimized stateful API internally:
+- **autonomous_filesystem_full**: Execute filesystem tasks autonomously (98% token savings)
+- **autonomous_memory_full**: Build and query knowledge graphs autonomously (98% token savings)
+- **autonomous_fetch_full**: Fetch and analyze web content autonomously (99% token savings)
+- **autonomous_github_full**: Search and manage GitHub repositories autonomously (94% token savings)
 
-#### Legacy: V1 Functions (Still Available)
-- **autonomous_filesystem_full**: Original implementation (linear token growth)
-- **autonomous_memory_full**: Original implementation (linear token growth)
-- **autonomous_fetch_full**: Original implementation (linear token growth)
-- **autonomous_github_full**: Original implementation (linear token growth)
-
-**💡 Recommendation**: Use v2 functions for all new projects. They provide:
-- ✅ **97% fewer tokens** at round 100 vs v1
+**Key Benefits**:
+- ✅ **97% fewer tokens** at round 100 (constant vs linear growth)
 - ✅ **Unlimited rounds** without context overflow
 - ✅ **Automatic state management** - no manual history tracking
-- ✅ **Same functionality** - drop-in replacement with `_v2` suffix
-
-See [MIGRATION_GUIDE.md](MIGRATION_GUIDE.md) for details on migrating from v1 to v2.
+- ✅ **Optimized by default** - you get the best performance automatically
 
 ## Prerequisites
 
@@ -96,49 +88,42 @@ Add to your `.mcp.json`:
 - Approve the MCP server when prompted
 
 ### 3. Use the Tools
-All 15 tools will be available in Claude Code's MCP tool list (7 core + 8 autonomous).
+All 11 tools will be available in Claude Code's MCP tool list (7 core + 4 autonomous).
 
 ## Autonomous Function Examples
 
-### Filesystem Operations (Recommended: v2)
+### Filesystem Operations
 ```python
-# V2: Optimized with constant token usage
-autonomous_filesystem_full_v2(
+# Optimized with constant token usage
+autonomous_filesystem_full(
     task="Find all Python files, count lines of code, and create a summary",
     working_directory="/path/to/project",
     max_rounds=50  # No problem - stays at ~3K tokens!
 )
-
-# V1: Legacy - works but grows linearly
-autonomous_filesystem_full(
-    task="Same task",
-    working_directory="/path/to/project",
-    max_rounds=50  # ~70K tokens at round 50
-)
 ```
 
-### GitHub Operations (Recommended: v2)
+### GitHub Operations
 ```python
-# V2: Search, analyze, and report on repositories
-autonomous_github_full_v2(
+# Search, analyze, and report on repositories
+autonomous_github_full(
     task="Search for FastMCP repositories, analyze top 5, create comparison",
     max_rounds=30  # Constant ~7.5K tokens
 )
 ```
 
-### Web Content Analysis (Recommended: v2)
+### Web Content Analysis
 ```python
-# V2: Fetch and analyze multiple URLs
-autonomous_fetch_full_v2(
+# Fetch and analyze multiple URLs
+autonomous_fetch_full(
     task="Fetch docs from modelcontextprotocol.io and github.com/modelcontextprotocol, compare them",
     max_rounds=20  # Stays at ~500 tokens
 )
 ```
 
-### Knowledge Graph Building (Recommended: v2)
+### Knowledge Graph Building
 ```python
-# V2: Build knowledge graphs from information
-autonomous_memory_full_v2(
+# Build knowledge graphs from information
+autonomous_memory_full(
     task="Create entities for Python, FastMCP, MCP and link them with relationships",
     max_rounds=10  # Constant ~2K tokens
 )
