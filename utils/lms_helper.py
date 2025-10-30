@@ -123,7 +123,8 @@ ALTERNATIVE:
 
         Args:
             model_name: Name of model to load
-            keep_loaded: If True, prevents auto-unload
+            keep_loaded: If True, prevents auto-unload (no TTL)
+                        If False, sets TTL to 300 seconds (5 minutes)
 
         Returns:
             True if successful, False otherwise
@@ -133,9 +134,12 @@ ALTERNATIVE:
             return False
 
         try:
-            cmd = ["lms", "load", model_name]
-            if keep_loaded:
-                cmd.append("--keep-loaded")
+            cmd = ["lms", "load", model_name, "--yes"]  # --yes suppresses confirmations
+
+            # If keep_loaded=False, add TTL to allow auto-unload
+            # If keep_loaded=True, omit TTL (model stays loaded indefinitely)
+            if not keep_loaded:
+                cmd.extend(["--ttl", "300"])  # 5 minutes TTL
 
             result = subprocess.run(
                 cmd,
@@ -145,7 +149,7 @@ ALTERNATIVE:
             )
 
             if result.returncode == 0:
-                logger.info(f"✅ Model loaded: {model_name}")
+                logger.info(f"✅ Model loaded: {model_name} (keep_loaded={keep_loaded})")
                 return True
             else:
                 logger.error(f"Failed to load model: {result.stderr}")
