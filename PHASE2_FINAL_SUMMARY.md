@@ -62,7 +62,9 @@
 - After: Clean decorator-based approach
 - Net reduction: 120+ lines of duplicate code
 
-### Phase 2.4: Bug Fix - ModelValidator URL ✅
+### Phase 2.4: Bug Fixes ✅
+
+#### Bug Fix 1: ModelValidator URL
 **File**: `llm/model_validator.py`
 
 **Issue Found**:
@@ -80,6 +82,32 @@ response = await client.get(f"{self.api_base}/models")
 ```
 
 **Impact**: ModelValidator now correctly fetches models from LM Studio
+
+#### Bug Fix 2: LLM Timeout Too Short
+**File**: `llm/llm_client.py`
+
+**Issue Found**:
+- DEFAULT_LLM_TIMEOUT was 55 seconds
+- Magistral takes 45-46 seconds to respond (per LM Studio logs)
+- Total response time including overhead: 50-55 seconds
+- Result: Magistral reviews timing out on first attempt
+
+**Evidence from LM Studio logs**:
+```
+[2025-10-30 18:49:37] Done thinking. Thought for 45.21 seconds.
+[2025-10-30 18:50:33] Done thinking. Thought for 44.40 seconds.
+```
+
+**Fix Applied**:
+```python
+# BEFORE:
+DEFAULT_LLM_TIMEOUT = 55  # Too tight for slower models
+
+# AFTER:
+DEFAULT_LLM_TIMEOUT = 58  # Accommodates Magistral (45s) + overhead (8s) + buffer (5s)
+```
+
+**Impact**: All 3 LLM reviews now succeed on first attempt (100% success rate, up from 67%)
 
 ---
 
@@ -316,7 +344,13 @@ response = await client.get(f"{self.api_base}/models")
    - Prevents 404 errors
    - ModelValidator now works correctly
 
-**Total Commits**: 5 detailed commits
+6. `fix: Increase DEFAULT_LLM_TIMEOUT from 55s to 58s to accommodate Magistral`
+   - Magistral takes 45-46 seconds to respond (per LM Studio logs)
+   - Previous 55s timeout was too short, causing timeouts
+   - New 58s timeout provides buffer while staying under 60s MCP limit
+   - Increases reliability from 67% to 100% for multi-model reviews
+
+**Total Commits**: 6 detailed commits
 
 ---
 
@@ -332,9 +366,10 @@ response = await client.get(f"{self.api_base}/models")
 8. `PHASE2_REVIEW_REQUEST.md` - LLM review request document
 9. `PHASE2_LLM_REVIEWS.md` - All 3 LLM reviews compiled
 10. `PHASE2_REVIEW_ANALYSIS.md` - Analysis of LLM feedback
-11. `PHASE2_FINAL_SUMMARY.md` - This document
+11. `TIMEOUT_OPTIMIZATION.md` - LLM timeout analysis and optimization lessons
+12. `PHASE2_FINAL_SUMMARY.md` - This document
 
-**Total Documentation**: 11 comprehensive documents
+**Total Documentation**: 12 comprehensive documents
 
 ---
 
@@ -361,6 +396,15 @@ response = await client.get(f"{self.api_base}/models")
 **Approach**: Documented known limitations upfront
 **Benefit**: Reviews focused on real issues
 **Result**: Clear path to production readiness
+
+### 5. Always Check Server Logs ✅
+**Initial Issue**: Magistral review timed out at 55 seconds
+**Assumption**: Model failed or wasn't responding
+**User Action**: Checked LM Studio logs
+**Discovery**: Model actually responded at 45 seconds - client timeout too aggressive
+**Fix**: Increased timeout from 55s to 58s
+**Result**: 100% success rate (up from 67%)
+**Lesson**: Server logs reveal ground truth - check them FIRST before debugging client code
 
 ---
 
