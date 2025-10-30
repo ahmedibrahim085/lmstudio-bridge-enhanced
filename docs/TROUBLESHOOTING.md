@@ -546,6 +546,274 @@ This will show:
 
 ---
 
+## Multi-Model Issues ✨ NEW
+
+### Issue: "Model not found"
+
+**Symptoms**:
+```
+Error: Model 'qwen/qwen3-coder' not found.
+Available models: mistralai/magistral-small-2509, deepseek/deepseek-coder-33b
+```
+
+**Causes**:
+1. Model not loaded in LM Studio
+2. Typo in model name
+3. Wrong model ID format
+
+**Solutions**:
+
+1. **Load model in LM Studio**:
+   - Open LM Studio
+   - Go to "My Models" or search for model
+   - Click "Load" button
+   - Wait for loading to complete (progress bar reaches 100%)
+   - Verify with: `list_models()`
+
+2. **Use exact model name**:
+   ```python
+   # Check available models first
+   list_models()
+   # Returns: Available models (2):
+   #   1. qwen/qwen3-coder-30b
+   #   2. mistralai/magistral-small-2509
+
+   # Copy exact name from output
+   autonomous_with_mcp(
+       "filesystem",
+       "task",
+       model="qwen/qwen3-coder-30b"  # Must match exactly!
+   )
+   ```
+
+3. **Verify model ID format**:
+   ```python
+   # Correct format: organization/model-name
+   ✅ "qwen/qwen3-coder-30b"
+   ✅ "mistralai/magistral-small-2509"
+   ✅ "deepseek/deepseek-coder-33b"
+
+   # Wrong format:
+   ❌ "qwen3-coder"           # Missing organization
+   ❌ "Qwen/Qwen3-Coder-30B"  # Wrong capitalization
+   ❌ "qwen-coder"            # Incomplete name
+   ```
+
+---
+
+### Issue: "Model parameter ignored"
+
+**Symptoms**: Task uses default model instead of specified model
+
+**Causes**:
+1. Using old version of lmstudio-bridge-enhanced (< v2.0.0)
+2. Model parameter not specified correctly
+3. Positional argument instead of named parameter
+
+**Solutions**:
+
+1. **Update to v2.0.0+**:
+   ```bash
+   cd lmstudio-bridge-enhanced
+   git pull
+   pip install -r requirements.txt --upgrade
+   ```
+
+2. **Use named parameter**:
+   ```python
+   ✅ Correct:
+   autonomous_with_mcp(
+       mcp_name="filesystem",
+       task="task description",
+       model="qwen/qwen3-coder-30b"  # Named parameter
+   )
+
+   ❌ Wrong:
+   autonomous_with_mcp(
+       "filesystem",
+       "task description",
+       "qwen/qwen3-coder-30b"  # Positional won't work
+   )
+   ```
+
+3. **Check version**:
+   ```python
+   # In Python
+   import lmstudio_bridge
+   print(lmstudio_bridge.__version__)  # Should be >= 2.0.0
+   ```
+
+---
+
+### Issue: "Wrong model used in task"
+
+**Symptoms**: Different model used than specified
+
+**Debugging steps**:
+
+1. **Enable logging**:
+   ```python
+   import logging
+   logging.basicConfig(level=logging.INFO)
+
+   autonomous_with_mcp(
+       "filesystem",
+       "task",
+       model="qwen/qwen3-coder-30b"
+   )
+   # Check logs for: "Using model: qwen/qwen3-coder-30b"
+   ```
+
+2. **Verify model loaded**:
+   ```python
+   # Check LM Studio has model loaded
+   list_models()
+   # Should include your specified model
+   ```
+
+3. **Test model directly**:
+   ```python
+   # Test model with chat_completion
+   chat_completion(
+       prompt="Test",
+       model="qwen/qwen3-coder-30b"
+   )
+   # Should work without error
+   ```
+
+**Solutions**:
+- Restart LM Studio
+- Unload and reload model
+- Check LM Studio logs for model switching issues
+- Verify model name spelling
+
+---
+
+### Issue: "Model validation slow"
+
+**Symptoms**: Noticeable delay before task starts
+
+**Explanation**: First validation call fetches model list from LM Studio (~100-200ms)
+
+**Solutions**:
+
+1. **Normal behavior**: First call is slower, subsequent calls are cached (< 0.1ms)
+   ```python
+   # First call: ~100ms validation
+   result1 = autonomous_with_mcp("filesystem", "task1", model="...")
+
+   # Subsequent calls: < 0.1ms (cached for 60 seconds)
+   result2 = autonomous_with_mcp("filesystem", "task2", model="...")
+   ```
+
+2. **If consistently slow**:
+   - Check LM Studio API response time: `curl http://localhost:1234/v1/models`
+   - Restart LM Studio
+   - Reduce number of loaded models
+
+3. **Bypass validation** (not recommended):
+   ```python
+   # Use default model (no validation)
+   autonomous_with_mcp("filesystem", "task")  # No model parameter
+   ```
+
+---
+
+### Issue: "Which model should I use?"
+
+**Quick Decision Tree**:
+
+```
+What type of task?
+├─ Code generation/refactoring/testing
+│  └─ Use: qwen/qwen3-coder-30b or deepseek/deepseek-coder-33b
+├─ Complex analysis/planning/reasoning
+│  └─ Use: mistralai/magistral-small-2509 or qwen/qwen3-thinking-small-2509
+├─ Simple file operations/documentation
+│  └─ Use: Default (omit model parameter)
+└─ Mixed task
+   └─ Use: Default or try both and compare
+```
+
+**Model Selection Guide**:
+
+| Task Type | Model | Why |
+|-----------|-------|-----|
+| Generate functions/classes | Qwen-Coder, DeepSeek-Coder | Specialized for code |
+| Write unit tests | Qwen-Coder | Understands test patterns |
+| Refactor code | Qwen-Coder | Code-aware refactoring |
+| Analyze architecture | Magistral, Qwen-Thinking | Better reasoning |
+| Identify design patterns | Magistral | Pattern recognition |
+| Code review | Magistral | Comprehensive analysis |
+| Simple file operations | Default | Sufficient for basic tasks |
+| Documentation | Default | General capability |
+
+**Still unsure?**
+- Start with default (omit model parameter)
+- If quality insufficient, try specialized model
+- See [Multi-Model Guide](MULTI_MODEL_GUIDE.md) for detailed selection strategy
+
+---
+
+### Issue: "Can I use multiple models in one call?"
+
+**Answer**: No, one model per tool call.
+
+**Workaround**: Chain multiple calls with different models
+
+```python
+# Step 1: Analysis with reasoning model
+analysis = autonomous_with_mcp(
+    "filesystem",
+    "Analyze codebase structure",
+    model="mistralai/magistral-small-2509"
+)
+
+# Step 2: Implementation with coding model
+implementation = autonomous_with_mcp(
+    "filesystem",
+    f"Implement based on analysis: {analysis}",
+    model="qwen/qwen3-coder-30b"
+)
+```
+
+See [Multi-Model Guide](MULTI_MODEL_GUIDE.md) for workflow patterns.
+
+---
+
+### Issue: "Model keeps unloading in LM Studio"
+
+**Symptoms**: Model works initially, then fails with "model not found"
+
+**Causes**:
+1. LM Studio auto-unload settings
+2. Memory pressure
+3. Multiple models fighting for memory
+
+**Solutions**:
+
+1. **Disable auto-unload**:
+   - LM Studio Settings → Memory Management
+   - Disable "Auto-unload models"
+   - Or increase unload timeout
+
+2. **Monitor memory**:
+   ```bash
+   # Check available RAM
+   free -h  # Linux
+   vm_stat  # macOS
+   ```
+
+3. **Use one model at a time**:
+   - Unload unused models before loading new one
+   - Keep only actively used models loaded
+
+4. **Use smaller models**:
+   - Try 7B or 13B parameter models
+   - Use quantized versions (Q4, Q5)
+
+---
+
 ## Getting Help
 
 If issues persist:
@@ -554,6 +822,7 @@ If issues persist:
    - [Quick Start](QUICKSTART.md)
    - [Architecture](ARCHITECTURE.md)
    - [API Reference](API_REFERENCE.md)
+   - [Multi-Model Guide](MULTI_MODEL_GUIDE.md) ✨ NEW
 
 2. **Search existing issues**: [GitHub Issues](https://github.com/your-username/lmstudio-bridge-enhanced/issues)
 
