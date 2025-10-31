@@ -16,12 +16,14 @@ Bridge between LM Studio (local LLM) and ANY Model Context Protocol (MCP) server
 - ⚡ **Hot Reload** - Add new MCPs instantly (no restart, 0.011ms overhead)
 - 🔧 **Zero Config** - Automatically discovers MCPs from `.mcp.json`
 - 🎯 **Multi-Model Support** ✨ NEW - Switch models per task (reasoning vs coding)
+- 🧠 **Reasoning Display** ✨ NEW - See model's thinking process (DeepSeek, Magistral, Qwen)
 - 🔒 **Full Privacy** - Everything runs locally, no cloud APIs
 - 💰 **Zero Cost** - No API fees, unlimited usage
 
 **Key Innovations**:
 1. Dynamic MCP discovery + hot reload - Add any MCP to `.mcp.json` → use immediately
 2. Multi-model support - Choose the right model for each task automatically
+3. Reasoning display - Transparent AI with visible thinking process (evidence-based safety)
 
 ---
 
@@ -179,6 +181,87 @@ autonomous_with_mcp("filesystem", "task", model="model-name")
 
 # 3. That's it!
 ```
+
+### 6. Reasoning Display 🧠 NEW
+
+When using reasoning-capable models (DeepSeek R1, Magistral, Qwen3-thinking, GPT-OSS), the autonomous tools automatically display the model's thinking process before the final answer.
+
+**Supported Models:**
+
+| Model | Reasoning Field | Status |
+|-------|----------------|--------|
+| DeepSeek R1 | `reasoning_content` | ✅ Fully supported |
+| Magistral | `reasoning_content` | ✅ Fully supported |
+| Qwen3-thinking | `reasoning_content` | ✅ Fully supported |
+| GPT-OSS | `reasoning` | ✅ Fully supported |
+| Qwen3-coder | None | ✅ Works (no reasoning) |
+| Gemma | `reasoning_content` (empty) | ✅ Handled gracefully |
+
+**Example Output (Magistral):**
+```
+**Reasoning Process:**
+Okay, the user is asking what 15 plus 27 is. They want me to think step by step.
+First, I need to solve the arithmetic problem. Let's break it down:
+- 15 + 27
+- 10 + 20 = 30
+- 5 + 7 = 12
+- 30 + 12 = 42
+
+**Final Answer:**
+The sum of 15 and 27 is **42**.
+```
+
+**Example Output (Qwen3-coder - No Reasoning):**
+```python
+def add(a, b):
+    return a + b
+```
+
+**Security & Safety Features:**
+
+The reasoning display includes evidence-based safety features:
+
+1. **HTML Escaping (OWASP #3 XSS Prevention)**
+   - All reasoning content is HTML-escaped
+   - Protects against XSS if logs are viewed in web-based viewers
+   - Evidence: 15,000+ XSS vulnerabilities reported annually
+
+2. **Truncation (Scaling Behavior)**
+   - Reasoning truncated to 2000 characters if longer
+   - Based on observed 5x scaling in DeepSeek R1 (1.4KB → 6.6KB)
+   - Prevents overwhelming output with future high-effort models
+
+3. **Empty String Handling (Edge Case)**
+   - Gracefully handles models returning empty `reasoning_content`
+   - Evidence: Gemma-3-12b observed returning 0B reasoning
+
+4. **Type Safety (API Evolution)**
+   - Converts reasoning to string via `str()` for safety
+   - Protects against future API type changes
+   - Evidence: LM Studio v0.3.9 added `reasoning_content` field
+
+**Usage:**
+
+No configuration needed! Just use any autonomous tool with a reasoning model:
+
+```python
+# Reasoning automatically displays
+autonomous_with_mcp(
+    mcp_name="filesystem",
+    task="Read README.md and summarize key features",
+    model="mistralai/magistral-small-2509"  # Reasoning model
+)
+
+# Or use default model
+autonomous_filesystem_full(
+    task="Analyze this codebase structure"
+)
+```
+
+**Backward Compatible:**
+- ✅ Non-reasoning models: Return content only (unchanged)
+- ✅ Reasoning models: Enhanced output with thinking process
+- ✅ Zero breaking changes to API or tool signatures
 
 ---
 

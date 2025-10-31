@@ -23,6 +23,7 @@ from config.constants import (
     DEFAULT_MCP_NPX_ARGS,
     MCP_PACKAGES
 )
+import html
 import json
 import os
 import logging
@@ -42,6 +43,151 @@ class AutonomousExecutionTools:
         self.llm = llm_client or LLMClient()
 
     # Private helper methods for consolidated implementation
+
+    def _format_response_with_reasoning(self, message: dict) -> str:
+        """Extract and format response with reasoning if available.
+
+        Handles two reasoning field formats observed in comprehensive testing:
+        - reasoning_content: Used by 10/11 models (DeepSeek, Magistral, Qwen-thinking)
+        - reasoning: Used by GPT-OSS only (1/11 models)
+
+        Priority: reasoning_content > reasoning
+
+        Evidence-based safety features:
+        1. Empty string handling: Gemma-3-12b observed returning 0B reasoning_content
+           (COMPREHENSIVE_MODEL_TESTING.md line ~184)
+        2. HTML escaping: XSS prevention (OWASP Top 10 #3, 15,000+ vulnerabilities/year)
+           Even terminal output can be logged to web-based log viewers
+        3. 2000-char truncation: DeepSeek R1 shows 5x scaling (1.4KB → 6.6KB with high effort)
+           (COMPREHENSIVE_MODEL_TESTING.md line ~221)
+           Future reasoning-heavy models could generate 10KB-20KB+ output
+        4. Type safety: str() conversion handles API evolution (LM Studio v0.3.9 added reasoning_content)
+           Protects against future API changes where field type might change
+
+        Args:
+            message: LLM response message dict with optional reasoning fields
+                     Format: {"content": "...", "reasoning_content": "...", "reasoning": "..."}
+
+        Returns:
+            Formatted string with reasoning (if available) + final answer
+            Format with reasoning:
+                **Reasoning Process:**
+                [reasoning content]
+
+                **Final Answer:**
+                [content]
+            Format without reasoning:
+                [content only]
+
+        Examples:
+            >>> # Standard reasoning_content (10/11 models)
+            >>> message = {
+            ...     "content": "The answer is 42",
+            ...     "reasoning_content": "First, I analyzed the question..."
+            ... }
+            >>> result = self._format_response_with_reasoning(message)
+            >>> "**Reasoning Process:**" in result
+            True
+            >>> "First, I analyzed the question..." in result
+            True
+
+            >>> # reasoning field only (GPT-OSS)
+            >>> message = {
+            ...     "content": "The sky is blue",
+            ...     "reasoning": "Light scattering analysis..."
+            ... }
+            >>> result = self._format_response_with_reasoning(message)
+            >>> "Light scattering analysis..." in result
+            True
+
+            >>> # No reasoning (baseline models like Qwen3-coder)
+            >>> message = {"content": "def add(a, b):\\n    return a + b"}
+            >>> result = self._format_response_with_reasoning(message)
+            >>> "**Reasoning Process:**" not in result
+            True
+
+            >>> # Empty reasoning_content (Gemma-3-12b edge case)
+            >>> message = {
+            ...     "content": "Answer",
+            ...     "reasoning_content": ""  # Empty string
+            ... }
+            >>> result = self._format_response_with_reasoning(message)
+            >>> result
+            'Answer'
+
+            >>> # HTML in reasoning (XSS test - OWASP #3)
+            >>> message = {
+            ...     "content": "Safe",
+            ...     "reasoning_content": "<script>alert('XSS')</script> Normal text"
+            ... }
+            >>> result = self._format_response_with_reasoning(message)
+            >>> "<script>" not in result  # Should be escaped
+            True
+            >>> "&lt;script&gt;" in result  # HTML escaped
+            True
+
+            >>> # Very long reasoning (truncation test)
+            >>> message = {
+            ...     "content": "Answer",
+            ...     "reasoning_content": "A" * 3000  # 3KB
+            ... }
+            >>> result = self._format_response_with_reasoning(message)
+            >>> len(result.split("**Final Answer:**")[0]) < 2100  # Truncated
+            True
+        """
+        # Extract content
+        content = message.get("content", "")
+
+        # Get reasoning fields
+        reasoning_content = message.get("reasoning_content")
+        reasoning = message.get("reasoning")
+
+        # Explicit priority: prefer reasoning_content if it has content
+        # This handles the Gemma-3-12b case where reasoning_content is empty string
+        # Evidence: COMPREHENSIVE_MODEL_TESTING.md shows Gemma-3-12b returned 0B reasoning_content
+        if reasoning_content is not None and str(reasoning_content).strip():
+            reasoning = reasoning_content
+        else:
+            # Fallback to reasoning field (GPT-OSS uses this naming)
+            # Evidence: Testing showed 1/11 models (GPT-OSS) uses "reasoning" not "reasoning_content"
+            reasoning = reasoning
+
+        # Process reasoning if available
+        if reasoning is not None:
+            # Convert to string once (type safety - handles API changes)
+            # Evidence: LM Studio v0.3.9 added reasoning_content field
+            # Future API versions might change field types (e.g., dict with metadata)
+            str_reasoning = str(reasoning)
+            stripped_reasoning = str_reasoning.strip()
+
+            if stripped_reasoning:
+                # Sanitize for XSS prevention (OWASP Top 10 #3)
+                # Evidence: 15,000+ XSS vulnerabilities reported annually
+                # Even terminal output can be logged to web-based log viewers
+                # This is defensive security, not paranoia
+                sanitized_reasoning = html.escape(stripped_reasoning)
+
+                # Truncate if too long (based on observed scaling behavior)
+                # Evidence: DeepSeek R1 with reasoning_effort="high" shows 5x increase
+                # 1.4KB baseline → 6.6KB with high effort (COMPREHENSIVE_MODEL_TESTING.md)
+                # Extrapolation: Future models could hit 10KB-20KB+ with extended reasoning
+                # 2000 chars ≈ reasonable display limit without overwhelming output
+                if len(sanitized_reasoning) > 2000:
+                    sanitized_reasoning = sanitized_reasoning[:1997] + "..."
+
+                # Ensure content is clean
+                content = content.strip() if content else ""
+
+                # Format with reasoning - using markdown for better readability
+                return (
+                    f"**Reasoning Process:**\n"
+                    f"{sanitized_reasoning}\n\n"
+                    f"**Final Answer:**\n"
+                    f"{content}"
+                )
+
+        # No reasoning available or reasoning was empty - return content only
+        return content if content else "No content in response"
 
     async def _execute_autonomous_stateful(
         self,
@@ -223,7 +369,7 @@ class AutonomousExecutionTools:
                 continue
             else:
                 # No tool calls - this is the final answer
-                return message.get("content", "No content in response")
+                return self._format_response_with_reasoning(message)
 
         return f"Max rounds ({max_rounds}) reached without final answer."
 
@@ -530,7 +676,7 @@ class AutonomousExecutionTools:
                                 })
                         else:
                             # Task complete
-                            result = message.get("content", "No content in response")
+                            result = self._format_response_with_reasoning(message)
                             results.append(result)
                             print(f"[Task {i+1}] Complete")
                             break
