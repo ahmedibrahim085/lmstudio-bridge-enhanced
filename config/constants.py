@@ -112,3 +112,100 @@ ENV_LMSTUDIO_PORT = "LMSTUDIO_PORT"
 ENV_LOG_LEVEL = "LOG_LEVEL"
 ENV_MAX_RETRIES = "MAX_RETRIES"
 ENV_REQUEST_TIMEOUT = "REQUEST_TIMEOUT"
+ENV_MCP_FILESYSTEM_ROOT = "MCP_FILESYSTEM_ROOT"
+
+# ==============================================================================
+# MODEL CONFIGURATION - Default models for different operations
+# ==============================================================================
+
+# Default fallback model when no model is specified in API calls
+# Used in: lmstudio_bridge.py:296 (fallback when model resolution fails)
+DEFAULT_FALLBACK_MODEL = "qwen/qwen3-coder-30b"
+
+# Default model for autonomous execution tasks (coding, analysis, implementation)
+# Used in: lmstudio_bridge.py:423, tools/dynamic_autonomous.py:129,261,430
+#          tools/dynamic_autonomous_register.py:82,163,231
+DEFAULT_AUTONOMOUS_MODEL = "qwen/qwen3-coder-30b"
+
+# Default model for code review tasks (smaller, faster for review)
+# Used in: run_code_review.py:60, retry_magistral.py:38
+DEFAULT_REVIEW_MODEL = "mistralai/magistral-small-2509"
+
+# Default model for thinking/reasoning tasks
+# Used in: get_llm_reviews.py:155
+DEFAULT_THINKING_MODEL = "qwen/qwen3-4b-thinking-2507"
+
+# Example model name for documentation and docstrings
+# Used in: tools/lms_cli_tools.py docstrings, examples
+EXAMPLE_MODEL_NAME = "qwen/qwen3-coder-30b"
+
+# List of models to use for comprehensive code reviews
+# Used in: get_llm_reviews.py:141,148,155 (multiple model reviews)
+REVIEW_MODELS = [
+    "mistralai/magistral-small-2509",   # Fast, efficient for quick reviews
+    "qwen/qwen3-coder-30b",             # Coding specialist
+    "qwen/qwen3-4b-thinking-2507"       # Deep reasoning
+]
+
+# Special keyword meaning "use currently loaded model in LM Studio"
+# Used in: Multiple files for model parameter defaults
+# When a function receives model="default", it means "use whatever is loaded"
+DEFAULT_MODEL_KEYWORD = "default"
+
+# ==============================================================================
+# FILE PATHS - System and configuration paths
+# ==============================================================================
+
+# Default root directory for filesystem MCP operations
+# Can be overridden by MCP_FILESYSTEM_ROOT environment variable
+# Used in: lmstudio_bridge.py:373 (filesystem MCP allowed directory)
+# Falls back to current working directory if not set
+import os
+DEFAULT_FILESYSTEM_ROOT = os.environ.get("MCP_FILESYSTEM_ROOT", os.getcwd())
+
+# Path to LM Studio's MCP configuration file
+# Used in: benchmark_hot_reload.py:35, mcp_client/discovery.py
+DEFAULT_LMSTUDIO_MCP_PATH = "~/.lmstudio/mcp.json"
+
+# ==============================================================================
+# MCP SERVER CONFIGURATION - Commands and package names
+# ==============================================================================
+
+# Default command to run npm-based MCP servers
+# Used in: lmstudio_bridge.py:369, tools/autonomous.py:240,308,492,637
+DEFAULT_MCP_NPX_COMMAND = "npx"
+
+# Default arguments for npx command (always use -y for non-interactive)
+# Used when spawning MCP servers via npx
+DEFAULT_MCP_NPX_ARGS = ["-y"]
+
+# Official MCP package names - centralized to avoid typos and ensure consistency
+# Used in: lmstudio_bridge.py:372, tools/autonomous.py:234,308-309,492-493,637-638
+MCP_PACKAGES = {
+    "filesystem": "@modelcontextprotocol/server-filesystem",
+    "memory": "@modelcontextprotocol/server-memory",
+    "github": "@modelcontextprotocol/server-github",
+    "fetch": "mcp-server-fetch",
+    "sqlite": "mcp-server-sqlite",
+    "python": "mcp-server-python-interpreter"
+}
+
+# ==============================================================================
+# MCP DISCOVERY CONFIGURATION - Where to find MCP configs
+# ==============================================================================
+
+# Search paths for MCP configuration files (in priority order)
+# Used in: mcp_client/discovery.py:65-71
+MCP_CONFIG_SEARCH_PATHS = [
+    "~/.lmstudio/mcp.json",    # LM Studio config (HIGHEST PRIORITY for local LLM)
+    ".mcp.json",                # Current directory (project-specific config)
+    "~/.mcp.json",              # Home directory (user-wide config)
+    "../.mcp.json"              # Parent directory (workspace config)
+]
+
+# Patterns to identify MCP packages in command arguments
+# Used in: mcp_client/discovery.py:215 (package detection logic)
+MCP_PACKAGE_PATTERNS = [
+    "@modelcontextprotocol",   # Official MCP packages
+    "mcp-server"               # Community MCP packages
+]

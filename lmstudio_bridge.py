@@ -293,7 +293,8 @@ async def create_response(input_text: str, previous_response_id: Optional[str] =
                 current_model_response = await get_current_model()
                 model = current_model_response.replace("Currently loaded model: ", "").strip()
             except:
-                model = "qwen/qwen3-coder-30b"  # Fallback
+                from config.constants import DEFAULT_FALLBACK_MODEL
+                model = DEFAULT_FALLBACK_MODEL
 
         payload = {
             "input": input_text,
@@ -365,12 +366,18 @@ async def test_autonomous_poc(task: str, file_path: str = None) -> str:
         # 1. Connect to REAL filesystem MCP
         log_info("Step 1: Connecting to filesystem MCP...")
 
+        from config.constants import (
+            DEFAULT_MCP_NPX_COMMAND,
+            DEFAULT_MCP_NPX_ARGS,
+            MCP_PACKAGES,
+            DEFAULT_FILESYSTEM_ROOT
+        )
+
         server_params = StdioServerParameters(
-            command="npx",
-            args=[
-                "-y",
-                "@modelcontextprotocol/server-filesystem",
-                "/Users/ahmedmaged/ai_storage/mcp-development-project"
+            command=DEFAULT_MCP_NPX_COMMAND,
+            args=DEFAULT_MCP_NPX_ARGS + [
+                MCP_PACKAGES["filesystem"],
+                DEFAULT_FILESYSTEM_ROOT
             ]
         )
 
@@ -417,10 +424,12 @@ async def test_autonomous_poc(task: str, file_path: str = None) -> str:
 
                     # Ask Qwen
                     log_info("Calling Qwen with tools...")
+                    from config.constants import DEFAULT_AUTONOMOUS_MODEL
+
                     response = requests.post(
                         f"{LMSTUDIO_API_BASE}/chat/completions",
                         json={
-                            "model": "qwen/qwen3-coder-30b",
+                            "model": DEFAULT_AUTONOMOUS_MODEL,
                             "messages": messages,
                             "tools": openai_tools,
                             "tool_choice": "auto"
