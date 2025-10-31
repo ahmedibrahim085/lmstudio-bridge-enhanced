@@ -20,6 +20,7 @@ from llm.exceptions import (
     LLMRateLimitError,
 )
 from utils.error_handling import retry_with_backoff
+from utils.lms_helper import LMSHelper
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -162,6 +163,7 @@ class LLMClient:
         """Generate a chat completion from the local LLM.
 
         Automatically retries on transient errors (HTTP 500, timeouts) with exponential backoff.
+        Automatically ensures the model is loaded before making the request (if LMS CLI available).
 
         Args:
             messages: List of message dictionaries with 'role' and 'content'
@@ -181,6 +183,37 @@ class LLMClient:
             LLMResponseError: If LM Studio returns an error
             LLMError: For other unexpected errors
         """
+        # CRITICAL BUG FIX: Ensure model is loaded before making request
+        # This prevents confusing 404 errors when models are auto-unloaded or ejected
+        # Only attempt if LMS CLI is available (gracefully degrades without it)
+        if self.model and self.model != "default" and LMSHelper.is_installed():
+            try:
+                # Check if model is loaded
+                is_loaded = LMSHelper.is_model_loaded(self.model)
+
+                if is_loaded is False:
+                    # Model not loaded - try to load it
+                    logger.warning(f"Model '{self.model}' not loaded, attempting to load...")
+                    load_success = LMSHelper.ensure_model_loaded_with_verification(self.model, ttl=600)
+
+                    if not load_success:
+                        raise LLMConnectionError(
+                            f"Model '{self.model}' is not loaded and failed to load automatically. "
+                            f"Please load the model in LM Studio manually or check available models."
+                        )
+
+                    logger.info(f"✅ Model '{self.model}' loaded successfully")
+                elif is_loaded is True:
+                    logger.debug(f"Model '{self.model}' already loaded")
+                # is_loaded is None means LMS CLI couldn't determine state - proceed anyway
+
+            except LLMConnectionError:
+                # Re-raise LLMConnectionError as-is
+                raise
+            except Exception as e:
+                # Log other errors but don't fail - model might still work
+                logger.warning(f"Could not verify model load state: {e}. Proceeding anyway...")
+
         payload = {
             "messages": messages,
             "temperature": temperature,
@@ -225,6 +258,7 @@ class LLMClient:
         """Generate a raw text completion from the local LLM.
 
         Automatically retries on transient errors with exponential backoff.
+        Automatically ensures the model is loaded before making the request (if LMS CLI available).
 
         Args:
             prompt: Text prompt to complete
@@ -244,6 +278,33 @@ class LLMClient:
             LLMResponseError: If LM Studio returns an error
             LLMError: For other unexpected errors
         """
+        # Determine which model to use
+        target_model = model or self.model
+
+        # CRITICAL BUG FIX: Ensure model is loaded before making request
+        if target_model and target_model != "default" and LMSHelper.is_installed():
+            try:
+                is_loaded = LMSHelper.is_model_loaded(target_model)
+
+                if is_loaded is False:
+                    logger.warning(f"Model '{target_model}' not loaded, attempting to load...")
+                    load_success = LMSHelper.ensure_model_loaded_with_verification(target_model, ttl=600)
+
+                    if not load_success:
+                        raise LLMConnectionError(
+                            f"Model '{target_model}' is not loaded and failed to load automatically. "
+                            f"Please load the model in LM Studio manually."
+                        )
+
+                    logger.info(f"✅ Model '{target_model}' loaded successfully")
+                elif is_loaded is True:
+                    logger.debug(f"Model '{target_model}' already loaded")
+
+            except LLMConnectionError:
+                raise
+            except Exception as e:
+                logger.warning(f"Could not verify model load state: {e}. Proceeding anyway...")
+
         payload = {
             "prompt": prompt,
             "temperature": temperature,
@@ -251,7 +312,7 @@ class LLMClient:
         }
 
         # Add model parameter (required when multiple models loaded)
-        payload["model"] = model or self.model
+        payload["model"] = target_model
 
         # Add stop sequences if provided
         if stop_sequences:
