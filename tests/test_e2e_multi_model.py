@@ -25,6 +25,21 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from tools.dynamic_autonomous import DynamicAutonomousAgent
 from llm.exceptions import ModelNotFoundError, LLMConnectionError
+from tests.test_constants import (
+    REASONING_MODEL,
+    CODING_MODEL,
+    FILESYSTEM_MCP,
+    MEMORY_MCP,
+    DEFAULT_MAX_ROUNDS,
+    SHORT_MAX_ROUNDS,
+    LONG_MAX_ROUNDS,
+    E2E_ANALYSIS_TASK,
+    E2E_IMPLEMENTATION_TASK,
+    SIMPLE_TASK,
+    INVALID_MODEL_NAME,
+    ERROR_KEYWORDS,
+    NO_CONTENT_MESSAGE,
+)
 
 
 class TestE2EMultiModelWorkflows:
@@ -75,27 +90,27 @@ class TestE2EMultiModelWorkflows:
         # Step 1: Analysis with reasoning model
         print("\n📊 Step 1: Analyzing with reasoning model...")
         analysis = await agent.autonomous_with_mcp(
-            mcp_name="filesystem",
-            task="List the files in the current directory and describe what you find. What types of files are present?",
-            max_rounds=10,
+            mcp_name=FILESYSTEM_MCP,
+            task=E2E_ANALYSIS_TASK,
+            max_rounds=SHORT_MAX_ROUNDS,
             model=reasoning_model
         )
 
         assert analysis is not None
-        assert "Error" not in analysis or "error" not in analysis.lower()
+        assert not any(keyword in analysis for keyword in ERROR_KEYWORDS)
         print(f"✅ Analysis complete: {len(analysis)} characters")
 
         # Step 2: Implementation with coding model
         print("\n🔨 Step 2: Generating code with coding model...")
         implementation = await agent.autonomous_with_mcp(
-            mcp_name="filesystem",
-            task="Explain what Python files do based on the directory analysis. Describe their purpose.",
-            max_rounds=10,
+            mcp_name=FILESYSTEM_MCP,
+            task=E2E_IMPLEMENTATION_TASK,
+            max_rounds=SHORT_MAX_ROUNDS,
             model=coding_model
         )
 
         assert implementation is not None
-        assert "Error" not in implementation or "error" not in implementation.lower()
+        assert not any(keyword in implementation for keyword in ERROR_KEYWORDS)
         print(f"✅ Implementation complete: {len(implementation)} characters")
 
         # Verify both steps produced meaningful results
@@ -233,16 +248,16 @@ class TestE2EMultiModelWorkflows:
         # Try to use invalid model
         print("\n❌ Attempting to use invalid model...")
         result = await agent.autonomous_with_mcp(
-            mcp_name="filesystem",
-            task="List files",
-            model="definitely-not-a-real-model-name-12345"
+            mcp_name=FILESYSTEM_MCP,
+            task=SIMPLE_TASK,
+            model=INVALID_MODEL_NAME
         )
 
         # Should return error message (not raise exception)
         assert result is not None
-        assert "Error" in result or "error" in result.lower()
+        assert any(keyword in result for keyword in ERROR_KEYWORDS)
         assert "not found" in result.lower()
-        assert "definitely-not-a-real-model-name-12345" in result
+        assert INVALID_MODEL_NAME in result
 
         print(f"✅ Got expected error: {result[:200]}...")
         print("\n✅ Error Handling Test PASSED")
