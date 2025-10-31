@@ -521,11 +521,18 @@ class DynamicAutonomousAgent:
             # Process output array (not choices - different format!)
             output = response.get("output", [])
 
-            # Find text output (final answer)
-            text_outputs = [item for item in output if item.get("type") == "output_text"]
-            if text_outputs:
-                text_content = text_outputs[0].get("text", "")
-                log_info(f"LLM text: {text_content[:100]}...")
+            # Find text output (final answer) - it's nested inside "message" type items
+            text_content = None
+            for item in output:
+                if item.get("type") == "message":
+                    content = item.get("content", [])
+                    for content_item in content:
+                        if content_item.get("type") == "output_text":
+                            text_content = content_item.get("text", "")
+                            log_info(f"LLM text: {text_content[:100]}...")
+                            break
+                    if text_content:
+                        break
 
             # Check for function calls
             function_calls = [
@@ -567,8 +574,8 @@ class DynamicAutonomousAgent:
             else:
                 # Final answer - no function calls
                 log_info("LLM provided final answer")
-                if text_outputs:
-                    return text_outputs[0].get("text", "No content in response")
+                if text_content:
+                    return text_content
                 else:
                     return "No content in response"
 
@@ -614,11 +621,18 @@ class DynamicAutonomousAgent:
             # Process output array (not choices - different format!)
             output = response.get("output", [])
 
-            # Find text output (final answer)
-            text_outputs = [item for item in output if item.get("type") == "output_text"]
-            if text_outputs:
-                text_content = text_outputs[0].get("text", "")
-                log_info(f"LLM text: {text_content[:100]}...")
+            # Find text output (final answer) - it's nested inside "message" type items
+            text_content = None
+            for item in output:
+                if item.get("type") == "message":
+                    content = item.get("content", [])
+                    for content_item in content:
+                        if content_item.get("type") == "output_text":
+                            text_content = content_item.get("text", "")
+                            log_info(f"LLM text: {text_content[:100]}...")
+                            break
+                    if text_content:
+                        break
 
             # Check for function calls
             function_calls = [
@@ -666,8 +680,8 @@ class DynamicAutonomousAgent:
             else:
                 # Final answer - no function calls
                 log_info("LLM provided final answer")
-                if text_outputs:
-                    return text_outputs[0].get("text", "No content in response")
+                if text_content:
+                    return text_content
                 else:
                     return "No content in response"
 
