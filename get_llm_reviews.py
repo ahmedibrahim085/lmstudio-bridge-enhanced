@@ -136,23 +136,25 @@ async def main():
 
     reviews = {}
 
+    from config.constants import REVIEW_MODELS
+
     # 1. Magistral - General Review
     reviews["magistral"] = await get_review(
-        model="mistralai/magistral-small-2509",
+        model=REVIEW_MODELS[0],  # magistral-small-2509
         role_instructions=MAGISTRAL_INSTRUCTIONS,
         reviewer_name="Magistral"
     )
 
     # 2. Qwen3-Coder-30B - Code Quality
     reviews["qwen_coder"] = await get_review(
-        model="qwen/qwen3-coder-30b",
+        model=REVIEW_MODELS[1],  # qwen3-coder-30b
         role_instructions=QWEN_CODER_INSTRUCTIONS,
         reviewer_name="Qwen3-Coder-30B"
     )
 
     # 3. Qwen3-Thinking - Deep Analysis
     reviews["qwen_thinking"] = await get_review(
-        model="qwen/qwen3-4b-thinking-2507",
+        model=REVIEW_MODELS[2],  # qwen3-4b-thinking-2507
         role_instructions=QWEN_THINKING_INSTRUCTIONS,
         reviewer_name="Qwen3-Thinking"
     )

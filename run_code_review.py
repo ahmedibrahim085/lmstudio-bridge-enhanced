@@ -57,7 +57,8 @@ Provide a rating from 1-10 and list any issues found."""
 def main():
     """Main code review function."""
     # Initialize LLMClient with specific model
-    llm = LLMClient(model='mistralai/magistral-small-2509')
+    from config.constants import DEFAULT_REVIEW_MODEL
+    llm = LLMClient(model=DEFAULT_REVIEW_MODEL)
 
     print("="*60)
     print("CODE REVIEW: llm/model_validator.py")

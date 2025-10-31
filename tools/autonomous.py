@@ -229,15 +229,18 @@ class AutonomousExecutionTools:
 
             # 3. Connect to filesystem MCP with working directory/directories
             # Pass all directories as separate arguments
-            connection_args = [
-                "-y",
-                "@modelcontextprotocol/server-filesystem"
-            ]
+            from config.constants import (
+                DEFAULT_MCP_NPX_COMMAND,
+                DEFAULT_MCP_NPX_ARGS,
+                MCP_PACKAGES
+            )
+
+            connection_args = DEFAULT_MCP_NPX_ARGS + [MCP_PACKAGES["filesystem"]]
             # Add all directories to args
             connection_args.extend(working_dirs)
 
             connection = MCPConnection(
-                command="npx",
+                command=DEFAULT_MCP_NPX_COMMAND,
                 args=connection_args
             )
 
@@ -305,8 +308,8 @@ class AutonomousExecutionTools:
 
         # Create persistent session
         session = PersistentMCPSession(
-            command="npx",
-            args=["-y", "@modelcontextprotocol/server-filesystem"],
+            command=DEFAULT_MCP_NPX_COMMAND,
+            args=DEFAULT_MCP_NPX_ARGS + [MCP_PACKAGES["filesystem"]],
             initial_roots=working_dirs
         )
 
@@ -489,8 +492,8 @@ class AutonomousExecutionTools:
 
             # Connect to memory MCP
             connection = MCPConnection(
-                command="npx",
-                args=["-y", "@modelcontextprotocol/server-memory"]
+                command=DEFAULT_MCP_NPX_COMMAND,
+                args=DEFAULT_MCP_NPX_ARGS + [MCP_PACKAGES["memory"]]
             )
 
             async with connection.connect() as session:
@@ -634,8 +637,8 @@ class AutonomousExecutionTools:
 
             # Connect to GitHub MCP
             connection = MCPConnection(
-                command="npx",
-                args=["-y", "@modelcontextprotocol/server-github"],
+                command=DEFAULT_MCP_NPX_COMMAND,
+                args=DEFAULT_MCP_NPX_ARGS + [MCP_PACKAGES["github"]],
                 env={"GITHUB_PERSONAL_ACCESS_TOKEN": token}
             )
 

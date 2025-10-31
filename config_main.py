@@ -90,8 +90,9 @@ class LMStudioConfig:
             models = [model["id"] for model in data.get("data", [])]
 
             if not models:
-                logger.warning("No models available in LM Studio, using 'default'")
-                return "default"
+                from config.constants import DEFAULT_MODEL_KEYWORD
+                logger.warning(f"No models available in LM Studio, using '{DEFAULT_MODEL_KEYWORD}'")
+                return DEFAULT_MODEL_KEYWORD
 
             # Filter out embedding models (they start with "text-embedding-")
             non_embedding_models = [
@@ -117,9 +118,9 @@ class LMStudioConfig:
         except Exception as e:
             logger.warning(
                 f"Failed to auto-detect model from LM Studio: {e}. "
-                f"Using 'default'"
+                f"Using '{DEFAULT_MODEL_KEYWORD}'"
             )
-            return "default"
+            return DEFAULT_MODEL_KEYWORD
 
     def get_endpoint(self, path: str) -> str:
         """Get full URL for an API endpoint.

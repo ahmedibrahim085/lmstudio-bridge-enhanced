@@ -32,7 +32,8 @@ print()
 print("TEST 1: Single .mcp.json reload")
 print("-"*80)
 
-mcp_json_path = os.path.expanduser("~/.lmstudio/mcp.json")
+from config.constants import DEFAULT_LMSTUDIO_MCP_PATH
+mcp_json_path = os.path.expanduser(DEFAULT_LMSTUDIO_MCP_PATH)
 print(f"File: {mcp_json_path}")
 print(f"File size: {os.path.getsize(mcp_json_path)} bytes")
 print()

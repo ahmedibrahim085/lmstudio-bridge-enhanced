@@ -35,7 +35,8 @@ def main():
     print("Retrying Magistral review with longer timeout and simpler prompt...")
 
     try:
-        client = LLMClient(model="mistralai/magistral-small-2509")
+        from config.constants import DEFAULT_REVIEW_MODEL
+        client = LLMClient(model=DEFAULT_REVIEW_MODEL)
 
         # Much longer timeout for Magistral (120s instead of 55s)
         response = client.chat_completion(

@@ -60,15 +60,12 @@ class MCPDiscovery:
             possible_paths.append(os.path.expanduser(os.environ["MCP_JSON_PATH"]))
 
         # Add standard search locations
+        from config.constants import MCP_CONFIG_SEARCH_PATHS
+        # Expand paths with proper home directory resolution
         possible_paths.extend([
-            # LM Studio's mcp.json (HIGHEST PRIORITY for local LLM!)
-            os.path.expanduser("~/.lmstudio/mcp.json"),
-            # Current working directory
-            os.path.join(os.getcwd(), ".mcp.json"),
-            # User's home directory
-            os.path.expanduser("~/.mcp.json"),
-            # Parent directory
-            os.path.join(os.path.dirname(os.getcwd()), ".mcp.json")
+            os.path.expanduser(path) if path.startswith("~") else
+            os.path.join(os.getcwd(), path) if not os.path.isabs(path) else path
+            for path in MCP_CONFIG_SEARCH_PATHS
         ])
 
         for path in possible_paths:
@@ -212,7 +209,8 @@ class MCPDiscovery:
         if config["args"]:
             # Look for package name in args
             for arg in config["args"]:
-                if "@modelcontextprotocol" in arg or "mcp-server" in arg:
+                from config.constants import MCP_PACKAGE_PATTERNS
+                if any(pattern in arg for pattern in MCP_PACKAGE_PATTERNS):
                     description = f"MCP server: {arg}"
                     break
 

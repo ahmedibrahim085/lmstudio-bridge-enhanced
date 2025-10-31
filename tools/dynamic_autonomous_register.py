@@ -44,7 +44,7 @@ def register_dynamic_autonomous_tools(mcp, llm_client: Optional[LLMClient] = Non
             )
         ] = "auto",
         model: Annotated[Optional[str], Field(
-            description="Optional model name to use (None = use default model from config, 'default' = use default, or specify model like 'qwen/qwen3-coder-30b')"
+            description="Optional model name to use (None = use default model from config, 'default' = use default, or specify model by name)"
         )] = None
     ) -> str:
         """
@@ -60,7 +60,7 @@ def register_dynamic_autonomous_tools(mcp, llm_client: Optional[LLMClient] = Non
             task: Task description for the local LLM
             max_rounds: Maximum autonomous loop iterations (default: DEFAULT_MAX_ROUNDS=10000, no artificial limit - local LLM works until task complete)
             max_tokens: Maximum tokens per LLM response ("auto" or integer)
-            model: Optional model name to use (None = use default model from config, 'default' = use default, or specify model like 'qwen/qwen3-coder-30b')
+            model: Optional model name to use (None = use default model from config, 'default' = use default, or specify model by name)
 
         Returns:
             Final answer from the local LLM after autonomous tool usage
@@ -76,10 +76,11 @@ def register_dynamic_autonomous_tools(mcp, llm_client: Optional[LLMClient] = Non
             )
 
             # Use memory MCP with specific model
+            from config.constants import EXAMPLE_MODEL_NAME
             autonomous_with_mcp(
                 mcp_name="memory",
                 task="Create an entity called 'Python' with observations about its features",
-                model="qwen/qwen3-coder-30b"
+                model=EXAMPLE_MODEL_NAME
             )
 
             # Use fetch MCP with default model explicitly
@@ -124,7 +125,7 @@ def register_dynamic_autonomous_tools(mcp, llm_client: Optional[LLMClient] = Non
             )
         ] = "auto",
         model: Annotated[Optional[str], Field(
-            description="Optional model name to use (None = use default model from config, 'default' = use default, or specify model like 'qwen/qwen3-coder-30b')"
+            description="Optional model name to use (None = use default model from config, 'default' = use default, or specify model by name)"
         )] = None
     ) -> str:
         """
@@ -141,7 +142,7 @@ def register_dynamic_autonomous_tools(mcp, llm_client: Optional[LLMClient] = Non
             task: Task description for the local LLM
             max_rounds: Maximum autonomous loop iterations (default: DEFAULT_MAX_ROUNDS=10000, no artificial limit - local LLM works until task complete)
             max_tokens: Maximum tokens per LLM response ("auto" or integer)
-            model: Optional model name to use (None = use default model from config, 'default' = use default, or specify model like 'qwen/qwen3-coder-30b')
+            model: Optional model name to use (None = use default model from config, 'default' = use default, or specify model by name)
 
         Returns:
             Final answer from the local LLM after using tools from multiple MCPs
@@ -160,7 +161,7 @@ def register_dynamic_autonomous_tools(mcp, llm_client: Optional[LLMClient] = Non
             autonomous_with_multiple_mcps(
                 mcp_names=["filesystem", "fetch", "memory"],
                 task="Read local docs, fetch online docs from example.com, compare them, and build a knowledge graph",
-                model="qwen/qwen3-coder-30b"
+                model=EXAMPLE_MODEL_NAME
             )
 
             # Use filesystem + github + memory MCPs
@@ -195,7 +196,7 @@ def register_dynamic_autonomous_tools(mcp, llm_client: Optional[LLMClient] = Non
             )
         ] = "auto",
         model: Annotated[Optional[str], Field(
-            description="Optional model name to use (None = use default model from config, 'default' = use default, or specify model like 'qwen/qwen3-coder-30b')"
+            description="Optional model name to use (None = use default model from config, 'default' = use default, or specify model by name)"
         )] = None
     ) -> str:
         """
@@ -211,7 +212,7 @@ def register_dynamic_autonomous_tools(mcp, llm_client: Optional[LLMClient] = Non
             task: Task description for the local LLM
             max_rounds: Maximum autonomous loop iterations (default: DEFAULT_MAX_ROUNDS=10000, no artificial limit - local LLM works until task complete)
             max_tokens: Maximum tokens per LLM response ("auto" or integer)
-            model: Optional model name to use (None = use default model from config, 'default' = use default, or specify model like 'qwen/qwen3-coder-30b')
+            model: Optional model name to use (None = use default model from config, 'default' = use default, or specify model by name)
 
         Returns:
             Final answer from the local LLM after using any tools from any MCPs
@@ -228,7 +229,7 @@ def register_dynamic_autonomous_tools(mcp, llm_client: Optional[LLMClient] = Non
             # LLM has access to EVERYTHING with specific model!
             autonomous_discover_and_execute(
                 task="Analyze this project, compare with similar GitHub repos, fetch best practices from web, and suggest improvements",
-                model="qwen/qwen3-coder-30b"
+                model=EXAMPLE_MODEL_NAME
             )
 
             # Works with ANY MCPs in .mcp.json!

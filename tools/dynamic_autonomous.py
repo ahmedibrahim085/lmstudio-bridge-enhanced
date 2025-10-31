@@ -123,10 +123,11 @@ class DynamicAutonomousAgent:
             )
 
             # Use memory MCP with specific model
+            from config.constants import DEFAULT_AUTONOMOUS_MODEL
             await agent.autonomous_with_mcp(
                 mcp_name="memory",
                 task="Create an entity called 'Python' with observations",
-                model="qwen/qwen3-coder-30b"
+                model=DEFAULT_AUTONOMOUS_MODEL
             )
 
             # Use ANY MCP configured in .mcp.json!
@@ -258,7 +259,7 @@ class DynamicAutonomousAgent:
             await agent.autonomous_with_multiple_mcps(
                 mcp_names=["filesystem", "fetch", "memory"],
                 task="Read local docs, fetch online docs, compare them, and build a knowledge graph",
-                model="qwen/qwen3-coder-30b"
+                model=DEFAULT_AUTONOMOUS_MODEL
             )
 
             # Use ALL available MCPs!
@@ -427,7 +428,7 @@ class DynamicAutonomousAgent:
             # LLM has access to EVERYTHING with specific model!
             await agent.autonomous_discover_and_execute(
                 task="Analyze this project, compare with GitHub repos, fetch best practices, and suggest improvements",
-                model="qwen/qwen3-coder-30b"
+                model=DEFAULT_AUTONOMOUS_MODEL
             )
         """
         log_info("=== Auto-Discovery Autonomous Execution ===")
