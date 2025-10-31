@@ -541,6 +541,15 @@ class DynamicAutonomousAgent:
                     tool_name = fc["name"]
                     tool_args = fc.get("arguments", {})
 
+                    # Parse arguments if they're a JSON string
+                    if isinstance(tool_args, str):
+                        import json
+                        try:
+                            tool_args = json.loads(tool_args)
+                        except json.JSONDecodeError:
+                            log_error(f"Failed to parse tool arguments: {tool_args}")
+                            tool_args = {}
+
                     log_info(f"Executing {tool_name}")
 
                     try:
@@ -624,6 +633,15 @@ class DynamicAutonomousAgent:
                 for fc in function_calls:
                     namespaced_tool_name = fc["name"]
                     tool_args = fc.get("arguments", {})
+
+                    # Parse arguments if they're a JSON string
+                    if isinstance(tool_args, str):
+                        import json
+                        try:
+                            tool_args = json.loads(tool_args)
+                        except json.JSONDecodeError:
+                            log_error(f"Failed to parse tool arguments: {tool_args}")
+                            tool_args = {}
 
                     # Get original tool name and session
                     if namespaced_tool_name not in tool_to_session:
