@@ -17,6 +17,11 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from mcp_client.discovery import MCPDiscovery
+from config.constants import (
+    DEFAULT_LMSTUDIO_HOST,
+    DEFAULT_LMSTUDIO_PORT,
+    MODELS_ENDPOINT,
+)
 
 print("="*80)
 print("HOT RELOAD PERFORMANCE BENCHMARK")
@@ -128,8 +133,11 @@ print("-"*80)
 import requests
 
 try:
+    # Use constants instead of hardcoded values
+    lm_studio_url = f"http://{os.getenv('LMSTUDIO_HOST', DEFAULT_LMSTUDIO_HOST)}:{os.getenv('LMSTUDIO_PORT', str(DEFAULT_LMSTUDIO_PORT))}{MODELS_ENDPOINT}"
+
     start = time.perf_counter()
-    response = requests.get("http://localhost:1234/v1/models", timeout=5)
+    response = requests.get(lm_studio_url, timeout=5)
     end = time.perf_counter()
 
     llm_api_time = (end - start) * 1000

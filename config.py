@@ -14,6 +14,12 @@ import logging
 from typing import Optional, Dict, Any, List
 from dataclasses import dataclass
 
+# Import constants
+from config.constants import (
+    DEFAULT_LMSTUDIO_HOST,
+    DEFAULT_LMSTUDIO_PORT,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -38,8 +44,8 @@ class LMStudioConfig:
         Returns:
             LMStudioConfig instance with loaded settings
         """
-        host = os.getenv("LMSTUDIO_HOST", "localhost")
-        port = os.getenv("LMSTUDIO_PORT", "1234")
+        host = os.getenv("LMSTUDIO_HOST", DEFAULT_LMSTUDIO_HOST)
+        port = os.getenv("LMSTUDIO_PORT", str(DEFAULT_LMSTUDIO_PORT))
         api_base = f"http://{host}:{port}/v1"
 
         # Get default model - either from env or auto-detect

@@ -9,12 +9,18 @@ import os
 import asyncio
 from typing import List, Dict, Any, Optional, Union
 
+# Import constants
+from config.constants import (
+    DEFAULT_LMSTUDIO_HOST,
+    DEFAULT_LMSTUDIO_PORT,
+)
+
 # Initialize FastMCP server
 mcp = FastMCP("lmstudio-bridge-enhanced")
 
 # LM Studio settings - configurable via environment variables
-LMSTUDIO_HOST = os.getenv("LMSTUDIO_HOST", "localhost")
-LMSTUDIO_PORT = os.getenv("LMSTUDIO_PORT", "1234")
+LMSTUDIO_HOST = os.getenv("LMSTUDIO_HOST", DEFAULT_LMSTUDIO_HOST)
+LMSTUDIO_PORT = os.getenv("LMSTUDIO_PORT", str(DEFAULT_LMSTUDIO_PORT))
 LMSTUDIO_API_BASE = f"http://{LMSTUDIO_HOST}:{LMSTUDIO_PORT}/v1"
 DEFAULT_MODEL = "default"  # Will be replaced with whatever model is currently loaded
 
