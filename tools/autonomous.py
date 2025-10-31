@@ -50,9 +50,21 @@ class AutonomousExecutionTools:
         """
         Core implementation using stateful /v1/responses API.
 
-        This is the optimized implementation with constant token usage.
+        ⚠️ NOTE: This implementation does NOT currently work with tool execution
+        because tool results are not passed back to the LLM. Preserved for
+        future use when we figure out how to properly pass tool results with
+        the create_response API.
+
+        For tool execution, use _execute_autonomous_with_tools instead.
+
+        Status: NOT CURRENTLY USED (see Option 4A implementation)
+        Date: 2025-10-31
+        See: OPTION_4A_IMPLEMENTATION_PLAN.md, ROOT_CAUSE_ANALYSIS_TOOL_RESULTS_NOT_RETURNED.md
+
+        This was the optimized implementation with constant token usage.
         Uses LM Studio's stateful conversation API where the server maintains
-        conversation history automatically.
+        conversation history automatically. The optimization is preserved for
+        future research into proper tool result passing with create_response.
 
         Args:
             task: The task for the local LLM
@@ -88,6 +100,9 @@ class AutonomousExecutionTools:
             # Save response ID for next round
             previous_response_id = response["id"]
 
+            # DEBUG: Log the entire response to understand what LLM is returning
+            logger.info(f"[Round {round_num + 1}] LLM Response: {json.dumps(response, indent=2)}")
+
             # Process output array (not choices!)
             output = response.get("output", [])
 
@@ -96,6 +111,13 @@ class AutonomousExecutionTools:
                 item for item in output
                 if item.get("type") == "function_call"
             ]
+
+            # DEBUG: Log what we found
+            logger.info(f"[Round {round_num + 1}] Found {len(function_calls)} function_calls in output")
+            if not function_calls:
+                # Log what types we DID find
+                types_found = [item.get("type") for item in output]
+                logger.info(f"[Round {round_num + 1}] Output types found instead: {types_found}")
 
             if function_calls:
                 # Execute each tool
@@ -120,6 +142,83 @@ class AutonomousExecutionTools:
 
             # If neither function calls nor message, something unexpected happened
             return f"Unexpected output format in round {round_num + 1}"
+
+        return f"Max rounds ({max_rounds}) reached without final answer."
+
+    async def _execute_autonomous_with_tools(
+        self,
+        task: str,
+        session: Any,
+        openai_tools: List[Dict],
+        executor: ToolExecutor,
+        max_rounds: int,
+        max_tokens: int
+    ) -> str:
+        """
+        Core implementation using chat_completion API with explicit tool result passing.
+
+        This implementation WORKS correctly by explicitly passing tool results back
+        to the LLM via messages array. This is the proven pattern from autonomous_persistent_session.
+
+        Uses chat_completion API instead of create_response because we need explicit
+        control over tool result passing. The create_response API does not currently
+        support local tool result passing in a way we understand.
+
+        This is part of Option 4A implementation (user's suggestion).
+        Status: WORKING implementation for tool execution
+        Date: 2025-10-31
+
+        Args:
+            task: The task for the local LLM
+            session: Active MCP session
+            openai_tools: List of tools in OpenAI format
+            executor: Tool executor for the session
+            max_rounds: Maximum rounds for autonomous loop
+            max_tokens: Maximum tokens per response
+
+        Returns:
+            Final answer from the LLM
+        """
+        # Build messages array (explicit history management)
+        messages = [{"role": "user", "content": task}]
+
+        for round_num in range(max_rounds):
+            # Call chat_completion with tools
+            response = self.llm.chat_completion(
+                messages=messages,
+                tools=openai_tools,
+                tool_choice="auto",
+                max_tokens=max_tokens
+            )
+
+            message = response["choices"][0]["message"]
+
+            # Check for tool calls
+            if message.get("tool_calls"):
+                # Add assistant message to history
+                messages.append(message)
+
+                # Execute each tool
+                for tool_call in message["tool_calls"]:
+                    tool_name = tool_call["function"]["name"]
+                    tool_args = json.loads(tool_call["function"]["arguments"])
+
+                    # Execute via MCP
+                    result = await executor.execute_tool(tool_name, tool_args)
+                    content = ToolExecutor.extract_text_content(result)
+
+                    # ← CRITICAL: Explicitly add tool result to messages
+                    messages.append({
+                        "role": "tool",
+                        "tool_call_id": tool_call["id"],
+                        "content": content
+                    })
+
+                # Continue loop (LLM will see tool results in next call)
+                continue
+            else:
+                # No tool calls - this is the final answer
+                return message.get("content", "No content in response")
 
         return f"Max rounds ({max_rounds}) reached without final answer."
 
@@ -253,8 +352,11 @@ class AutonomousExecutionTools:
                 openai_tools = SchemaConverter.mcp_tools_to_openai(all_tools)
                 executor = ToolExecutor(session)
 
-                # Call optimized stateful implementation
-                return await self._execute_autonomous_stateful(
+                # Using _execute_autonomous_with_tools (chat_completion)
+                # instead of _execute_autonomous_stateful (create_response)
+                # because we need explicit tool result passing.
+                # See Option 4A implementation: OPTION_4A_IMPLEMENTATION_PLAN.md
+                return await self._execute_autonomous_with_tools(
                     task=task,
                     session=session,
                     openai_tools=openai_tools,
@@ -305,6 +407,13 @@ class AutonomousExecutionTools:
         # Ensure list
         if isinstance(working_dirs, str):
             working_dirs = [working_dirs]
+
+        # Import constants
+        from config.constants import (
+            DEFAULT_MCP_NPX_COMMAND,
+            DEFAULT_MCP_NPX_ARGS,
+            MCP_PACKAGES
+        )
 
         # Create persistent session
         session = PersistentMCPSession(
@@ -503,8 +612,11 @@ class AutonomousExecutionTools:
                 openai_tools = SchemaConverter.mcp_tools_to_openai(all_tools)
                 executor = ToolExecutor(session)
 
-                # Call optimized stateful implementation
-                return await self._execute_autonomous_stateful(
+                # Using _execute_autonomous_with_tools (chat_completion)
+                # instead of _execute_autonomous_stateful (create_response)
+                # because we need explicit tool result passing.
+                # See Option 4A implementation: OPTION_4A_IMPLEMENTATION_PLAN.md
+                return await self._execute_autonomous_with_tools(
                     task=task,
                     session=session,
                     openai_tools=openai_tools,
@@ -571,8 +683,11 @@ class AutonomousExecutionTools:
                 openai_tools = SchemaConverter.mcp_tools_to_openai(all_tools)
                 executor = ToolExecutor(session)
 
-                # Call optimized stateful implementation
-                return await self._execute_autonomous_stateful(
+                # Using _execute_autonomous_with_tools (chat_completion)
+                # instead of _execute_autonomous_stateful (create_response)
+                # because we need explicit tool result passing.
+                # See Option 4A implementation: OPTION_4A_IMPLEMENTATION_PLAN.md
+                return await self._execute_autonomous_with_tools(
                     task=task,
                     session=session,
                     openai_tools=openai_tools,
@@ -651,8 +766,11 @@ class AutonomousExecutionTools:
                 openai_tools = SchemaConverter.mcp_tools_to_openai(all_tools)
                 executor = ToolExecutor(session)
 
-                # Call optimized stateful implementation
-                return await self._execute_autonomous_stateful(
+                # Using _execute_autonomous_with_tools (chat_completion)
+                # instead of _execute_autonomous_stateful (create_response)
+                # because we need explicit tool result passing.
+                # See Option 4A implementation: OPTION_4A_IMPLEMENTATION_PLAN.md
+                return await self._execute_autonomous_with_tools(
                     task=task,
                     session=session,
                     openai_tools=openai_tools,
