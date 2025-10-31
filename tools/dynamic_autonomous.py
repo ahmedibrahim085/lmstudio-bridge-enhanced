@@ -148,7 +148,10 @@ class DynamicAutonomousAgent:
                 log_info(f"✓ Model validated: {model}")
             except ModelNotFoundError as e:
                 log_error(f"Model validation failed: {e}")
-                raise
+                return f"Error: Model '{model}' not found. {e}"
+            except Exception as e:
+                log_error(f"Model validation error: {e}")
+                return f"Error: Model validation failed: {e}"
 
         try:
             # HOT RELOAD: Create fresh MCPDiscovery (reads .mcp.json fresh)
@@ -280,7 +283,10 @@ class DynamicAutonomousAgent:
                 log_info(f"✓ Model validated: {model}")
             except ModelNotFoundError as e:
                 log_error(f"Model validation failed: {e}")
-                raise
+                return f"Error: Model '{model}' not found. {e}"
+            except Exception as e:
+                log_error(f"Model validation error: {e}")
+                return f"Error: Model validation failed: {e}"
 
         try:
             # HOT RELOAD: Create fresh MCPDiscovery (reads .mcp.json fresh)
@@ -461,7 +467,10 @@ class DynamicAutonomousAgent:
                 log_info(f"✓ Model validated: {model}")
             except ModelNotFoundError as e:
                 log_error(f"Model validation failed: {e}")
-                raise
+                return f"Error: Model '{model}' not found. {e}"
+            except Exception as e:
+                log_error(f"Model validation error: {e}")
+                return f"Error: Model validation failed: {e}"
 
         # HOT RELOAD: Create fresh MCPDiscovery (reads .mcp.json fresh)
         discovery = MCPDiscovery(self.mcp_json_path)

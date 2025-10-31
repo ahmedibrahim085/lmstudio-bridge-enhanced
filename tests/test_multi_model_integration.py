@@ -33,35 +33,69 @@ class TestMultiModelIntegration:
 
         # Mock model validator to return valid
         with patch.object(agent.model_validator, 'validate_model', return_value=True):
-            # Mock MCP operations
+            # Mock MCP discovery
             with patch('tools.dynamic_autonomous.MCPDiscovery') as mock_discovery:
-                with patch('tools.dynamic_autonomous.connect_to_mcp_server') as mock_connect:
-                    # Mock successful MCP connection
-                    mock_conn = AsyncMock()
-                    mock_conn.__aenter__.return_value = mock_conn
-                    mock_conn.__aexit__.return_value = None
-                    mock_conn.call_tool = AsyncMock(return_value={"content": [{"type": "text", "text": "Tool result"}]})
-                    mock_connect.return_value = mock_conn
+                mock_disc_instance = MagicMock()
+                mock_disc_instance.get_connection_params.return_value = {
+                    "command": "npx",
+                    "args": ["-y", "@modelcontextprotocol/server-filesystem"],
+                    "env": None
+                }
+                mock_discovery.return_value = mock_disc_instance
 
-                    # Mock discovery
-                    mock_disc_instance = MagicMock()
-                    mock_disc_instance.get_connection_params.return_value = {
-                        "command": "test",
-                        "args": []
-                    }
-                    mock_discovery.return_value = mock_disc_instance
+                # Mock stdio_client context manager
+                with patch('tools.dynamic_autonomous.stdio_client') as mock_stdio:
+                    # Mock ClientSession
+                    with patch('tools.dynamic_autonomous.ClientSession') as mock_session_class:
+                        # Create mock session instance
+                        mock_session = AsyncMock()
 
-                    # Mock LLM client
-                    with patch('tools.dynamic_autonomous.LLMClient') as mock_llm_class:
-                        mock_llm = AsyncMock()
-                        mock_llm.chat_completion.return_value = {
-                            "choices": [{
-                                "message": {
-                                    "content": "Task complete"
+                        # Mock session methods
+                        mock_init_result = MagicMock()
+                        mock_init_result.serverInfo.name = "test-server"
+                        mock_session.initialize.return_value = mock_init_result
+
+                        # Mock tools
+                        mock_tool = MagicMock()
+                        mock_tool.name = "test_tool"
+                        mock_tool.description = "Test tool description"
+                        mock_tool.inputSchema = {"type": "object", "properties": {}}
+                        mock_tools_result = MagicMock()
+                        mock_tools_result.tools = [mock_tool]
+                        mock_session.list_tools.return_value = mock_tools_result
+
+                        # Mock tool call
+                        mock_session.call_tool.return_value = MagicMock(
+                            content=[MagicMock(type="text", text="Tool result")]
+                        )
+
+                        # Setup session context manager
+                        mock_session.__aenter__.return_value = mock_session
+                        mock_session.__aexit__.return_value = None
+                        mock_session_class.return_value = mock_session
+
+                        # Setup stdio_client context manager
+                        mock_read = MagicMock()
+                        mock_write = MagicMock()
+                        mock_stdio.return_value.__aenter__.return_value = (mock_read, mock_write)
+                        mock_stdio.return_value.__aexit__.return_value = None
+
+                        # Mock the agent's LLM client directly - Use create_response API (stateful /v1/responses)
+                        agent.llm = MagicMock()
+
+                        # Mock create_response to return stateful API format
+                        agent.llm.create_response.return_value = {
+                            "id": "resp_test_123",
+                            "output": [
+                                {
+                                    "type": "message",
+                                    "content": [
+                                        {"type": "output_text", "text": "Task complete"}
+                                    ]
                                 }
-                            }]
+                            ]
                         }
-                        mock_llm_class.return_value = mock_llm
+                        agent.llm.get_default_max_tokens.return_value = 8192
 
                         # Execute with specific model
                         result = await agent.autonomous_with_mcp(
@@ -74,49 +108,77 @@ class TestMultiModelIntegration:
                         # Verify model was validated
                         agent.model_validator.validate_model.assert_called_once_with("qwen/qwen3-coder-30b")
 
-                        # Verify LLM client was created with model
-                        assert mock_llm_class.called
+                        # Verify result
                         assert result is not None
+                        assert "Task complete" in result
 
     @pytest.mark.asyncio
     async def test_autonomous_without_model_uses_default(self):
         """Test that omitting model parameter uses default LLM client."""
         agent = DynamicAutonomousAgent()
 
+        # Mock MCP discovery
         with patch('tools.dynamic_autonomous.MCPDiscovery') as mock_discovery:
-            with patch('tools.dynamic_autonomous.connect_to_mcp_server') as mock_connect:
-                mock_conn = AsyncMock()
-                mock_conn.__aenter__.return_value = mock_conn
-                mock_conn.__aexit__.return_value = None
-                mock_conn.call_tool = AsyncMock(return_value={"content": [{"type": "text", "text": "Result"}]})
-                mock_connect.return_value = mock_conn
+            mock_disc_instance = MagicMock()
+            mock_disc_instance.get_connection_params.return_value = {
+                "command": "npx",
+                "args": ["-y", "@modelcontextprotocol/server-filesystem"],
+                "env": None
+            }
+            mock_discovery.return_value = mock_disc_instance
 
-                mock_disc_instance = MagicMock()
-                mock_disc_instance.get_connection_params.return_value = {"command": "test", "args": []}
-                mock_discovery.return_value = mock_disc_instance
+            # Mock stdio_client and ClientSession
+            with patch('tools.dynamic_autonomous.stdio_client') as mock_stdio:
+                with patch('tools.dynamic_autonomous.ClientSession') as mock_session_class:
+                    # Setup mock session
+                    mock_session = AsyncMock()
+                    mock_init_result = MagicMock()
+                    mock_init_result.serverInfo.name = "test-server"
+                    mock_session.initialize.return_value = mock_init_result
 
-                # Mock the default LLM client
-                agent.llm = AsyncMock()
-                agent.llm.chat_completion.return_value = {
-                    "choices": [{"message": {"content": "Done"}}]
-                }
+                    mock_tool = MagicMock()
+                    mock_tool.name = "test_tool"
+                    mock_tool.description = "Test tool"
+                    mock_tool.inputSchema = {"type": "object", "properties": {}}
+                    mock_tools_result = MagicMock()
+                    mock_tools_result.tools = [mock_tool]
+                    mock_session.list_tools.return_value = mock_tools_result
 
-                result = await agent.autonomous_with_mcp(
-                    mcp_name="filesystem",
-                    task="Test",
-                    max_rounds=1
-                    # No model parameter - should use default
-                )
+                    mock_session.__aenter__.return_value = mock_session
+                    mock_session.__aexit__.return_value = None
+                    mock_session_class.return_value = mock_session
 
-                # Verify validator was not called (no model to validate)
-                with patch.object(agent.model_validator, 'validate_model') as mock_validate:
-                    # Re-run to verify
-                    await agent.autonomous_with_mcp(
-                        mcp_name="filesystem",
-                        task="Test",
-                        max_rounds=1
-                    )
-                    mock_validate.assert_not_called()
+                    mock_stdio.return_value.__aenter__.return_value = (MagicMock(), MagicMock())
+                    mock_stdio.return_value.__aexit__.return_value = None
+
+                    # Mock the default LLM client - Use create_response API
+                    agent.llm = MagicMock()
+                    agent.llm.create_response.return_value = {
+                        "id": "resp_test_456",
+                        "output": [
+                            {
+                                "type": "message",
+                                "content": [
+                                    {"type": "output_text", "text": "Done"}
+                                ]
+                            }
+                        ]
+                    }
+                    agent.llm.get_default_max_tokens.return_value = 8192
+
+                    # Verify validator not called when no model specified
+                    with patch.object(agent.model_validator, 'validate_model') as mock_validate:
+                        result = await agent.autonomous_with_mcp(
+                            mcp_name="filesystem",
+                            task="Test",
+                            max_rounds=1
+                            # No model parameter - should use default
+                        )
+
+                        # Validator should NOT be called when model is None
+                        mock_validate.assert_not_called()
+                        assert result is not None
+                        assert "Done" in result
 
     @pytest.mark.asyncio
     async def test_invalid_model_returns_error(self):
@@ -148,24 +210,53 @@ class TestMultiModelIntegration:
 
         with patch.object(agent.model_validator, 'validate_model', return_value=True):
             with patch('tools.dynamic_autonomous.MCPDiscovery') as mock_discovery:
-                with patch('tools.dynamic_autonomous.connect_to_mcp_server') as mock_connect:
-                    mock_conn = AsyncMock()
-                    mock_conn.__aenter__.return_value = mock_conn
-                    mock_conn.__aexit__.return_value = None
-                    mock_conn.call_tool = AsyncMock(return_value={"content": [{"type": "text", "text": "Result"}]})
-                    mock_conn.list_tools.return_value = []
-                    mock_connect.return_value = mock_conn
+                mock_disc_instance = MagicMock()
+                mock_disc_instance.get_connection_params.return_value = {
+                    "command": "npx",
+                    "args": ["-y", "@modelcontextprotocol/server-filesystem"],
+                    "env": None
+                }
+                mock_disc_instance.validate_mcp_names.return_value = ["filesystem", "memory"]
+                mock_discovery.return_value = mock_disc_instance
 
-                    mock_disc_instance = MagicMock()
-                    mock_disc_instance.get_connection_params.return_value = {"command": "test", "args": []}
-                    mock_discovery.return_value = mock_disc_instance
+                # Mock stdio_client and ClientSession
+                with patch('tools.dynamic_autonomous.stdio_client') as mock_stdio:
+                    with patch('tools.dynamic_autonomous.ClientSession') as mock_session_class:
+                        # Create mock session
+                        mock_session = AsyncMock()
+                        mock_init_result = MagicMock()
+                        mock_init_result.serverInfo.name = "test-server"
+                        mock_session.initialize.return_value = mock_init_result
 
-                    with patch('tools.dynamic_autonomous.LLMClient') as mock_llm_class:
-                        mock_llm = AsyncMock()
-                        mock_llm.chat_completion.return_value = {
-                            "choices": [{"message": {"content": "Complete"}}]
+                        mock_tool = MagicMock()
+                        mock_tool.name = "test_tool"
+                        mock_tool.description = "Test tool"
+                        mock_tool.inputSchema = {"type": "object", "properties": {}}
+                        mock_tools_result = MagicMock()
+                        mock_tools_result.tools = [mock_tool]
+                        mock_session.list_tools.return_value = mock_tools_result
+
+                        mock_session.__aenter__.return_value = mock_session
+                        mock_session.__aexit__.return_value = None
+                        mock_session_class.return_value = mock_session
+
+                        mock_stdio.return_value.__aenter__.return_value = (MagicMock(), MagicMock())
+                        mock_stdio.return_value.__aexit__.return_value = None
+
+                        # Mock the agent's LLM client directly - Use create_response API
+                        agent.llm = MagicMock()
+                        agent.llm.create_response.return_value = {
+                            "id": "resp_test_789",
+                            "output": [
+                                {
+                                    "type": "message",
+                                    "content": [
+                                        {"type": "output_text", "text": "Complete"}
+                                    ]
+                                }
+                            ]
                         }
-                        mock_llm_class.return_value = mock_llm
+                        agent.llm.get_default_max_tokens.return_value = 8192
 
                         result = await agent.autonomous_with_multiple_mcps(
                             mcp_names=["filesystem", "memory"],
@@ -177,6 +268,7 @@ class TestMultiModelIntegration:
                         # Verify model was validated
                         agent.model_validator.validate_model.assert_called_with("qwen/qwen3-coder-30b")
                         assert result is not None
+                        assert "Complete" in result
 
     @pytest.mark.asyncio
     async def test_discover_and_execute_with_model(self):
@@ -184,35 +276,68 @@ class TestMultiModelIntegration:
         agent = DynamicAutonomousAgent()
 
         with patch.object(agent.model_validator, 'validate_model', return_value=True):
-            with patch('tools.dynamic_autonomous.MCPDiscovery') as mock_discovery:
-                with patch('tools.dynamic_autonomous.connect_to_mcp_server') as mock_connect:
-                    mock_conn = AsyncMock()
-                    mock_conn.__aenter__.return_value = mock_conn
-                    mock_conn.__aexit__.return_value = None
-                    mock_conn.call_tool = AsyncMock(return_value={"content": [{"type": "text", "text": "Result"}]})
-                    mock_conn.list_tools.return_value = []
-                    mock_connect.return_value = mock_conn
+            # Mock LMSHelper to skip preloading
+            with patch('tools.dynamic_autonomous.LMSHelper') as mock_lms:
+                mock_lms.is_installed.return_value = False
 
+                with patch('tools.dynamic_autonomous.MCPDiscovery') as mock_discovery:
                     mock_disc_instance = MagicMock()
-                    mock_disc_instance.get_all_enabled_mcps.return_value = ["filesystem"]
-                    mock_disc_instance.get_connection_params.return_value = {"command": "test", "args": []}
+                    mock_disc_instance.list_available_mcps.return_value = ["filesystem"]
+                    mock_disc_instance.validate_mcp_names.return_value = ["filesystem"]  # Add this!
+                    mock_disc_instance.get_connection_params.return_value = {
+                        "command": "npx",
+                        "args": ["-y", "@modelcontextprotocol/server-filesystem"],
+                        "env": None
+                    }
                     mock_discovery.return_value = mock_disc_instance
 
-                    with patch('tools.dynamic_autonomous.LLMClient') as mock_llm_class:
-                        mock_llm = AsyncMock()
-                        mock_llm.chat_completion.return_value = {
-                            "choices": [{"message": {"content": "Done"}}]
-                        }
-                        mock_llm_class.return_value = mock_llm
+                    # Mock stdio_client and ClientSession
+                    with patch('tools.dynamic_autonomous.stdio_client') as mock_stdio:
+                        with patch('tools.dynamic_autonomous.ClientSession') as mock_session_class:
+                            mock_session = AsyncMock()
+                            mock_init_result = MagicMock()
+                            mock_init_result.serverInfo.name = "test-server"
+                            mock_session.initialize.return_value = mock_init_result
 
-                        result = await agent.autonomous_discover_and_execute(
-                            task="Test",
-                            max_rounds=1,
-                            model="mistralai/magistral-small-2509"
-                        )
+                            mock_tool = MagicMock()
+                            mock_tool.name = "test_tool"
+                            mock_tool.description = "Test tool"
+                            mock_tool.inputSchema = {"type": "object", "properties": {}}
+                            mock_tools_result = MagicMock()
+                            mock_tools_result.tools = [mock_tool]
+                            mock_session.list_tools.return_value = mock_tools_result
 
-                        agent.model_validator.validate_model.assert_called_with("mistralai/magistral-small-2509")
-                        assert result is not None
+                            mock_session.__aenter__.return_value = mock_session
+                            mock_session.__aexit__.return_value = None
+                            mock_session_class.return_value = mock_session
+
+                            mock_stdio.return_value.__aenter__.return_value = (MagicMock(), MagicMock())
+                            mock_stdio.return_value.__aexit__.return_value = None
+
+                            # Mock the agent's LLM client directly - Use create_response API
+                            agent.llm = MagicMock()
+                            agent.llm.create_response.return_value = {
+                                "id": "resp_test_101112",
+                                "output": [
+                                    {
+                                        "type": "message",
+                                        "content": [
+                                            {"type": "output_text", "text": "Done"}
+                                        ]
+                                    }
+                                ]
+                            }
+                            agent.llm.get_default_max_tokens.return_value = 8192
+
+                            result = await agent.autonomous_discover_and_execute(
+                                task="Test",
+                                max_rounds=1,
+                                model="mistralai/magistral-small-2509"
+                            )
+
+                            agent.model_validator.validate_model.assert_called_with("mistralai/magistral-small-2509")
+                            assert result is not None
+                            assert "Done" in result
 
     @pytest.mark.asyncio
     async def test_model_validation_error_handling(self):
@@ -239,30 +364,61 @@ class TestMultiModelIntegration:
         agent = DynamicAutonomousAgent()
 
         with patch('tools.dynamic_autonomous.MCPDiscovery') as mock_discovery:
-            with patch('tools.dynamic_autonomous.connect_to_mcp_server') as mock_connect:
-                mock_conn = AsyncMock()
-                mock_conn.__aenter__.return_value = mock_conn
-                mock_conn.__aexit__.return_value = None
-                mock_conn.call_tool = AsyncMock(return_value={"content": [{"type": "text", "text": "OK"}]})
-                mock_connect.return_value = mock_conn
+            mock_disc_instance = MagicMock()
+            mock_disc_instance.get_connection_params.return_value = {
+                "command": "npx",
+                "args": ["-y", "@modelcontextprotocol/server-filesystem"],
+                "env": None
+            }
+            mock_discovery.return_value = mock_disc_instance
 
-                mock_disc_instance = MagicMock()
-                mock_disc_instance.get_connection_params.return_value = {"command": "test", "args": []}
-                mock_discovery.return_value = mock_disc_instance
+            # Mock stdio_client and ClientSession
+            with patch('tools.dynamic_autonomous.stdio_client') as mock_stdio:
+                with patch('tools.dynamic_autonomous.ClientSession') as mock_session_class:
+                    mock_session = AsyncMock()
+                    mock_init_result = MagicMock()
+                    mock_init_result.serverInfo.name = "test-server"
+                    mock_session.initialize.return_value = mock_init_result
 
-                agent.llm = AsyncMock()
-                agent.llm.chat_completion.return_value = {
-                    "choices": [{"message": {"content": "Success"}}]
-                }
+                    mock_tool = MagicMock()
+                    mock_tool.name = "test_tool"
+                    mock_tool.description = "Test tool"
+                    mock_tool.inputSchema = {"type": "object", "properties": {}}
+                    mock_tools_result = MagicMock()
+                    mock_tools_result.tools = [mock_tool]
+                    mock_session.list_tools.return_value = mock_tools_result
 
-                # Should work without model parameter
-                result = await agent.autonomous_with_mcp(
-                    mcp_name="filesystem",
-                    task="Test task",
-                    max_rounds=1
-                )
+                    mock_session.__aenter__.return_value = mock_session
+                    mock_session.__aexit__.return_value = None
+                    mock_session_class.return_value = mock_session
 
-                assert result is not None
+                    mock_stdio.return_value.__aenter__.return_value = (MagicMock(), MagicMock())
+                    mock_stdio.return_value.__aexit__.return_value = None
+
+                    # Mock the default LLM client - Use create_response API
+                    agent.llm = MagicMock()
+                    agent.llm.create_response.return_value = {
+                        "id": "resp_test_131415",
+                        "output": [
+                            {
+                                "type": "message",
+                                "content": [
+                                    {"type": "output_text", "text": "Success"}
+                                ]
+                            }
+                        ]
+                    }
+                    agent.llm.get_default_max_tokens.return_value = 8192
+
+                    # Should work without model parameter
+                    result = await agent.autonomous_with_mcp(
+                        mcp_name="filesystem",
+                        task="Test task",
+                        max_rounds=1
+                    )
+
+                    assert result is not None
+                    assert "Success" in result
 
 
 class TestModelValidatorIntegration:
