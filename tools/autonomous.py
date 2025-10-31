@@ -18,6 +18,11 @@ from utils.validation import (
     ValidationError
 )
 from utils.lms_helper import LMSHelper
+from config.constants import (
+    DEFAULT_MCP_NPX_COMMAND,
+    DEFAULT_MCP_NPX_ARGS,
+    MCP_PACKAGES
+)
 import json
 import os
 import logging
@@ -328,12 +333,6 @@ class AutonomousExecutionTools:
 
             # 3. Connect to filesystem MCP with working directory/directories
             # Pass all directories as separate arguments
-            from config.constants import (
-                DEFAULT_MCP_NPX_COMMAND,
-                DEFAULT_MCP_NPX_ARGS,
-                MCP_PACKAGES
-            )
-
             connection_args = DEFAULT_MCP_NPX_ARGS + [MCP_PACKAGES["filesystem"]]
             # Add all directories to args
             connection_args.extend(working_dirs)
@@ -407,13 +406,6 @@ class AutonomousExecutionTools:
         # Ensure list
         if isinstance(working_dirs, str):
             working_dirs = [working_dirs]
-
-        # Import constants
-        from config.constants import (
-            DEFAULT_MCP_NPX_COMMAND,
-            DEFAULT_MCP_NPX_ARGS,
-            MCP_PACKAGES
-        )
 
         # Create persistent session
         session = PersistentMCPSession(
