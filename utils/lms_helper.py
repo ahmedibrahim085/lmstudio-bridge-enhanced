@@ -132,7 +132,19 @@ ALTERNATIVE:
 
         Returns:
             True if successful, False otherwise
+
+        Raises:
+            ValueError: If model_name is None
         """
+        # Validate input - raise exception for None (programming error)
+        if model_name is None:
+            raise ValueError("model_name cannot be None")
+
+        # Return False for empty/whitespace strings (fail gracefully)
+        if isinstance(model_name, str) and not model_name.strip():
+            logger.error("model_name cannot be empty or whitespace")
+            return False
+
         if not cls.is_installed():
             logger.warning("LMS CLI not available - cannot load model")
             return False

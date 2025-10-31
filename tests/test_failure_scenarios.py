@@ -211,7 +211,7 @@ class TestEdgeCases:
             try:
                 LMSHelper.load_model(None)
                 assert False, "Should have raised exception"
-            except (TypeError, AttributeError):
+            except (TypeError, AttributeError, ValueError):
                 pass  # Expected
 
     def test_empty_list_loaded_models_response(self):
