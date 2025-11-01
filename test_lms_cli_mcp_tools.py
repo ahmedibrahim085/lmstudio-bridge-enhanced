@@ -217,12 +217,146 @@ class LMSCLIMCPToolsTester:
         print("\nNote: Skipped tests are intentional to avoid disrupting operations.")
         print("The tools are available and functional in the MCP server.")
 
+    def test_idle_state_detection(self):
+        """Test 6: Verify IDLE state detection (CRITICAL BUG FIX)."""
+        self.print_section("TEST 6: IDLE State Detection (CRITICAL)")
+
+        try:
+            # Get all loaded models with their status
+            result = lms_list_loaded_models()
+
+            if not result.get("success"):
+                self.print_fail(f"Could not list models: {result.get('error')}")
+                self.results['idle_detection'] = {'status': 'FAIL', 'error': result.get('error')}
+                return False
+
+            models = result.get("models", [])
+            if not models:
+                self.print_info("No models loaded - cannot test IDLE detection")
+                self.results['idle_detection'] = {'status': 'SKIP', 'reason': 'No models loaded'}
+                return True
+
+            # Check if any model is IDLE
+            idle_models = [m for m in models if m.get("status", "").lower() == "idle"]
+            loaded_models = [m for m in models if m.get("status", "").lower() == "loaded"]
+
+            self.print_info(f"Found {len(models)} total models:")
+            self.print_info(f"  - {len(loaded_models)} LOADED (active)")
+            self.print_info(f"  - {len(idle_models)} IDLE (not active)")
+
+            # CRITICAL: Verify code correctly distinguishes IDLE from LOADED
+            if idle_models:
+                idle_model = idle_models[0]
+                model_name = idle_model.get("identifier")
+
+                self.print_info(f"\nTesting IDLE detection with: {model_name}")
+
+                # Call ensure_model_loaded - should detect IDLE and reactivate
+                ensure_result = lms_ensure_model_loaded(model_name=model_name)
+
+                if ensure_result.get("success"):
+                    was_idle = not ensure_result.get("wasAlreadyLoaded", False)
+                    if was_idle:
+                        self.print_success("✅ IDLE state detected and model reactivated")
+                        self.print_info(f"   Model was IDLE, now being loaded")
+                    else:
+                        self.print_info("Model was already LOADED (active)")
+
+                    self.results['idle_detection'] = {'status': 'PASS'}
+                    return True
+                else:
+                    self.print_fail(f"Failed to handle IDLE model: {ensure_result.get('error')}")
+                    self.results['idle_detection'] = {'status': 'FAIL', 'error': ensure_result.get('error')}
+                    return False
+            else:
+                self.print_success("All models are LOADED (active) - IDLE detection working correctly")
+                self.results['idle_detection'] = {'status': 'PASS', 'reason': 'All models active'}
+                return True
+
+        except Exception as e:
+            self.print_fail(f"Exception: {e}")
+            self.results['idle_detection'] = {'status': 'ERROR', 'error': str(e)}
+            return False
+
+    def test_idle_state_reactivation(self):
+        """Test 7: Verify IDLE models get reactivated (CRITICAL BUG FIX)."""
+        self.print_section("TEST 7: IDLE State Reactivation (CRITICAL)")
+
+        try:
+            # This test verifies the fix for the critical bug where IDLE models
+            # were treated as "loaded" when they couldn't serve requests
+
+            self.print_info("Testing ensure_model_loaded() with IDLE handling...")
+
+            # Get current models
+            result = lms_list_loaded_models()
+            if not result.get("success"):
+                self.print_fail(f"Could not list models: {result.get('error')}")
+                self.results['idle_reactivation'] = {'status': 'FAIL', 'error': result.get('error')}
+                return False
+
+            models = result.get("models", [])
+            if not models:
+                self.print_info("No models loaded - loading test model first")
+                # Load a model
+                load_result = lms_load_model(model_name=self.test_model, keep_loaded=True)
+                if not load_result.get("success"):
+                    self.print_fail(f"Could not load test model: {load_result.get('error')}")
+                    self.results['idle_reactivation'] = {'status': 'SKIP', 'reason': 'Could not load model'}
+                    return True
+
+            # Call ensure_model_loaded - should handle IDLE correctly
+            ensure_result = lms_ensure_model_loaded(model_name=self.test_model)
+
+            if ensure_result.get("success"):
+                was_already_loaded = ensure_result.get("wasAlreadyLoaded", False)
+
+                if was_already_loaded:
+                    self.print_success("Model was already LOADED (active)")
+                    self.print_info("   ensure_model_loaded correctly detected active model")
+                else:
+                    self.print_success("Model was IDLE/not loaded and has been reactivated")
+                    self.print_info("   ensure_model_loaded correctly handled IDLE state")
+
+                # Verify model is now actually loaded (not idle)
+                verify_result = lms_list_loaded_models()
+                if verify_result.get("success"):
+                    current_models = verify_result.get("models", [])
+                    target_model = next(
+                        (m for m in current_models if m.get("identifier") == self.test_model),
+                        None
+                    )
+
+                    if target_model:
+                        status = target_model.get("status", "").lower()
+                        if status == "loaded":
+                            self.print_success(f"✅ Model verified LOADED (status={status})")
+                        elif status == "idle":
+                            self.print_fail(f"❌ Model still IDLE (reactivation failed)")
+                            self.results['idle_reactivation'] = {'status': 'FAIL', 'error': 'Model still IDLE'}
+                            return False
+                        else:
+                            self.print_info(f"Model status: {status} (loading or other)")
+
+                self.results['idle_reactivation'] = {'status': 'PASS'}
+                return True
+            else:
+                self.print_fail(f"ensure_model_loaded failed: {ensure_result.get('error')}")
+                self.results['idle_reactivation'] = {'status': 'FAIL', 'error': ensure_result.get('error')}
+                return False
+
+        except Exception as e:
+            self.print_fail(f"Exception: {e}")
+            self.results['idle_reactivation'] = {'status': 'ERROR', 'error': str(e)}
+            return False
+
     def run_all_tests(self):
         """Run all tests."""
         print("\n" + "="*80)
         print("LMS CLI MCP TOOLS TEST SUITE")
         print("="*80)
-        print("\nTesting all 5 LMS CLI tools exposed as MCP tools...")
+        print("\nTesting all 7 LMS CLI tools exposed as MCP tools...")
+        print("Including CRITICAL IDLE state bug fix tests...")
 
         # Run tests
         self.test_server_status()
@@ -230,6 +364,10 @@ class LMSCLIMCPToolsTester:
         self.test_ensure_model_loaded()
         self.test_load_model()
         self.test_unload_model()
+
+        # CRITICAL BUG FIX TESTS
+        self.test_idle_state_detection()
+        self.test_idle_state_reactivation()
 
         # Print summary
         self.print_summary()
