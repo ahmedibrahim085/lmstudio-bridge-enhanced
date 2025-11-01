@@ -249,62 +249,129 @@ ALTERNATIVE:
     @classmethod
     def is_model_loaded(cls, model_name: str) -> Optional[bool]:
         """
-        Check if a specific model is loaded.
+        Check if a specific model is available (loaded or idle).
+
+        According to LM Studio docs: "Any API request to an idle model automatically reactivates it"
+        So we treat both "loaded" and "idle" as available.
+
+        Status meanings:
+        - "loaded" (active, ready to serve) → Returns True
+        - "idle" (present in memory, will auto-activate) → Returns True
+        - "loading" (currently loading) → Returns False
+        - Not in list → Returns False
 
         Args:
             model_name: Name of model to check
 
         Returns:
-            True if loaded, False if not loaded, None if LMS not available
+            True if model is available (loaded or idle), False otherwise, None if LMS not available
         """
         models = cls.list_loaded_models()
         if models is None:
             return None
 
-        return any(m.get("identifier") == model_name or m.get("modelKey") == model_name for m in models)
+        # Check if model exists and verify its status
+        for m in models:
+            if m.get("identifier") == model_name or m.get("modelKey") == model_name:
+                status = m.get("status", "").lower()
+
+                # Both "loaded" and "idle" are usable (idle auto-activates on API call)
+                is_available = status in ("loaded", "idle")
+
+                if not is_available:
+                    logger.debug(
+                        f"Model '{model_name}' found but status='{status}'. "
+                        f"Expected 'loaded' or 'idle'"
+                    )
+
+                return is_available
+
+        # Model not found in list
+        return False
 
     @classmethod
     def ensure_model_loaded(cls, model_name: str) -> bool:
         """
-        Ensure a model is loaded, load if necessary.
+        Ensure a model is loaded AND active, reactivate if idle.
+
+        CRITICAL: This now handles IDLE state explicitly:
+        - If model is "loaded" (active) → Return True
+        - If model is "idle" → Unload then reload to reactivate
+        - If model is "loading" → Wait then check again
+        - If model not in list → Load it
 
         Args:
             model_name: Name of model to ensure is loaded
 
         Returns:
-            True if model is loaded (or successfully loaded), False otherwise
+            True if model is loaded (or successfully loaded/reactivated), False otherwise
         """
         if not cls.is_installed():
             logger.warning("LMS CLI not available - cannot ensure model loaded")
             return False
 
-        # Check if already loaded
-        is_loaded = cls.is_model_loaded(model_name)
+        # Get detailed model info including status
+        models = cls.list_loaded_models()
+        if not models:
+            # No models loaded, proceed to load
+            logger.info(f"No models loaded, loading: {model_name}")
+            return cls.load_model(model_name, keep_loaded=True)
 
-        if is_loaded is None:
-            return False  # LMS not available
+        # Check if model exists and its status
+        for m in models:
+            if m.get("identifier") == model_name or m.get("modelKey") == model_name:
+                status = m.get("status", "").lower()
 
-        if is_loaded:
-            logger.info(f"✅ Model already loaded: {model_name}")
-            return True
+                if status == "loaded":
+                    # Model is active and ready
+                    logger.info(f"✅ Model already active: {model_name}")
+                    return True
 
-        # Not loaded - load it now
-        logger.info(f"Loading model: {model_name}")
+                if status == "idle":
+                    # Model is IDLE but present in memory
+                    # According to LM Studio docs: "Any API request to an idle model automatically reactivates it"
+                    # So we just return True and let the next API call wake it up
+                    logger.info(
+                        f"ℹ️  Model '{model_name}' is IDLE. "
+                        f"Will auto-activate on next API request."
+                    )
+                    return True
+
+                if status == "loading":
+                    # Model is currently loading, wait briefly
+                    logger.info(f"⏳ Model '{model_name}' is loading, waiting...")
+                    import time
+                    time.sleep(2)
+                    # Check again after wait
+                    return cls.is_model_loaded(model_name) or False
+
+                # Unknown status
+                logger.warning(
+                    f"⚠️  Model '{model_name}' has unknown status: {status}. "
+                    f"Attempting reload..."
+                )
+                cls.unload_model(model_name)
+                return cls.load_model(model_name, keep_loaded=True)
+
+        # Model not in list at all - load it
+        logger.info(f"Model '{model_name}' not found in loaded models, loading...")
         return cls.load_model(model_name, keep_loaded=True)
 
     @classmethod
     def verify_model_loaded(cls, model_name: str) -> bool:
         """
-        Verify model is actually loaded (not just CLI state).
+        Verify model is available (loaded or idle).
 
-        This is a health check to catch false positives where CLI reports
-        success but model isn't actually available (memory pressure, etc).
+        According to LM Studio docs: "Any API request to an idle model automatically reactivates it"
+        So both "loaded" and "idle" status are acceptable.
+
+        This is a health check to catch cases where model isn't available at all.
 
         Args:
             model_name: Name of model to verify
 
         Returns:
-            True if model is confirmed loaded, False otherwise
+            True if model is available (loaded or idle), False otherwise
         """
         try:
             loaded_models = cls.list_loaded_models()
@@ -313,8 +380,20 @@ ALTERNATIVE:
 
             for model in loaded_models:
                 if model.get('identifier') == model_name:
-                    logger.debug(f"Model '{model_name}' verified loaded")
-                    return True
+                    status = model.get('status', '').lower()
+
+                    # Both "loaded" and "idle" are acceptable
+                    is_available = status in ("loaded", "idle")
+
+                    if is_available:
+                        logger.debug(f"Model '{model_name}' verified available (status={status})")
+                        return True
+                    else:
+                        logger.warning(
+                            f"Model '{model_name}' found but status={status}. "
+                            f"Expected 'loaded' or 'idle'"
+                        )
+                        return False
 
             logger.warning(f"Model '{model_name}' not found in loaded models")
             return False
