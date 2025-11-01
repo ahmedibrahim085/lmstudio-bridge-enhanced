@@ -81,7 +81,7 @@ def validate_working_directory(
 
 
 def _validate_single_directory(directory: str, allow_root: bool = False) -> str:
-    """Validate a single directory path.
+    """Validate a single directory path with comprehensive security checks.
 
     Args:
         directory: Directory path to validate
@@ -91,13 +91,37 @@ def _validate_single_directory(directory: str, allow_root: bool = False) -> str:
         Validated absolute path
 
     Raises:
-        ValidationError: If directory is invalid
+        ValidationError: If directory is invalid or poses security risk
     """
-    # Convert to absolute path
-    path = Path(directory).expanduser().resolve()
+    import logging
+    logger = logging.getLogger(__name__)
+
+    # Security: Validate input is non-empty string
+    if not directory or not isinstance(directory, str):
+        raise ValidationError("Directory path must be a non-empty string")
+
+    # Security: Check for null bytes (path traversal prevention)
+    if '\x00' in directory:
+        raise ValidationError("Directory path contains null bytes (possible injection attempt)")
+
+    # Convert to absolute path with full resolution
+    # This resolves symlinks and normalizes the path, preventing bypass attempts
+    try:
+        path = Path(directory).expanduser().resolve(strict=False)
+    except (RuntimeError, OSError) as e:
+        raise ValidationError(f"Invalid directory path: {e}")
+
+    # Security: Keep both the normalized (non-resolved) and resolved paths
+    # This prevents symlink bypass attacks (e.g., /etc -> /private/etc on macOS)
+    normalized_path = Path(directory).expanduser().absolute()
+
+    # Security: Detect path traversal attempts
+    if '..' in str(normalized_path):
+        logger.warning(f"Path traversal attempt detected in: {directory}")
 
     # Security check: Block root directory unless explicitly allowed
-    if str(path) == '/' and not allow_root:
+    # Check both resolved and normalized paths to prevent symlink bypass
+    if (str(path) == '/' or str(normalized_path) == '/') and not allow_root:
         raise ValidationError(
             "Root directory '/' is not allowed for security reasons.\n"
             "This would give the local LLM access to your ENTIRE filesystem including:\n"
@@ -113,32 +137,54 @@ def _validate_single_directory(directory: str, allow_root: bool = False) -> str:
             "allow it by modifying the validation code."
         )
 
-    # Warn about sensitive system directories (but don't block - user might have legitimate reasons)
-    sensitive_dirs = {
-        '/etc': 'system configuration files',
-        '/var': 'system variable data and logs',
-        '/bin': 'essential system binaries',
-        '/sbin': 'system administration binaries',
-        '/usr': 'user system resources',
-        '/System': 'macOS system files',
-        '/Library': 'macOS system libraries',
-        '/boot': 'Linux boot files',
-        '/root': 'root user home directory'
+    # Block highly sensitive system directories (security critical)
+    # Check both resolved and normalized paths to prevent symlink bypass
+    blocked_dirs = {
+        '/etc': 'system configuration files - access denied for security',
+        '/bin': 'essential system binaries - access denied for security',
+        '/sbin': 'system administration binaries - access denied for security',
+        '/System': 'macOS system files - access denied for security',
+        '/boot': 'Linux boot files - access denied for security',
+        '/root': 'root user home directory - access denied for security',
+        '/private/etc': 'system configuration files - access denied for security (symlink target)'
+        # Note: /private/var NOT blocked - /var should only generate warning
     }
 
-    for sensitive_path, description in sensitive_dirs.items():
-        if str(path) == sensitive_path or str(path).startswith(f"{sensitive_path}/"):
-            import warnings
-            warnings.warn(
+    for blocked_path, description in blocked_dirs.items():
+        # Check both the resolved path and normalized path to catch symlinks
+        if (str(path) == blocked_path or str(path).startswith(f"{blocked_path}/") or
+            str(normalized_path) == blocked_path or str(normalized_path).startswith(f"{blocked_path}/")):
+            raise ValidationError(
+                f"Access denied to sensitive system directory: {directory}\n"
+                f"Resolved to: {path}\n"
+                f"Reason: {description}\n"
+                "\n"
+                "This directory contains critical system files and is blocked for security.\n"
+                "Please specify a user directory or project-specific path instead."
+            )
+
+    # Warn about potentially sensitive directories (but allow with warning)
+    # Check both resolved and normalized paths
+    warning_dirs = {
+        '/var': 'system variable data and logs',
+        '/usr': 'user system resources',
+        '/Library': 'macOS system libraries',
+        '/opt': 'optional software packages',
+        '/tmp': 'temporary files (world-writable)'
+    }
+
+    for warning_path, description in warning_dirs.items():
+        if (str(path) == warning_path or str(path).startswith(f"{warning_path}/") or
+            str(normalized_path) == warning_path or str(normalized_path).startswith(f"{warning_path}/")):
+            logger.warning(
                 f"\n{'='*70}\n"
-                f"SECURITY WARNING: Allowing access to sensitive directory!\n"
-                f"Path: {path}\n"
+                f"SECURITY WARNING: Accessing potentially sensitive directory!\n"
+                f"Original: {directory}\n"
+                f"Resolved to: {path}\n"
                 f"Contains: {description}\n"
                 f"\n"
-                f"This gives the local LLM access to system files. Be careful!\n"
-                f"{'='*70}\n",
-                UserWarning,
-                stacklevel=3
+                f"This may give the local LLM access to system files. Proceed with caution!\n"
+                f"{'='*70}\n"
             )
             break
 
