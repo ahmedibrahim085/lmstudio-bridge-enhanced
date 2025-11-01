@@ -187,6 +187,48 @@ class TestWarningDirectories:
             result = validate_working_directory('/tmp')
             assert result in ['/tmp', '/private/tmp']  # macOS /tmp -> /private/tmp
 
+    def test_usr_directory_allowed_with_warning(self, caplog):
+        """Test that /usr is allowed but logs warning."""
+        import logging
+        caplog.set_level(logging.WARNING)
+
+        if Path('/usr').exists():
+            try:
+                result = validate_working_directory('/usr')
+                assert result == '/usr'
+                # Should log warning
+                assert "WARNING" in caplog.text or "warning" in caplog.text.lower()
+            except ValidationError:
+                pytest.skip("/usr not accessible on this system")
+
+    def test_library_directory_allowed_with_warning(self, caplog):
+        """Test that /Library (macOS) is allowed but logs warning."""
+        import logging
+        caplog.set_level(logging.WARNING)
+
+        if Path('/Library').exists():
+            try:
+                result = validate_working_directory('/Library')
+                assert result == '/Library'
+                # Should log warning
+                assert "WARNING" in caplog.text or "warning" in caplog.text.lower()
+            except ValidationError:
+                pytest.skip("/Library not accessible on this system")
+
+    def test_opt_directory_allowed_with_warning(self, caplog):
+        """Test that /opt is allowed but logs warning."""
+        import logging
+        caplog.set_level(logging.WARNING)
+
+        if Path('/opt').exists():
+            try:
+                result = validate_working_directory('/opt')
+                assert result == '/opt'
+                # Should log warning
+                assert "WARNING" in caplog.text or "warning" in caplog.text.lower()
+            except ValidationError:
+                pytest.skip("/opt not accessible on this system")
+
 
 class TestValidUserDirectories:
     """Test that valid user directories are allowed without blocking."""
@@ -338,6 +380,68 @@ class TestInputValidation:
                 os.unlink(tmpfile.name)
 
 
+class TestExoticPathFormats:
+    """Test validation with exotic path formats (Unicode, very long paths, etc.)."""
+
+    def test_unicode_in_path(self):
+        """Test that Unicode characters in paths are handled correctly."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Create a directory with Unicode characters
+            unicode_dir = Path(tmpdir) / "test_日本語_مرحبا_🚀"
+            unicode_dir.mkdir()
+
+            # Should be allowed
+            result = validate_working_directory(str(unicode_dir))
+            assert unicode_dir.samefile(result)
+
+    def test_very_long_path(self):
+        """Test that very long paths (but still valid) are handled."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Create a long path (not exceeding OS limits, but reasonably long)
+            # Most systems support at least 4096 chars
+            long_name = "a" * 200  # Reasonable length that should work
+            long_dir = Path(tmpdir) / long_name
+            long_dir.mkdir()
+
+            # Should be allowed
+            result = validate_working_directory(str(long_dir))
+            assert long_dir.samefile(result)
+
+    def test_path_with_spaces(self):
+        """Test that paths with spaces are handled correctly."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            space_dir = Path(tmpdir) / "path with spaces"
+            space_dir.mkdir()
+
+            # Should be allowed
+            result = validate_working_directory(str(space_dir))
+            assert space_dir.samefile(result)
+
+    def test_path_with_special_chars(self):
+        """Test that paths with special characters are handled."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Characters that are valid in filenames but might cause issues
+            special_dir = Path(tmpdir) / "test-_@#$%"
+            try:
+                special_dir.mkdir()
+                # Should be allowed
+                result = validate_working_directory(str(special_dir))
+                assert special_dir.samefile(result)
+            except OSError:
+                # Some special chars may not be allowed by OS
+                pytest.skip("OS doesn't support these special characters")
+
+    def test_path_with_dots_not_traversal(self):
+        """Test that single dots in directory names are allowed."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            dots_dir = Path(tmpdir) / "test.directory.name"
+            dots_dir.mkdir()
+
+            # Should be allowed (single dots, not ..)
+            result = validate_working_directory(str(dots_dir))
+            assert dots_dir.samefile(result)
+
+
 class TestTaskValidation:
     """Test task parameter validation."""
 
@@ -416,13 +520,14 @@ def test_security_test_suite_completeness():
         TestRootDirectoryBlocking,
         TestMultipleDirectoryValidation,
         TestInputValidation,
+        TestExoticPathFormats,  # NEW: Exotic path testing
         TestTaskValidation,
         TestMaxRoundsValidation,
         TestMaxTokensValidation
     ]
 
     # Ensure we have comprehensive coverage
-    assert len(security_test_classes) >= 10, "Should have at least 10 test classes for security"
+    assert len(security_test_classes) >= 13, "Should have at least 13 test classes for security"
 
     # Count total test methods
     total_tests = sum(
@@ -430,7 +535,7 @@ def test_security_test_suite_completeness():
         for cls in security_test_classes
     )
 
-    assert total_tests >= 40, f"Should have at least 40 security tests, found {total_tests}"
+    assert total_tests >= 48, f"Should have at least 48 security test methods, found {total_tests}"
     print(f"\n✅ Security test suite completeness: {len(security_test_classes)} classes, {total_tests} tests")
 
 
