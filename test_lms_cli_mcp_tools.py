@@ -285,8 +285,11 @@ class LMSCLIMCPToolsTester:
         try:
             # This test verifies the fix for the critical bug where IDLE models
             # were treated as "loaded" when they couldn't serve requests
+            #
+            # FIX (per user suggestion): Force model to IDLE state first,
+            # then test reactivation. This makes test deterministic.
 
-            self.print_info("Testing ensure_model_loaded() with IDLE handling...")
+            self.print_info("Step 1: Check current model status...")
 
             # Get current models
             result = lms_list_loaded_models()
@@ -296,57 +299,130 @@ class LMSCLIMCPToolsTester:
                 return False
 
             models = result.get("models", [])
-            if not models:
-                self.print_info("No models loaded - loading test model first")
-                # Load a model
+            target_model = next(
+                (m for m in models if m.get("identifier") == self.test_model),
+                None
+            )
+
+            if not target_model:
+                self.print_info(f"Model {self.test_model} not loaded - loading it first")
                 load_result = lms_load_model(model_name=self.test_model, keep_loaded=True)
                 if not load_result.get("success"):
                     self.print_fail(f"Could not load test model: {load_result.get('error')}")
                     self.results['idle_reactivation'] = {'status': 'SKIP', 'reason': 'Could not load model'}
                     return True
 
-            # Call ensure_model_loaded - should handle IDLE correctly
+                # Get updated status
+                result = lms_list_loaded_models()
+                models = result.get("models", [])
+                target_model = next(
+                    (m for m in models if m.get("identifier") == self.test_model),
+                    None
+                )
+
+            initial_status = target_model.get("status", "").lower()
+            self.print_info(f"   Current status: {initial_status}")
+
+            # Step 2: Force model to IDLE if it's currently LOADED
+            if initial_status == "loaded":
+                self.print_info("Step 2: Model is LOADED - forcing to IDLE by unloading...")
+                unload_result = lms_unload_model(model_name=self.test_model)
+
+                if not unload_result.get("success"):
+                    self.print_fail(f"Could not unload model: {unload_result.get('error')}")
+                    self.results['idle_reactivation'] = {'status': 'SKIP', 'reason': 'Could not force IDLE state'}
+                    return True
+
+                # Wait a moment for unload to complete
+                import time
+                time.sleep(2)
+
+                # Verify now IDLE
+                result = lms_list_loaded_models()
+                models = result.get("models", [])
+                target_model = next(
+                    (m for m in models if m.get("identifier") == self.test_model),
+                    None
+                )
+
+                if target_model:
+                    current_status = target_model.get("status", "").lower()
+                    self.print_info(f"   Status after unload: {current_status}")
+
+                    if current_status != "idle":
+                        self.print_fail(f"❌ Model not IDLE after unload (status={current_status})")
+                        self.results['idle_reactivation'] = {'status': 'SKIP', 'reason': f'Could not force IDLE (status={current_status})'}
+                        return True
+                    else:
+                        self.print_success("✅ Model is now IDLE - ready to test reactivation")
+                else:
+                    self.print_fail("Model disappeared after unload")
+                    self.results['idle_reactivation'] = {'status': 'SKIP', 'reason': 'Model not found after unload'}
+                    return True
+
+            elif initial_status == "idle":
+                self.print_success("✅ Model already IDLE - perfect for testing reactivation")
+            else:
+                self.print_info(f"Model status is {initial_status} (not IDLE or LOADED)")
+
+            # Step 3: NOW test reactivation from IDLE → LOADED
+            self.print_info("Step 3: Testing reactivation from IDLE → LOADED...")
             ensure_result = lms_ensure_model_loaded(model_name=self.test_model)
 
-            if ensure_result.get("success"):
-                was_already_loaded = ensure_result.get("wasAlreadyLoaded", False)
-
-                if was_already_loaded:
-                    self.print_success("Model was already LOADED (active)")
-                    self.print_info("   ensure_model_loaded correctly detected active model")
-                else:
-                    self.print_success("Model was IDLE/not loaded and has been reactivated")
-                    self.print_info("   ensure_model_loaded correctly handled IDLE state")
-
-                # Verify model is now actually loaded (not idle)
-                verify_result = lms_list_loaded_models()
-                if verify_result.get("success"):
-                    current_models = verify_result.get("models", [])
-                    target_model = next(
-                        (m for m in current_models if m.get("identifier") == self.test_model),
-                        None
-                    )
-
-                    if target_model:
-                        status = target_model.get("status", "").lower()
-                        if status == "loaded":
-                            self.print_success(f"✅ Model verified LOADED (status={status})")
-                        elif status == "idle":
-                            self.print_fail(f"❌ Model still IDLE (reactivation failed)")
-                            self.results['idle_reactivation'] = {'status': 'FAIL', 'error': 'Model still IDLE'}
-                            return False
-                        else:
-                            self.print_info(f"Model status: {status} (loading or other)")
-
-                self.results['idle_reactivation'] = {'status': 'PASS'}
-                return True
-            else:
-                self.print_fail(f"ensure_model_loaded failed: {ensure_result.get('error')}")
+            if not ensure_result.get("success"):
+                self.print_fail(f"❌ ensure_model_loaded failed: {ensure_result.get('error')}")
                 self.results['idle_reactivation'] = {'status': 'FAIL', 'error': ensure_result.get('error')}
                 return False
 
+            was_already_loaded = ensure_result.get("wasAlreadyLoaded", False)
+            if was_already_loaded:
+                self.print_fail("❌ ensure_model_loaded said 'already loaded' but model was IDLE")
+                self.results['idle_reactivation'] = {'status': 'FAIL', 'error': 'Did not detect IDLE state'}
+                return False
+
+            self.print_success("✅ ensure_model_loaded detected IDLE and reactivated model")
+
+            # Step 4: Verify model is now LOADED (not IDLE)
+            self.print_info("Step 4: Verifying model is now LOADED (not IDLE)...")
+            verify_result = lms_list_loaded_models()
+
+            if not verify_result.get("success"):
+                self.print_fail(f"Could not verify final status: {verify_result.get('error')}")
+                self.results['idle_reactivation'] = {'status': 'FAIL', 'error': 'Could not verify'}
+                return False
+
+            current_models = verify_result.get("models", [])
+            final_model = next(
+                (m for m in current_models if m.get("identifier") == self.test_model),
+                None
+            )
+
+            if not final_model:
+                self.print_fail("❌ Model disappeared after ensure_model_loaded")
+                self.results['idle_reactivation'] = {'status': 'FAIL', 'error': 'Model not found after reactivation'}
+                return False
+
+            final_status = final_model.get("status", "").lower()
+            self.print_info(f"   Final status: {final_status}")
+
+            if final_status == "loaded":
+                self.print_success("✅✅ IDLE REACTIVATION TEST PASSED")
+                self.print_success("   IDLE → ensure_model_loaded → LOADED (success!)")
+                self.results['idle_reactivation'] = {'status': 'PASS'}
+                return True
+            elif final_status == "idle":
+                self.print_fail("❌ Model still IDLE after reactivation attempt")
+                self.results['idle_reactivation'] = {'status': 'FAIL', 'error': 'Reactivation did not work'}
+                return False
+            else:
+                self.print_info(f"Model status is {final_status} (not LOADED or IDLE)")
+                self.results['idle_reactivation'] = {'status': 'PASS', 'note': f'Status: {final_status}'}
+                return True
+
         except Exception as e:
             self.print_fail(f"Exception: {e}")
+            import traceback
+            traceback.print_exc()
             self.results['idle_reactivation'] = {'status': 'ERROR', 'error': str(e)}
             return False
 
