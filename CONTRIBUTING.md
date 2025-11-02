@@ -552,6 +552,25 @@ Contributors will be:
 - Credited in release notes
 - Mentioned in project README
 
+### Development Collaboration
+
+This project was developed through a unique AI-powered workflow:
+
+**Lead Developer**: Ahmed Maged
+
+**AI Collaborators**:
+- **Claude (Anthropic)** - Primary development assistant, architecture design, and documentation
+- **Qwen3-Coder 30B** - Code generation, implementation support, and technical problem-solving
+- **Qwen3-Think** - Deep analysis, architectural decisions, and strategic planning
+
+This collaborative approach demonstrates the power of human-AI teamwork in modern software development, combining:
+- Human vision and project leadership
+- Claude's comprehensive documentation and best practices guidance
+- Qwen3-Coder's efficient code generation and implementation
+- Qwen3-Think's analytical depth for complex technical decisions
+
+All AI contributions were guided, reviewed, and validated by the human developer to ensure quality, security, and alignment with project goals.
+
 ---
 
 ## License
