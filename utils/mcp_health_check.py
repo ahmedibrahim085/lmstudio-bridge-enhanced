@@ -31,21 +31,43 @@ class MCPHealthChecker:
     """Check health of MCP servers before running tests."""
 
     def __init__(self):
-        self.mcp_config_path = Path.home() / ".mcp.json"
+        # Try multiple MCP config locations
+        self.mcp_config_paths = [
+            Path.home() / ".mcp.json",  # Standard location
+            Path.home() / ".lmstudio" / "extensions" / "plugins" / "mcp",  # LM Studio location
+        ]
         self.lms_log_dir = Path.home() / ".lmstudio" / "server-logs"
         self.claude_log_dir = Path.home() / "Library" / "Logs" / "Claude"
 
     def check_mcp_config(self) -> Dict:
-        """Load MCP configuration."""
-        if not self.mcp_config_path.exists():
-            return {}
+        """Load MCP configuration from multiple possible locations."""
+        # Try standard .mcp.json first
+        standard_config = Path.home() / ".mcp.json"
+        if standard_config.exists():
+            try:
+                with open(standard_config) as f:
+                    return json.load(f)
+            except Exception as e:
+                print(f"⚠️  Warning: Could not load .mcp.json: {e}")
 
-        try:
-            with open(self.mcp_config_path) as f:
-                return json.load(f)
-        except Exception as e:
-            print(f"⚠️  Warning: Could not load .mcp.json: {e}")
-            return {}
+        # Try LM Studio MCP configs
+        lms_mcp_dir = Path.home() / ".lmstudio" / "extensions" / "plugins" / "mcp"
+        if lms_mcp_dir.exists():
+            # Return dict with MCP names as keys, configs as values
+            lms_config = {"mcpServers": {}}
+            for mcp_dir in lms_mcp_dir.iterdir():
+                if mcp_dir.is_dir():
+                    config_file = mcp_dir / "mcp-bridge-config.json"
+                    if config_file.exists():
+                        try:
+                            with open(config_file) as f:
+                                lms_config["mcpServers"][mcp_dir.name] = json.load(f)
+                        except Exception:
+                            pass
+            if lms_config["mcpServers"]:
+                return lms_config
+
+        return {}
 
     def get_latest_lms_log(self) -> Optional[Path]:
         """Get the latest LM Studio server log file."""
