@@ -174,10 +174,105 @@ class MCPDiscovery:
         """
         config = self.get_mcp_config(mcp_name)
 
+        # Get env from config, or start with empty dict
+        env = config.get("env", {}).copy()
+
+        # CRITICAL FIX: Add system PATH to subprocess environment
+        # This ensures Node.js and other binaries can be found
+        if "PATH" not in env:
+            env["PATH"] = os.environ.get("PATH", "")
+
+        # Ensure homebrew bin is in PATH (common Node.js location on macOS)
+        # Also add the actual Cellar bin directory where node binaries are located
+        homebrew_paths = [
+            "/opt/homebrew/Cellar/node/*/bin",  # Actual node binaries
+            "/opt/homebrew/bin",                # Homebrew symlinks
+            "/usr/local/bin"                    # System binaries
+        ]
+        current_path = env.get("PATH", "")
+
+        # Add Cellar bin dirs first (highest priority)
+        import glob
+        for pattern in ["/opt/homebrew/Cellar/node/*/bin"]:
+            matches = glob.glob(pattern)
+            if matches:
+                # Add all matching directories (usually just one)
+                for cellar_bin in sorted(matches, reverse=True):  # Latest version first
+                    if cellar_bin not in current_path:
+                        env["PATH"] = f"{cellar_bin}:{current_path}" if current_path else cellar_bin
+                        current_path = env["PATH"]
+
+        # Then add standard paths
+        for homebrew_path in ["/opt/homebrew/bin", "/usr/local/bin"]:
+            if homebrew_path not in current_path:
+                env["PATH"] = f"{homebrew_path}:{current_path}" if current_path else homebrew_path
+                current_path = env["PATH"]
+
+        # CRITICAL FIX #2: Handle npx shebang issue
+        # npx starts with #!/usr/bin/env node
+        # When Python subprocess runs it, the shebang's 'env' command can't find 'node'
+        # even though we set PATH in the env dict (shebang uses system env, not subprocess env)
+        # Solution: Call node directly with npx script as argument
+        command = config["command"]
+        args = config["args"].copy()
+
+        if command == "npx":
+            # Find absolute paths to node and npx
+            # Check Cellar directly for actual binaries (symlinks may be broken)
+            node_path = None
+            npx_path = None
+
+            # Search paths for binaries
+            search_locations = [
+                # Homebrew Cellar (actual binaries)
+                "/opt/homebrew/Cellar/node/*/bin",
+                # Standard bin dirs
+                "/opt/homebrew/bin",
+                "/usr/local/bin"
+            ]
+
+            # Find node binary
+            if not node_path:
+                import glob
+                for pattern in ["/opt/homebrew/Cellar/node/*/bin/node"]:
+                    matches = glob.glob(pattern)
+                    if matches:
+                        # Use the latest version (last in sorted list)
+                        node_path = sorted(matches)[-1]
+                        break
+
+                # Fallback to symlink paths
+                if not node_path:
+                    for search_path in ["/opt/homebrew/bin", "/usr/local/bin"]:
+                        candidate = os.path.join(search_path, "node")
+                        if os.path.isfile(candidate):
+                            node_path = candidate
+                            break
+
+            # Find npx binary
+            if not npx_path:
+                for pattern in ["/opt/homebrew/Cellar/node/*/bin/npx"]:
+                    matches = glob.glob(pattern)
+                    if matches:
+                        npx_path = sorted(matches)[-1]
+                        break
+
+                if not npx_path:
+                    for search_path in ["/opt/homebrew/bin", "/usr/local/bin"]:
+                        candidate = os.path.join(search_path, "npx")
+                        if os.path.isfile(candidate):
+                            npx_path = candidate
+                            break
+
+            # Replace: npx <args> -> node /path/to/npx <args>
+            if node_path and npx_path:
+                command = node_path
+                args = [npx_path] + args
+
         return {
-            "command": config["command"],
-            "args": config["args"],
-            "env": config.get("env", {})
+            "command": command,
+            "args": args,
+            "env": env
         }
 
     def get_mcp_info(self, mcp_name: str) -> Dict[str, Any]:
