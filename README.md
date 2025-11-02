@@ -59,6 +59,8 @@ Add to your `.mcp.json` (Claude Code) or `~/.lmstudio/mcp.json`:
 }
 ```
 
+**Optional**: Add `"DEFAULT_MODEL": "model/name"` to `env` to pin a specific model.
+
 **Important**: Replace `/absolute/path/to/` with the actual path to your clone.
 
 ### 4. Use
@@ -188,6 +190,7 @@ The bridge acts as both:
 | `LMSTUDIO_HOST` | `localhost` | LM Studio host |
 | `LMSTUDIO_PORT` | `1234` | LM Studio API port |
 | `MCP_JSON_PATH` | (auto-detect) | Custom `.mcp.json` path |
+| `DEFAULT_MODEL` | (auto-detect) | Default model to use (e.g., `qwen/qwen3-coder-30b`) |
 
 ### MCP Discovery Priority
 
