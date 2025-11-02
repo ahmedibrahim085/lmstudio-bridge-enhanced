@@ -263,6 +263,30 @@ autonomous_filesystem_full(
 - ✅ Reasoning models: Enhanced output with thinking process
 - ✅ Zero breaking changes to API or tool signatures
 
+### 7. Intelligent Model State Handling
+
+Models can be in three states:
+- **loaded** - Active and ready to serve requests
+- **idle** - Present in memory, auto-activates instantly on first request
+- **loading** - Currently loading into memory
+
+The bridge automatically handles all states. **IDLE models reactivate instantly** when you use them (per LM Studio's auto-activation feature). Both "loaded" and "idle" are considered available states.
+
+**Why This Matters:**
+- ✅ No "model not found" errors when model is idle
+- ✅ Seamless experience - idle models wake up automatically
+- ✅ Resource efficient - LM Studio idles unused models to save memory
+- ✅ Zero configuration - handled transparently by the bridge
+
+**Technical Details:**
+When you use the `model` parameter, the bridge checks model availability:
+- ✅ `status="loaded"` → Model is active and ready
+- ✅ `status="idle"` → Model will auto-activate on first request
+- ❌ `status="loading"` → Wait for loading to complete
+- ❌ Not in list → Model not available
+
+See [LMS CLI Tools](docs/API_REFERENCE.md#lms-cli-tools-optional) for advanced model management (optional).
+
 ---
 
 ## Available Tools
