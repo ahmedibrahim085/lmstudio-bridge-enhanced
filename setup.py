@@ -5,7 +5,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="lmstudio-mcp",
-    version="3.0.0",
+    version="3.1.0",
     author="infinitimeless",
     author_email="127632852+infinitimeless@users.noreply.github.com",
     description="A Model Control Protocol (MCP) server that allows Claude to communicate with locally running LLM models via LM Studio",
