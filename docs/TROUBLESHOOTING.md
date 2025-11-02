@@ -814,9 +814,199 @@ See [Multi-Model Guide](MULTI_MODEL_GUIDE.md) for workflow patterns.
 
 ---
 
-## Getting Help
+### Issue: "Model shows as 'idle'" ✨ NEW
 
-If issues persist:
+**Symptoms**:
+```
+Log shows: "Model 'qwen/qwen3-coder-30b' found but status=idle"
+```
+
+**Cause**: Model hasn't received requests recently and entered idle state to save resources.
+
+**Solution**: **This is NORMAL!** No action needed.
+
+**Explanation**:
+- LM Studio automatically idles unused models to save memory
+- **IDLE models automatically reactivate when you use them** (per LM Studio's auto-activation feature)
+- Both "loaded" and "idle" are acceptable states
+- The bridge handles this transparently
+
+**Technical Details**:
+
+According to LM Studio documentation:
+> "Any API request to an idle model automatically reactivates it"
+
+The bridge's model validation explicitly accepts both states:
+
+```python
+# From utils/lms_helper.py
+def is_model_loaded(model_name: str) -> bool:
+    status = model.get("status", "").lower()
+
+    # Both "loaded" and "idle" are usable!
+    is_available = status in ("loaded", "idle")
+
+    return is_available
+```
+
+**Model States**:
+- ✅ **`loaded`** - Active and ready to serve (accepted)
+- ✅ **`idle`** - Will auto-activate on request (accepted)
+- ❌ **`loading`** - Currently loading (wait for completion)
+- ❌ Not in list - Model not available
+
+**What Happens When You Use IDLE Model**:
+1. Bridge sees model status = "idle" → considers it available
+2. Makes API request to LM Studio
+3. LM Studio automatically reactivates the model
+4. Request succeeds normally
+
+**No Configuration Needed**: The bridge handles IDLE state automatically.
+
+**See Also**:
+- [LMS CLI Integration](ARCHITECTURE.md#lms-cli-integration-optional-enhancement) - Advanced model state management
+- [Model State Handling](ARCHITECTURE.md#model-state-handling) - Complete architecture documentation
+
+---
+
+## Configuration Issues (continued)
+
+### Issue: ".mcp.json not found" ✨ NEW
+
+**Symptoms**:
+```
+Error: No .mcp.json file found in any search location
+Failed to discover MCPs
+```
+
+**Cause**: Dynamic MCP discovery requires `.mcp.json` configuration file to be present.
+
+**Solutions**:
+
+1. **Create .mcp.json in your project directory**:
+   ```bash
+   cd /path/to/your/project
+   touch .mcp.json
+   ```
+
+   **Minimal .mcp.json**:
+   ```json
+   {
+     "mcpServers": {
+       "filesystem": {
+         "command": "npx",
+         "args": ["-y", "@modelcontextprotocol/server-filesystem"],
+         "disabled": false
+       }
+     }
+   }
+   ```
+
+2. **Use standard MCP locations**:
+
+   The bridge searches these locations in order:
+   - `$MCP_JSON_PATH` (if environment variable set)
+   - `~/.lmstudio/mcp.json` (LM Studio's default)
+   - `$(pwd)/.mcp.json` (current directory)
+   - `~/.mcp.json` (home directory)
+   - Parent directory
+
+   **Check which location is being searched**:
+   ```bash
+   python3 -c "from mcp_client.discovery import MCPDiscovery; print(MCPDiscovery().mcp_json_path)"
+   ```
+
+3. **Set MCP_JSON_PATH environment variable**:
+   ```bash
+   export MCP_JSON_PATH=/path/to/your/.mcp.json
+   ```
+
+   Or in .mcp.json (for the bridge itself):
+   ```json
+   {
+     "mcpServers": {
+       "lmstudio-bridge-enhanced_v2": {
+         "env": {
+           "MCP_JSON_PATH": "/absolute/path/to/.mcp.json"
+         }
+       }
+     }
+   }
+   ```
+
+4. **Specify working_directory parameter explicitly**:
+   ```python
+   autonomous_filesystem_full(
+       task="Your task",
+       working_directory="/path/to/project/with/.mcp.json"
+   )
+   ```
+
+5. **Use single MCP mode (alternative)**:
+
+   If you only need one MCP, use `autonomous_with_mcp` without discovery:
+   ```python
+   # This bypasses .mcp.json discovery
+   autonomous_with_mcp(
+       mcp_name="filesystem",
+       task="Your task"
+   )
+   # Requires MCP to be configured in main .mcp.json
+   ```
+
+**Common Mistakes**:
+
+❌ **Wrong**:
+```bash
+# Creating .mcp.json in home directory but running from different directory
+cd /some/project
+# Bridge searches /some/project/.mcp.json first (not found!)
+```
+
+✅ **Correct**:
+```bash
+# Option 1: Create .mcp.json in project directory
+cd /some/project
+echo '{"mcpServers": {...}}' > .mcp.json
+
+# Option 2: Use LM Studio's global location
+echo '{"mcpServers": {...}}' > ~/.lmstudio/mcp.json
+
+# Option 3: Set environment variable
+export MCP_JSON_PATH=/absolute/path/to/.mcp.json
+```
+
+**Verification**:
+```bash
+# 1. Check if .mcp.json exists at search location
+ls -la ~/.lmstudio/mcp.json
+# OR
+ls -la $(pwd)/.mcp.json
+
+# 2. Verify file is valid JSON
+python3 -m json.tool < ~/.lmstudio/mcp.json
+
+# 3. Test MCP discovery
+python3 -c "from mcp_client.discovery import MCPDiscovery; print(MCPDiscovery().list_available_mcps())"
+```
+
+**Why This Happens**:
+
+The bridge's **dynamic MCP discovery** feature reads `.mcp.json` at runtime to discover which MCPs are available. This enables:
+- ✅ Hot reload (add MCPs without restart)
+- ✅ Zero hardcoded assumptions
+- ✅ Works with ANY MCP
+
+But it requires `.mcp.json` to exist somewhere in the search path.
+
+**See Also**:
+- [MCP Discovery Priority](../README.md#configuration) - Search order details
+- [Architecture: Dynamic Discovery](ARCHITECTURE.md#dynamic-discovery-flow) - How discovery works
+- [Quick Start Guide](QUICKSTART.md) - Setup instructions
+
+---
+
+## Getting Help
 
 1. **Check documentation**:
    - [Quick Start](QUICKSTART.md)
