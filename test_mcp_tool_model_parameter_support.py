@@ -22,6 +22,15 @@ def test_phase_2_2():
 
     # Read the file
     file_path = Path(__file__).parent / "tools" / "dynamic_autonomous_register.py"
+    print(f"Looking for file at: {file_path}")
+    print(f"File exists: {file_path.exists()}")
+
+    if not file_path.exists():
+        print(f"❌ ERROR: File not found at {file_path}")
+        print(f"__file__ = {__file__}")
+        print(f"parent = {Path(__file__).parent}")
+        return False
+
     with open(file_path, 'r') as f:
         content = f.read()
 
@@ -29,9 +38,26 @@ def test_phase_2_2():
     tree = ast.parse(content)
 
     # Find all function definitions decorated with @mcp.tool()
+    # Note: These functions are nested inside register_dynamic_autonomous_tools()
     tool_functions = []
+
+    # The @mcp.tool() functions are NESTED inside register_dynamic_autonomous_tools()
+    # They're in the function body, so we need to find the parent function first
+    register_func = None
     for node in ast.walk(tree):
-        if isinstance(node, ast.FunctionDef):
+        if isinstance(node, ast.FunctionDef) and node.name == 'register_dynamic_autonomous_tools':
+            register_func = node
+            break
+
+    if not register_func:
+        print("❌ ERROR: Could not find register_dynamic_autonomous_tools function")
+        return False
+
+    # Now walk the body of register_dynamic_autonomous_tools
+    # Note: The functions are AsyncFunctionDef, not FunctionDef!
+    for node in ast.walk(register_func):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node != register_func:
+            # This is a nested function
             # Check if decorated with @mcp.tool()
             for decorator in node.decorator_list:
                 if isinstance(decorator, ast.Call):
