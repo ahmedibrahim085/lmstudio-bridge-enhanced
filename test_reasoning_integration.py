@@ -45,8 +45,11 @@ async def test_magistral():
     """Test 1: Magistral with reasoning_content field."""
     print_section("TEST 1: Magistral (reasoning_content field)")
 
-    tools = AutonomousExecutionTools()
+    # Create tools with Magistral model explicitly
+    llm_client = LLMClient(model="mistralai/magistral-small-2509")
+    tools = AutonomousExecutionTools(llm_client=llm_client)
 
+    print("Using model: mistralai/magistral-small-2509")
     print("Testing with simple math task to trigger reasoning...")
     print("Task: 'What is 15 + 27? Think step by step.'\n")
 
@@ -55,7 +58,8 @@ async def test_magistral():
             task="What is 15 + 27? Think step by step. Do NOT use any filesystem tools, just answer.",
             working_directory="/Users/ahmedmaged/ai_storage/MyMCPs/lmstudio-bridge-enhanced",
             max_rounds=2,
-            max_tokens=1000
+            max_tokens=1000,
+            model="mistralai/magistral-small-2509"  # Explicit model parameter
         )
 
         print("Result:")
