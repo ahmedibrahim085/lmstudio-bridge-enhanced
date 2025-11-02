@@ -33,7 +33,7 @@ LONG_TIMEOUT = 300
 
 # Max rounds for autonomous execution
 DEFAULT_MAX_ROUNDS = 20
-SHORT_MAX_ROUNDS = 5
+SHORT_MAX_ROUNDS = 10  # Increased from 5: gives LLM more attempts to discover correct paths
 LONG_MAX_ROUNDS = 50
 
 # Performance targets
@@ -50,13 +50,17 @@ BENCHMARK_CONCURRENT_RUNS = 50  # Number of concurrent validations
 
 # Test tasks (generic, work with any accessible directory)
 SIMPLE_TASK = "What is 2+2? Just give me the number."
-LIST_FILES_TASK = "List the files in the current directory and describe what you find. What types of files are present?"
-COUNT_FILES_TASK = "Count how many files are in the current directory."
-EXPLAIN_TASK = "Explain what you observe about the current directory structure."
+LIST_FILES_TASK = "Use the list_directory tool to list files in your working directory and describe what you find. What types of files are present?"
+COUNT_FILES_TASK = "Use the list_directory tool to count how many files are in your working directory."
+EXPLAIN_TASK = "Use the list_directory tool to explore your working directory structure and explain what you observe."
 
 # E2E test tasks (designed to work with filesystem restrictions)
-E2E_ANALYSIS_TASK = "List the files in the current directory and describe what types of files are present."
-E2E_IMPLEMENTATION_TASK = "Based on the files you see, describe what this project might be about."
+# Note: CRITICAL - LLM must call list_directory() with NO path parameter to get the allowed directory
+# - Filesystem MCP has a configured working directory (/Users/ahmedmaged/ai_storage)
+# - Calling list_directory() with no arguments returns files in that directory
+# - Do NOT tell LLM to guess paths - it will try /workspace, /home/user, etc.
+E2E_ANALYSIS_TASK = "Call the list_directory tool with no arguments (don't provide a path parameter) to see what files are available, then describe what types of files you find."
+E2E_IMPLEMENTATION_TASK = "Based on the files you found, describe what this project might be about."
 
 # Invalid test values
 INVALID_MODEL_NAME = "definitely-not-a-real-model-name-12345"

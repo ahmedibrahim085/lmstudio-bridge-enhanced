@@ -209,7 +209,7 @@ class TestE2EMultiModelWorkflows:
         # Check if memory MCP is available
         from mcp_client.discovery import MCPDiscovery
         discovery = MCPDiscovery()
-        available_mcps = discovery.get_all_enabled_mcps()
+        available_mcps = discovery.list_available_mcps()
 
         if 'memory' not in available_mcps:
             pytest.skip("Memory MCP not configured")

@@ -330,12 +330,50 @@ ALTERNATIVE:
                 if status == "idle":
                     # Model is IDLE but present in memory
                     # According to LM Studio docs: "Any API request to an idle model automatically reactivates it"
-                    # So we just return True and let the next API call wake it up
+                    # Try to wake it up with a simple API call first
                     logger.info(
                         f"ℹ️  Model '{model_name}' is IDLE. "
-                        f"Will auto-activate on next API request."
+                        f"Attempting to reactivate with API call..."
                     )
-                    return True
+
+                    # Try a simple chat completion to wake up the model
+                    try:
+                        import httpx
+                        response = httpx.post(
+                            f"{cls.LM_STUDIO_BASE_URL}/chat/completions",
+                            json={
+                                "model": model_name,
+                                "messages": [{"role": "user", "content": "ping"}],
+                                "max_tokens": 1,
+                                "temperature": 0
+                            },
+                            timeout=10.0
+                        )
+
+                        if response.status_code == 200:
+                            # API call succeeded, check if model is now active
+                            import time
+                            time.sleep(1)  # Give it a moment to transition
+
+                            # Verify model is now loaded
+                            if cls.is_model_loaded(model_name):
+                                logger.info(f"✅ Model '{model_name}' reactivated successfully via API call")
+                                return True
+                            else:
+                                logger.warning(f"⚠️  API call succeeded but model still not active")
+                                # Fall through to unload+reload
+                        else:
+                            logger.warning(f"⚠️  API call failed with status {response.status_code}")
+                            # Fall through to unload+reload
+
+                    except Exception as e:
+                        logger.warning(f"⚠️  API call failed: {e}")
+                        # Fall through to unload+reload
+
+                    # If API call didn't work, try unload+reload
+                    logger.info(f"Falling back to unload+reload for model '{model_name}'")
+                    cls.unload_model(model_name)
+                    return cls.load_model(model_name, keep_loaded=True)
 
                 if status == "loading":
                     # Model is currently loading, wait briefly
