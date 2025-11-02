@@ -11,6 +11,7 @@ This provides pytest fixtures and decorators to:
 """
 
 import pytest
+import pytest_asyncio
 import asyncio
 import sys
 import os
@@ -30,13 +31,13 @@ from utils.mcp_health_check import (
 # Pytest Fixtures for MCP Health Checks
 # ============================================================================
 
-@pytest.fixture(scope="session")
+@pytest_asyncio.fixture(scope="session")
 async def mcp_health_checker():
     """Provide MCP health checker instance for entire test session."""
     return MCPHealthChecker()
 
 
-@pytest.fixture(scope="session")
+@pytest_asyncio.fixture(scope="session")
 async def check_filesystem_available():
     """Check if filesystem MCP is available (session-scoped).
 
@@ -50,13 +51,13 @@ async def check_filesystem_available():
     return await check_filesystem_mcp()
 
 
-@pytest.fixture(scope="session")
+@pytest_asyncio.fixture(scope="session")
 async def check_memory_available():
     """Check if memory MCP is available (session-scoped)."""
     return await check_memory_mcp()
 
 
-@pytest.fixture(scope="function")
+@pytest_asyncio.fixture(scope="function")
 async def require_filesystem():
     """Skip test if filesystem MCP is not available.
 
@@ -71,7 +72,7 @@ async def require_filesystem():
         pytest.skip(f"Filesystem MCP not available: {skip_reason}")
 
 
-@pytest.fixture(scope="function")
+@pytest_asyncio.fixture(scope="function")
 async def require_memory():
     """Skip test if memory MCP is not available."""
     is_running, skip_reason = await check_memory_mcp()
@@ -79,7 +80,7 @@ async def require_memory():
         pytest.skip(f"Memory MCP not available: {skip_reason}")
 
 
-@pytest.fixture(scope="function")
+@pytest_asyncio.fixture(scope="function")
 async def require_mcps():
     """Factory fixture to require specific MCPs.
 
