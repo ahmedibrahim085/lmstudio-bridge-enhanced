@@ -6,10 +6,11 @@ Complete reference for all tools provided by LM Studio Bridge Enhanced.
 
 ## Tool Categories
 
-- **[Core LM Studio Tools](#core-lm-studio-tools)** (7 tools) - Direct LM Studio API access
+- **[Core LM Studio Tools](#core-lm-studio-tools)** (7 tools) - Direct LM Studio HTTP API access
+- **[LMS CLI Tools](#lms-cli-tools-optional)** (5 tools) - Advanced model management (optional)
 - **[Dynamic Autonomous Tools](#dynamic-autonomous-tools)** (4 tools) - Dynamic MCP integration
 
-**Total**: 11 tools
+**Total**: 16 tools (11 core + 5 optional LMS CLI)
 
 ---
 
@@ -185,6 +186,280 @@ generate_embeddings([
 ```
 
 **Use case**: RAG systems, semantic search, text similarity, clustering.
+
+---
+
+## LMS CLI Tools (Optional)
+
+**IMPORTANT**: These tools require LM Studio CLI (`lms`) to be installed.
+
+### Why Use LMS CLI Tools?
+
+**Problem Without LMS CLI**:
+- Intermittent HTTP 404 errors when models auto-unload
+- No control over model lifecycle
+- Limited diagnostics when issues occur
+- Models may unload during critical operations
+
+**Solution With LMS CLI**:
+- ✅ Prevents 404 errors by ensuring models stay loaded
+- ✅ Proactive model management (load before operations)
+- ✅ Better diagnostics (detailed model status)
+- ✅ Production-grade reliability
+- ✅ Self-healing capabilities (auto-load failed models)
+
+**System works WITHOUT LMS CLI**, but these tools provide better reliability for production use!
+
+### Installation
+
+```bash
+# Option 1: Homebrew (macOS/Linux - RECOMMENDED)
+brew install lmstudio-ai/lms/lms
+
+# Option 2: npm (All platforms)
+npm install -g @lmstudio/lms
+
+# Verify installation
+lms --version
+```
+
+**Documentation**: https://github.com/lmstudio-ai/lms
+
+---
+
+### 1. lms_list_loaded_models
+
+List all currently loaded models with detailed information.
+
+**Parameters**: None
+
+**Returns**: `dict` with:
+- `success` (bool): Whether operation succeeded
+- `models` (list): List of model details (if successful)
+  - `identifier` (str): Model ID (e.g., "qwen/qwen3-coder-30b")
+  - `status` (str): Model status ("loaded", "idle", or "loading")
+  - `sizeBytes` (int): Model size in bytes
+  - `memoryUsageBytes` (int): Current memory usage
+- `count` (int): Number of loaded models
+- `totalMemoryBytes` (int): Total memory used by all models
+- `totalMemoryGB` (float): Total memory in GB
+- `error` (str): Error message (if failed)
+- `installInstructions` (str): How to install LMS CLI (if not installed)
+
+**Example**:
+```python
+lms_list_loaded_models()
+# Returns:
+# {
+#   "success": true,
+#   "models": [
+#     {
+#       "identifier": "qwen/qwen3-coder-30b",
+#       "status": "loaded",
+#       "sizeBytes": 19874906112,
+#       "memoryUsageBytes": 19874906112
+#     }
+#   ],
+#   "count": 1,
+#   "totalMemoryGB": 18.5,
+#   "summary": "Found 1 loaded models using 18.5GB memory"
+# }
+```
+
+**Use cases**:
+- Check which models are available before operations
+- Monitor total memory usage
+- Optimize model selection based on what's already loaded
+- Decide whether to load a new model or use existing one
+
+---
+
+### 2. lms_load_model
+
+Load a specific model in LM Studio.
+
+**Parameters**:
+- `model_name` (str, required): Model identifier (e.g., "qwen/qwen3-coder-30b")
+- `keep_loaded` (bool, optional): If True, prevents auto-unloading (default: True)
+
+**Returns**: `dict` with:
+- `success` (bool): Whether model loaded successfully
+- `model` (str): Model identifier
+- `keepLoaded` (bool): Whether model will be kept loaded
+- `message` (str): Success/failure message
+- `error` (str): Error details (if failed)
+
+**Example**:
+```python
+# Load coder model and keep it loaded for workflow
+lms_load_model("qwen/qwen3-coder-30b", keep_loaded=True)
+# Returns:
+# {
+#   "success": true,
+#   "model": "qwen/qwen3-coder-30b",
+#   "keepLoaded": true,
+#   "message": "Model 'qwen/qwen3-coder-30b' loaded successfully and kept loaded (will not auto-unload)"
+# }
+```
+
+**Use cases**:
+- Preload models before intensive operations
+- Switch to different model for specific tasks
+- Ensure model stays loaded during long workflows
+- Prepare for multi-model workflows
+
+---
+
+### 3. lms_unload_model
+
+Unload a model to free memory.
+
+**Parameters**:
+- `model_name` (str, required): Model identifier to unload
+
+**Returns**: `dict` with:
+- `success` (bool): Whether model unloaded successfully
+- `model` (str): Model identifier
+- `message` (str): Success/failure message
+- `error` (str): Error details (if failed)
+
+**Example**:
+```python
+# Free memory by unloading unused model
+lms_unload_model("qwen/qwen3-4b-thinking-2507")
+# Returns:
+# {
+#   "success": true,
+#   "model": "qwen/qwen3-4b-thinking-2507",
+#   "message": "Model 'qwen/qwen3-4b-thinking-2507' unloaded successfully"
+# }
+```
+
+**Use cases**:
+- Free memory after completing tasks
+- Make room for larger models
+- Clean up after multi-model workflows
+- Optimize memory usage
+
+---
+
+### 4. lms_ensure_model_loaded ⭐ RECOMMENDED
+
+Ensure a model is loaded, load if necessary (idempotent).
+
+**This is the RECOMMENDED way to prevent 404 errors!**
+
+Safe to call multiple times - only loads if needed.
+
+**Parameters**:
+- `model_name` (str, required): Model identifier to ensure is loaded
+
+**Returns**: `dict` with:
+- `success` (bool): Whether model is loaded (or was loaded)
+- `model` (str): Model identifier
+- `wasAlreadyLoaded` (bool): True if model was already loaded
+- `message` (str): Status message
+- `error` (str): Error details (if failed)
+
+**Example**:
+```python
+# BEST PRACTICE: Ensure model loaded before operation
+lms_ensure_model_loaded("qwen/qwen3-coder-30b")
+# Returns (if already loaded):
+# {
+#   "success": true,
+#   "model": "qwen/qwen3-coder-30b",
+#   "wasAlreadyLoaded": true,
+#   "message": "Model 'qwen/qwen3-coder-30b' is already loaded and ready"
+# }
+
+# Returns (if not loaded):
+# {
+#   "success": true,
+#   "model": "qwen/qwen3-coder-30b",
+#   "wasAlreadyLoaded": false,
+#   "message": "Model 'qwen/qwen3-coder-30b' loaded successfully and kept loaded"
+# }
+```
+
+**Use cases**:
+- **PRIMARY**: Prevent 404 errors before operations
+- Guarantee model availability
+- Idempotent preloading (safe to call multiple times)
+- Fail-safe pattern before autonomous execution
+
+**Best practice workflow**:
+```python
+# 1. Ensure model loaded first
+result = lms_ensure_model_loaded("qwen/qwen3-coder-30b")
+
+if result["success"]:
+    # 2. Now safe to run autonomous task
+    autonomous_with_mcp(
+        "filesystem",
+        "analyze codebase",
+        model="qwen/qwen3-coder-30b"
+    )
+```
+
+---
+
+### 5. lms_server_status
+
+Get LM Studio server status and diagnostics.
+
+**Parameters**: None
+
+**Returns**: `dict` with:
+- `success` (bool): Whether status retrieved successfully
+- `serverRunning` (bool): Whether LM Studio server is running
+- `status` (dict): Server status details (if available)
+- `error` (str): Error message (if failed)
+
+**Example**:
+```python
+# Check server health before running tasks
+lms_server_status()
+# Returns:
+# {
+#   "success": true,
+#   "serverRunning": true,
+#   "status": {...},
+#   "message": "LM Studio server is running"
+# }
+```
+
+**Use cases**:
+- Check server health before operations
+- Diagnose issues when failures occur
+- Monitor server state
+- Verify LM Studio is running properly
+
+---
+
+### LMS CLI Tools: When to Use
+
+| Scenario | Recommended Tool | Why |
+|----------|-----------------|-----|
+| Before autonomous execution | `lms_ensure_model_loaded` | Prevents 404 errors |
+| Check available models | `lms_list_loaded_models` | See what's already loaded |
+| Preload for workflow | `lms_load_model` | Ensure model stays loaded |
+| Free memory | `lms_unload_model` | Clean up after tasks |
+| Diagnose issues | `lms_server_status` | Server health check |
+
+### LMS CLI vs HTTP API Tools
+
+| Feature | HTTP API Tools | LMS CLI Tools |
+|---------|---------------|---------------|
+| Model listing | `list_models` (basic) | `lms_list_loaded_models` (detailed) |
+| Model loading | Auto (on first use) | `lms_load_model` (explicit) |
+| Model status | Not available | `lms_list_loaded_models` (status field) |
+| 404 prevention | Not available | `lms_ensure_model_loaded` |
+| Memory management | Not available | `lms_unload_model` |
+| Installation | None required | Requires `lms` CLI |
+| Reliability | Good | Excellent |
+
+**Recommendation**: Use LMS CLI tools for production deployments!
 
 ---
 
