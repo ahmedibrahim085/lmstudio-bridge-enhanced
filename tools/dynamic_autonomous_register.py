@@ -52,6 +52,45 @@ def register_dynamic_autonomous_tools(mcp, llm_client: Optional[LLMClient] = Non
 
         This delegates the task to a LOCAL LLM which autonomously uses MCP tools to complete it.
 
+        ⚠️ **MULTI-MODEL DELEGATION - CRITICAL PARAMETER** ⚠️
+
+        **To ask a SPECIFIC LOCAL MODEL to do the task, use the `model` parameter:**
+
+        ```python
+        # ✅ CORRECT - Delegate to gemma-3
+        autonomous_with_mcp(
+            mcp_name="filesystem",
+            task="Generate a happy cat description",
+            model="google/gemma-3-12b"  # ← THIS specifies which model does the work!
+        )
+
+        # ✅ CORRECT - Delegate to qwen coder
+        autonomous_with_mcp(
+            mcp_name="filesystem",
+            task="Write Python code",
+            model="qwen/qwen3-coder-30b"  # ← THIS model will write the code!
+        )
+
+        # ❌ WRONG - Missing model parameter (uses default model)
+        autonomous_with_mcp(
+            mcp_name="filesystem",
+            task="Tell google/gemma-3 to generate photo"
+            # ← NO MODEL PARAMETER = default model does it, NOT gemma-3!
+        )
+
+        # ❌ VERY WRONG - Calling wrong tool
+        lms_ensure_model_loaded("gemma-3")  # ← This is for PRELOADING, NOT delegation!
+        autonomous_with_mcp(...)  # ← Still uses default model!
+        ```
+
+        **When User Says**: "Tell [model name] to do [task]"
+        **You MUST Pass**: `model="[exact model name]"` parameter!
+
+        **Examples of User Requests → Your Parameters:**
+        - User: "Ask gemma-3 to generate cat photo" → `model="google/gemma-3-12b"`
+        - User: "Tell qwen coder to write code" → `model="qwen/qwen3-coder-30b"`
+        - User: "Have the thinking model analyze this" → `model="qwen/qwen3-4b-thinking-2507"`
+
         ## When to Use This Tool
         ✅ Use when:
         - User requests file/directory operations → use mcp_name="filesystem"
@@ -59,6 +98,7 @@ def register_dynamic_autonomous_tools(mcp, llm_client: Optional[LLMClient] = Non
         - User requests knowledge storage/retrieval → use mcp_name="memory"
         - User requests GitHub operations → use mcp_name="github"
         - Task clearly needs ONE specific MCP's tools
+        - **User requests a SPECIFIC MODEL to do a task** → use `model` parameter!
 
         ❌ Do NOT use for:
         - Simple questions you can answer → Answer directly!
@@ -173,6 +213,29 @@ def register_dynamic_autonomous_tools(mcp, llm_client: Optional[LLMClient] = Non
 
         This delegates to LOCAL LLM which can use ANY tool from ANY specified MCP in single session.
 
+        ⚠️ **MULTI-MODEL DELEGATION - CRITICAL PARAMETER** ⚠️
+
+        **To ask a SPECIFIC LOCAL MODEL to do the task, use the `model` parameter:**
+
+        ```python
+        # ✅ CORRECT - Delegate to gemma-3 with multiple MCPs
+        autonomous_with_multiple_mcps(
+            mcp_names=["filesystem", "memory"],
+            task="Analyze files and build knowledge graph",
+            model="google/gemma-3-12b"  # ← THIS specifies which model does the work!
+        )
+
+        # ❌ WRONG - Missing model parameter (uses default model)
+        autonomous_with_multiple_mcps(
+            mcp_names=["filesystem", "fetch"],
+            task="Tell google/gemma-3 to compare docs"
+            # ← NO MODEL PARAMETER = default model does it, NOT gemma-3!
+        )
+        ```
+
+        **When User Says**: "Tell [model name] to do [task]"
+        **You MUST Pass**: `model="[exact model name]"` parameter!
+
         ## When to Use This Tool
         ✅ Use when task requires:
         - Reading local files AND fetching web content
@@ -278,6 +341,27 @@ def register_dynamic_autonomous_tools(mcp, llm_client: Optional[LLMClient] = Non
         Execute task with ALL available MCP servers auto-discovered from .mcp.json.
 
         This delegates to LOCAL LLM with access to EVERY tool from EVERY enabled MCP!
+
+        ⚠️ **MULTI-MODEL DELEGATION - CRITICAL PARAMETER** ⚠️
+
+        **To ask a SPECIFIC LOCAL MODEL to do the task, use the `model` parameter:**
+
+        ```python
+        # ✅ CORRECT - Delegate complex task to gemma-3
+        autonomous_discover_and_execute(
+            task="Analyze project and create comprehensive docs",
+            model="google/gemma-3-12b"  # ← THIS specifies which model does the work!
+        )
+
+        # ❌ WRONG - Missing model parameter (uses default model)
+        autonomous_discover_and_execute(
+            task="Tell google/gemma-3 to analyze project"
+            # ← NO MODEL PARAMETER = default model does it, NOT gemma-3!
+        )
+        ```
+
+        **When User Says**: "Tell [model name] to do [task]"
+        **You MUST Pass**: `model="[exact model name]"` parameter!
 
         ## When to Use This Tool
         ✅ Use when:
