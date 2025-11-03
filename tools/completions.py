@@ -167,16 +167,80 @@ def register_completion_tools(mcp, llm_client: Optional[LLMClient] = None):
         temperature: float = 0.7,
         max_tokens: int = 1024
     ) -> str:
-        """Generate a completion from the current LM Studio model.
+        """
+        Delegate a task to the local LLM running in LM Studio.
+
+        ⚠️ CRITICAL: This tool calls ANOTHER LLM (not you!). Only use for task DELEGATION.
+
+        ## When to Use This Tool
+        ✅ Use for:
+        - Bulk content generation (e.g., "generate 50 product descriptions")
+        - Programmatic text/code generation for external systems
+        - Offloading repetitive sub-tasks to local models
+        - Template-based content creation at scale
+        - Delegating computational work to specialized local models
+
+        ❌ Do NOT use for:
+        - Answering user questions → Answer directly from your knowledge!
+        - Conversational responses → You should respond, not another LLM!
+        - Simple Q&A → Inefficient to delegate what you can answer
+        - Explaining concepts → You have this knowledge already
+        - Identity questions → Never ask another LLM "who are you?"
+
+        ## Multimedia & Content Types 🎨🖼️📹
+        **You can request ANY content type** through this tool:
+        - ✅ Text, code, markdown (always supported)
+        - ✅ Images (PNG, JPG, SVG) - if receiving LLM is multimodal
+        - ✅ Audio/Video analysis - if receiving LLM supports it
+        - ✅ Documents (PDF, Word) - if receiving LLM can process
+        - ✅ Data files (JSON, CSV, XML)
+
+        **Content Handling**: The receiving LLM in LM Studio decides:
+        - ✅ Accept & process if it has the capability (e.g., GPT-4V can analyze images)
+        - ❌ Reject with error if unsupported (e.g., text-only models cannot process images)
+
+        This tool is content-agnostic - it forwards your request without restriction.
+        The receiving model's capabilities determine what's supported.
+
+        ## Examples
+        ✅ CORRECT:
+        User: "Generate 10 creative coffee shop names"
+        Action: chat_completion(prompt="Generate 10 creative coffee shop names")
+        Reason: Bulk generation task - appropriate delegation
+
+        ✅ CORRECT:
+        User: "Analyze sentiment in this user review dataset"
+        Action: chat_completion(prompt="Analyze sentiment: [review data]")
+        Reason: Batch processing task - good delegation
+
+        ❌ INCORRECT:
+        User: "Hello, who are you?"
+        Wrong: chat_completion(prompt="Hello, who are you?")
+        Correct: Answer directly - "I am a local language model running via LM Studio..."
+        Reason: This is conversation! You should answer yourself, not ask another LLM
+
+        ❌ INCORRECT:
+        User: "What is Python?"
+        Wrong: chat_completion(prompt="What is Python?")
+        Correct: Answer directly - "Python is a high-level programming language..."
+        Reason: You have this knowledge! No need to delegate simple Q&A
+
+        ❌ INCORRECT:
+        User: "Explain how recursion works"
+        Wrong: chat_completion(prompt="Explain recursion")
+        Correct: Answer directly with your own explanation
+        Reason: Explaining concepts is YOUR job, not another LLM's
 
         Args:
-            prompt: The user's prompt to send to the model
-            system_prompt: Optional system instructions for the model
-            temperature: Controls randomness (0.0 to 1.0)
-            max_tokens: Maximum number of tokens to generate
+            prompt: The specific task to delegate to the local LLM
+            system_prompt: Optional system instructions for the local LLM
+            temperature: Controls randomness (0.0 = deterministic, 1.0 = creative)
+            max_tokens: Maximum response length
 
         Returns:
-            The model's response to the prompt
+            The local LLM's response to the delegated task
+
+        Note: This creates a SECOND LLM call. Only use when delegation is truly beneficial.
         """
         return await tools.chat_completion(prompt, system_prompt, temperature, max_tokens)
 
@@ -187,19 +251,71 @@ def register_completion_tools(mcp, llm_client: Optional[LLMClient] = None):
         max_tokens: int = 1024,
         stop_sequences: Optional[List[str]] = None
     ) -> str:
-        """Generate a raw text completion (non-chat format) from LM Studio.
+        """
+        Generate raw text/code completion from local LLM (non-chat format).
 
-        This endpoint is simpler and faster than chat completions for single-turn tasks
-        like code completion, text continuation, or simple Q&A.
+        ⚠️ IMPORTANT: This delegates to ANOTHER LLM for programmatic generation.
+
+        ## When to Use This Tool
+        ✅ Use for:
+        - Code completion for external systems (e.g., IDE integrations)
+        - Text continuation for programmatic use
+        - Template filling at scale
+        - Format-specific generation (completing JSON, YAML, etc.)
+        - Single-turn generation tasks without conversation context
+
+        ❌ Do NOT use for:
+        - Conversational responses → Use chat_completion or answer directly
+        - Questions requiring reasoning → Use chat_completion with system prompt
+        - Tasks you can complete yourself → Answer directly!
+        - Multi-turn conversations → Use chat_completion instead
+
+        ## Multimedia & Content Types 🎨🖼️📹
+        **You can request ANY content type** through this tool:
+        - ✅ Text, code, markdown (primary use case)
+        - ✅ SVG/ASCII art (text-based visuals)
+        - ✅ Data formats (JSON, CSV, XML)
+        - ✅ Configuration files (YAML, TOML, INI)
+
+        **Content Handling**: The receiving LLM in LM Studio decides:
+        - ✅ Accept & process if it can generate the requested format
+        - ❌ Reject with error if unsupported
+
+        This tool is optimized for single-turn, format-specific generation.
+
+        ## Examples
+        ✅ CORRECT:
+        User: "Complete this function signature"
+        Action: text_completion(prompt="def fibonacci(n):")
+        Reason: Code completion for external system
+
+        ✅ CORRECT:
+        User: "Fill in this JSON template"
+        Action: text_completion(prompt='{"name": "', stop_sequences=['"'])
+        Reason: Format-specific generation with stop sequence
+
+        ❌ INCORRECT:
+        User: "What does this code do?"
+        Wrong: text_completion(prompt="What does this code do: ...")
+        Correct: Answer directly or use chat_completion with context
+        Reason: This is analysis/explanation, not text completion
+
+        ❌ INCORRECT:
+        User: "Help me debug this"
+        Wrong: text_completion(prompt="Debug this code...")
+        Correct: Use chat_completion or reason about it yourself
+        Reason: Debugging requires conversation context, not raw completion
 
         Args:
-            prompt: The text prompt to complete
-            temperature: Controls randomness (0.0 to 2.0, default 0.7)
-            max_tokens: Maximum number of tokens to generate (default 1024)
-            stop_sequences: Optional list of sequences where generation will stop
+            prompt: The text prompt to complete (programmatic generation)
+            temperature: Controls randomness (0.0 = deterministic, 2.0 = creative)
+            max_tokens: Maximum number of tokens to generate
+            stop_sequences: Optional list of sequences where generation stops
 
         Returns:
-            The completed text from the model
+            The completed text from the local LLM
+
+        Note: Faster than chat_completion but no conversation context.
         """
         return await tools.text_completion(prompt, temperature, max_tokens, stop_sequences)
 
@@ -210,19 +326,56 @@ def register_completion_tools(mcp, llm_client: Optional[LLMClient] = None):
         stream: bool = False,
         model: Optional[str] = None
     ) -> str:
-        """Create a response using LM Studio's stateful /v1/responses endpoint.
+        """
+        Create stateful conversation response with local LLM (maintains history automatically).
 
-        This endpoint provides stateful conversations where you can reference previous
-        responses without managing message history manually.
+        ⚠️ NOTE: This delegates to ANOTHER LLM with automatic conversation state management.
+
+        ## When to Use This Tool
+        ✅ Use for:
+        - Multi-turn conversations with the local LLM
+        - Maintaining conversation context automatically
+        - Continuing previous conversation threads
+        - Delegated conversational tasks requiring memory
+
+        ❌ Do NOT use for:
+        - Single-turn questions → Use chat_completion or answer directly
+        - Your own conversational responses → Answer directly!
+        - Simple Q&A → Inefficient delegation
+        - Bulk generation → Use chat_completion instead
+
+        ## Multimedia & Content Types 🎨🖼️📹
+        **You can request ANY content type** through this tool:
+        - ✅ Text, code, markdown (always supported)
+        - ✅ Images (if receiving LLM is multimodal)
+        - ✅ Audio/Video (if receiving LLM supports it)
+
+        **Content Handling**: The receiving LLM in LM Studio decides:
+        - ✅ Accept & process if it has the capability
+        - ❌ Reject with error if unsupported
+
+        ## Examples
+        ✅ CORRECT:
+        Turn 1: create_response("Explain Python")
+        Turn 2: create_response("Give me an example", previous_response_id=resp1_id)
+        Reason: Multi-turn conversation delegation with context
+
+        ❌ INCORRECT:
+        User: "Hello, how are you?"
+        Wrong: create_response("Hello, how are you?")
+        Correct: Answer directly - "I'm an AI assistant, ready to help!"
+        Reason: This is YOUR conversation, not a delegated task
 
         Args:
-            input_text: The user's input text
-            previous_response_id: Optional ID from a previous response to continue conversation
-            stream: Whether to stream the response (default False)
-            model: Model to use (default: uses currently loaded model)
+            input_text: The input for the local LLM
+            previous_response_id: ID from previous response (for conversation continuity)
+            stream: Whether to stream the response
+            model: Model to use (default: currently loaded model)
 
         Returns:
-            JSON string with response including ID for future reference
+            JSON string with response and ID for future reference
+
+        Note: Server maintains conversation history automatically.
         """
         return await tools.create_response(
             input_text, previous_response_id, stream, model
