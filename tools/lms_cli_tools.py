@@ -237,17 +237,49 @@ def lms_ensure_model_loaded(model_name: str) -> Dict[str, Any]:
     """
     Ensure a model is loaded, load if necessary (idempotent).
 
+    ⚠️ **PURPOSE: MODEL LIFECYCLE MANAGEMENT (Performance & Reliability)**
+
+    This tool is for **preloading models** to prevent errors and delays.
+    It is **NOT for task delegation** or switching models for specific tasks!
+
+    ## When to Use This Tool
+    ✅ Use for MODEL LIFECYCLE:
+    - Prevent 404 errors before operations (PRIMARY USE CASE)
+    - Preload models for performance (eliminate JIT loading delays)
+    - Guarantee model availability for long workflows
+    - Idempotent preloading (safe to call multiple times)
+    - Fail-safe pattern before autonomous execution
+
+    ❌ Do NOT use for TASK DELEGATION:
+    ```python
+    # ❌ WRONG - This does NOT switch which model handles the task
+    lms_ensure_model_loaded("gemma-3")
+    chat_completion("generate cat photo")  # Still uses default model!
+
+    # ✅ CORRECT - Use autonomous tools with model parameter
+    autonomous_with_mcp(
+        mcp_name="filesystem",
+        task="generate cat photo description",
+        model="gemma-3"  # This ACTUALLY uses gemma-3
+    )
+    ```
+
+    ## Model Lifecycle vs Task Delegation
+    **Model Lifecycle** (THIS tool):
+    - Loading/unloading models for memory management
+    - Preventing auto-unload during workflows
+    - Performance optimization (preloading)
+
+    **Task Delegation** (USE autonomous tools instead):
+    - Asking a specific model to do something
+    - Multi-model workflows (different models for different tasks)
+    - Using model='name' parameter in autonomous tools
+
     This is the RECOMMENDED way to prevent 404 errors.
     Safe to call multiple times - only loads if needed.
 
     Args:
         model_name: Model identifier to ensure is loaded
-
-    Use this to:
-    - Prevent 404 errors before operations (PRIMARY USE CASE)
-    - Guarantee model availability
-    - Idempotent preloading (safe to call multiple times)
-    - Fail-safe pattern before autonomous execution
 
     Returns:
         Dictionary with:

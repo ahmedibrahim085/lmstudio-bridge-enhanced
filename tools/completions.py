@@ -187,6 +187,37 @@ def register_completion_tools(mcp, llm_client: Optional[LLMClient] = None):
         - Explaining concepts → You have this knowledge already
         - Identity questions → Never ask another LLM "who are you?"
 
+        ## Switching Models (Multi-Model Support)
+        **To delegate a task to a DIFFERENT model:**
+
+        The current implementation uses the DEFAULT model configured in LM Studio.
+
+        ⚠️ **Model switching via `model` parameter is NOT currently supported** in this basic tool.
+
+        **For multi-model workflows**, use the autonomous tools instead:
+        ```python
+        # Use a specific model for a task
+        autonomous_with_mcp(
+            mcp_name="filesystem",
+            task="your task",
+            model="qwen/qwen3-coder-30b"  # Specify model here
+        )
+        ```
+
+        ❌ **Do NOT use `lms_*` tools for model switching**:
+        ```python
+        # WRONG - This is for model LIFECYCLE, not task delegation
+        lms_ensure_model_loaded("gemma-3")  # ❌ WRONG
+        chat_completion("generate photo")    # Still uses default model
+
+        # CORRECT - Use autonomous tools with model parameter
+        autonomous_with_mcp(
+            mcp_name="filesystem",
+            task="generate photo description",
+            model="gemma-3"  # ✅ CORRECT
+        )
+        ```
+
         ## Multimedia & Content Types 🎨🖼️📹
         **You can request ANY content type** through this tool:
         - ✅ Text, code, markdown (always supported)
