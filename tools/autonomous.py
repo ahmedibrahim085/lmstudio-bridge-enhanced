@@ -58,9 +58,9 @@ class AutonomousExecutionTools:
            (COMPREHENSIVE_MODEL_TESTING.md line ~184)
         2. HTML escaping: XSS prevention (OWASP Top 10 #3, 15,000+ vulnerabilities/year)
            Even terminal output can be logged to web-based log viewers
-        3. 2000-char truncation: DeepSeek R1 shows 5x scaling (1.4KB → 6.6KB with high effort)
+        3. 20000-char truncation: DeepSeek R1 shows 5x scaling (1.4KB → 6.6KB with high effort)
            (COMPREHENSIVE_MODEL_TESTING.md line ~221)
-           Future reasoning-heavy models could generate 10KB-20KB+ output
+           Updated limit allows for extended reasoning display from advanced models
         4. Type safety: str() conversion handles API evolution (LM Studio v0.3.9 added reasoning_content)
            Protects against future API changes where field type might change
 
@@ -129,10 +129,10 @@ class AutonomousExecutionTools:
             >>> # Very long reasoning (truncation test)
             >>> message = {
             ...     "content": "Answer",
-            ...     "reasoning_content": "A" * 3000  # 3KB
+            ...     "reasoning_content": "A" * 25000  # 25KB
             ... }
             >>> result = self._format_response_with_reasoning(message)
-            >>> len(result.split("**Final Answer:**")[0]) < 2100  # Truncated
+            >>> len(result.split("**Final Answer:**")[0]) < 20100  # Truncated at 20K
             True
         """
         # Extract content
@@ -171,9 +171,9 @@ class AutonomousExecutionTools:
                 # Evidence: DeepSeek R1 with reasoning_effort="high" shows 5x increase
                 # 1.4KB baseline → 6.6KB with high effort (COMPREHENSIVE_MODEL_TESTING.md)
                 # Extrapolation: Future models could hit 10KB-20KB+ with extended reasoning
-                # 2000 chars ≈ reasonable display limit without overwhelming output
-                if len(sanitized_reasoning) > 2000:
-                    sanitized_reasoning = sanitized_reasoning[:1997] + "..."
+                # Updated: 20000 chars ≈ allows for extended reasoning display
+                if len(sanitized_reasoning) > 20000:
+                    sanitized_reasoning = sanitized_reasoning[:19997] + "..."
 
                 # Ensure content is clean
                 content = content.strip() if content else ""
