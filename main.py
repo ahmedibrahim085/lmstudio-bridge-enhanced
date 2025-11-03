@@ -15,7 +15,7 @@ Architecture: Orchestrator Pattern
 from mcp.server.fastmcp import FastMCP
 from config import get_config
 from llm.llm_client import LLMClient
-from utils.logging import get_logger, log_info
+from utils import get_logger, log_info
 from tools.health import register_health_tools
 from tools.completions import register_completion_tools
 from tools.embeddings import register_embeddings_tools
