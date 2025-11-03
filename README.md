@@ -40,7 +40,25 @@ pip install -r requirements.txt
 
 ### 3. Configure
 
-Add to your `.mcp.json` (Claude Code) or `~/.lmstudio/mcp.json`:
+#### Option A: Automated Setup (Recommended)
+
+Run the setup script to automatically configure the correct paths:
+
+```bash
+./setup-config.sh
+```
+
+The script will:
+- Detect your project root automatically
+- Create configuration for Claude Code and/or LM Studio
+- Set correct `PYTHONPATH` for Python module imports
+- Backup existing configurations
+
+#### Option B: Manual Configuration
+
+##### For Claude Code
+
+Add to your project's `.mcp.json`:
 
 ```json
 {
@@ -51,6 +69,7 @@ Add to your `.mcp.json` (Claude Code) or `~/.lmstudio/mcp.json`:
         "/absolute/path/to/lmstudio-bridge-enhanced/main.py"
       ],
       "env": {
+        "PYTHONPATH": "/absolute/path/to/lmstudio-bridge-enhanced",
         "LMSTUDIO_HOST": "localhost",
         "LMSTUDIO_PORT": "1234"
       }
@@ -59,9 +78,41 @@ Add to your `.mcp.json` (Claude Code) or `~/.lmstudio/mcp.json`:
 }
 ```
 
-**Optional**: Add `"DEFAULT_MODEL": "model/name"` to `env` to pin a specific model.
+##### For LM Studio
 
-**Important**: Replace `/absolute/path/to/` with the actual path to your clone.
+Add to `~/.lmstudio/mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "lmstudio-bridge-enhanced": {
+      "command": "python3",
+      "args": [
+        "/absolute/path/to/lmstudio-bridge-enhanced/main.py"
+      ],
+      "env": {
+        "PYTHONPATH": "/absolute/path/to/lmstudio-bridge-enhanced",
+        "LMSTUDIO_HOST": "localhost",
+        "LMSTUDIO_PORT": "1234"
+      }
+    }
+  }
+}
+```
+
+**Required Setup:**
+1. Replace `/absolute/path/to/lmstudio-bridge-enhanced` with your actual installation path
+   - Example (macOS/Linux): `/Users/yourname/projects/lmstudio-bridge-enhanced`
+   - Example (Windows): `C:\Users\yourname\projects\lmstudio-bridge-enhanced`
+2. **Important**: Set `PYTHONPATH` to the same directory as `main.py` (the project root)
+
+**Optional Environment Variables:**
+- `DEFAULT_MODEL`: Pin a specific model (e.g., `"qwen/qwen3-coder-30b"`)
+- `LMSTUDIO_HOST`: Change if LM Studio runs on different host (default: `localhost`)
+- `LMSTUDIO_PORT`: Change if LM Studio uses different port (default: `1234`)
+
+**Example Configuration:**
+See `.mcp.json.example` for a template configuration file with placeholders.
 
 ### 4. Use
 
