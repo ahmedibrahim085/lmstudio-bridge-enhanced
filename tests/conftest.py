@@ -123,6 +123,16 @@ def pytest_configure(config):
     )
 
 
+def _check_lmstudio_available():
+    """Check if LM Studio is running and available."""
+    import requests
+    try:
+        response = requests.get("http://localhost:1234/v1/models", timeout=2)
+        return response.status_code == 200
+    except Exception:
+        return False
+
+
 def pytest_runtest_setup(item):
     """Check MCP requirements before running test.
 
@@ -138,9 +148,22 @@ def pytest_runtest_setup(item):
         async def test_multi_mcp():
             # Automatically skipped if either MCP not available
             ...
+
+        @pytest.mark.e2e
+        async def test_end_to_end():
+            # Automatically skipped if LM Studio not running
+            ...
     """
     # Get all markers
     markers = {marker.name: marker for marker in item.iter_markers()}
+
+    # Auto-skip E2E tests if LM Studio is not available
+    if "e2e" in markers:
+        if not _check_lmstudio_available():
+            pytest.skip(
+                "LM Studio not available - E2E test requires running LM Studio.\n"
+                "Start LM Studio and load a model to run E2E tests."
+            )
 
     # Check for MCP requirement markers
     required_mcps = []

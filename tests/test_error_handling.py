@@ -10,8 +10,8 @@ from utils.error_handling import retry_with_backoff, fallback_strategy, log_erro
 
 # Test fixtures and helpers
 
-class TestException(Exception):
-    """Custom exception for testing."""
+class MockException(Exception):
+    """Custom exception for testing (renamed from MockException to avoid pytest collection warning)."""
     pass
 
 
@@ -40,7 +40,7 @@ async def test_retry_success_on_second_attempt():
     async def flaky_function():
         attempts.append(1)
         if len(attempts) < 2:
-            raise TestException("Temporary error")
+            raise MockException("Temporary error")
         return "success"
 
     result = await flaky_function()
@@ -57,9 +57,9 @@ async def test_retry_fails_after_max_attempts():
     @retry_with_backoff(max_retries=3, base_delay=0.01)
     async def always_failing_function():
         attempts.append(1)
-        raise TestException("Persistent error")
+        raise MockException("Persistent error")
 
-    with pytest.raises(TestException):
+    with pytest.raises(MockException):
         await always_failing_function()
 
     assert len(attempts) == 3
@@ -74,11 +74,11 @@ async def test_retry_exponential_backoff():
     @retry_with_backoff(max_retries=3, base_delay=0.1, max_delay=1.0)
     async def failing_function():
         timestamps.append(time.time())
-        raise TestException("Error")
+        raise MockException("Error")
 
     try:
         await failing_function()
-    except TestException:
+    except MockException:
         pass
 
     # Check that delays increase exponentially
@@ -98,11 +98,11 @@ async def test_retry_only_catches_specified_exceptions():
     """Should only retry on specified exception types."""
     attempts = []
 
-    @retry_with_backoff(max_retries=3, base_delay=0.01, exceptions=(TestException,))
+    @retry_with_backoff(max_retries=3, base_delay=0.01, exceptions=(MockException,))
     async def selective_function():
         attempts.append(1)
         if len(attempts) < 2:
-            raise TestException("This will be retried")
+            raise MockException("This will be retried")
         raise ValueError("This will not be retried")
 
     with pytest.raises(ValueError):
@@ -119,7 +119,7 @@ def test_retry_sync_function():
     def sync_flaky_function():
         attempts.append(1)
         if len(attempts) < 2:
-            raise TestException("Temporary error")
+            raise MockException("Temporary error")
         return "success"
 
     result = sync_flaky_function()
@@ -132,7 +132,7 @@ def test_retry_sync_function():
 async def test_fallback_on_failure():
     """Should call fallback function on failure."""
     async def main_function():
-        raise TestException("Main function failed")
+        raise MockException("Main function failed")
 
     async def fallback_function():
         return "fallback result"
@@ -180,7 +180,7 @@ async def test_fallback_with_arguments():
         fallback_kwargs={"kwarg1": "c"}
     )
     async def decorated_function():
-        raise TestException("Fail")
+        raise MockException("Fail")
 
     result = await decorated_function()
 
@@ -190,7 +190,7 @@ async def test_fallback_with_arguments():
 def test_fallback_sync_function():
     """Should work with synchronous functions."""
     def main_function():
-        raise TestException("Failed")
+        raise MockException("Failed")
 
     def fallback_function():
         return "fallback result"
@@ -209,9 +209,9 @@ async def test_log_errors_async():
     """Should log errors before re-raising (async)."""
     @log_errors
     async def failing_function():
-        raise TestException("Test error")
+        raise MockException("Test error")
 
-    with pytest.raises(TestException):
+    with pytest.raises(MockException):
         await failing_function()
 
 
@@ -219,9 +219,9 @@ def test_log_errors_sync():
     """Should log errors before re-raising (sync)."""
     @log_errors
     def failing_function():
-        raise TestException("Test error")
+        raise MockException("Test error")
 
-    with pytest.raises(TestException):
+    with pytest.raises(MockException):
         failing_function()
 
 
@@ -237,7 +237,7 @@ async def test_combined_decorators():
     @retry_with_backoff(max_retries=2, base_delay=0.01)
     async def decorated_function():
         attempts.append(1)
-        raise TestException("Always fails")
+        raise MockException("Always fails")
 
     result = await decorated_function()
 
