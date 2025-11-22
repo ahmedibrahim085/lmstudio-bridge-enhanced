@@ -303,7 +303,9 @@ class AutonomousExecutionTools:
         openai_tools: List[Dict],
         executor: ToolExecutor,
         max_rounds: int,
-        max_tokens: int
+        max_tokens: int,
+        model: Optional[str] = None,
+        response_format: Optional[Dict[str, Any]] = None
     ) -> str:
         """
         Core implementation using chat_completion API with explicit tool result passing.
@@ -326,6 +328,8 @@ class AutonomousExecutionTools:
             executor: Tool executor for the session
             max_rounds: Maximum rounds for autonomous loop
             max_tokens: Maximum tokens per response
+            model: Optional model to use (overrides default)
+            response_format: Optional structured output format (json_object or json_schema)
 
         Returns:
             Final answer from the LLM
@@ -339,7 +343,9 @@ class AutonomousExecutionTools:
                 messages=messages,
                 tools=openai_tools,
                 tool_choice="auto",
-                max_tokens=max_tokens
+                max_tokens=max_tokens,
+                model=model,
+                response_format=response_format
             )
 
             message = response["choices"][0]["message"]
@@ -378,7 +384,9 @@ class AutonomousExecutionTools:
         task: str,
         working_directory: Optional[Union[str, List[str]]] = None,
         max_rounds: int = 100,
-        max_tokens: Union[int, str] = "auto"
+        max_tokens: Union[int, str] = "auto",
+        model: Optional[str] = None,
+        response_format: Optional[Dict[str, Any]] = None
     ) -> str:
         """
         Full autonomous execution with ALL 14 filesystem MCP tools.
@@ -399,6 +407,7 @@ class AutonomousExecutionTools:
             working_directory: Directory or list of directories for filesystem operations (optional, uses current directory if not provided)
             max_rounds: Maximum rounds for autonomous loop (default: 100)
             max_tokens: Maximum tokens per response ("auto" for safe default, or integer, default: "auto")
+            model: Optional model to use for this task (overrides configured default)
 
         Returns:
             Local LLM's final answer after autonomous tool usage
@@ -507,7 +516,9 @@ class AutonomousExecutionTools:
                     openai_tools=openai_tools,
                     executor=executor,
                     max_rounds=max_rounds,
-                    max_tokens=actual_max_tokens
+                    max_tokens=actual_max_tokens,
+                    model=model,
+                    response_format=response_format
                 )
 
         except Exception as e:
@@ -694,7 +705,8 @@ class AutonomousExecutionTools:
         self,
         task: str,
         max_rounds: int = 100,
-        max_tokens: Union[int, str] = "auto"
+        max_tokens: Union[int, str] = "auto",
+        model: Optional[str] = None
     ) -> str:
         """
         Full autonomous execution with memory MCP (knowledge graph) tools.
@@ -760,7 +772,8 @@ class AutonomousExecutionTools:
                     openai_tools=openai_tools,
                     executor=executor,
                     max_rounds=max_rounds,
-                    max_tokens=actual_max_tokens
+                    max_tokens=actual_max_tokens,
+                    model=model
                 )
 
         except Exception as e:
@@ -771,7 +784,8 @@ class AutonomousExecutionTools:
         self,
         task: str,
         max_rounds: int = 100,
-        max_tokens: Union[int, str] = "auto"
+        max_tokens: Union[int, str] = "auto",
+        model: Optional[str] = None
     ) -> str:
         """
         Full autonomous execution with fetch MCP (web content) tools.
@@ -831,7 +845,8 @@ class AutonomousExecutionTools:
                     openai_tools=openai_tools,
                     executor=executor,
                     max_rounds=max_rounds,
-                    max_tokens=actual_max_tokens
+                    max_tokens=actual_max_tokens,
+                    model=model
                 )
 
         except Exception as e:
@@ -843,7 +858,8 @@ class AutonomousExecutionTools:
         task: str,
         github_token: Optional[str] = None,
         max_rounds: int = 100,
-        max_tokens: Union[int, str] = "auto"
+        max_tokens: Union[int, str] = "auto",
+        model: Optional[str] = None
     ) -> str:
         """
         Full autonomous execution with GitHub MCP tools.
@@ -914,13 +930,87 @@ class AutonomousExecutionTools:
                     openai_tools=openai_tools,
                     executor=executor,
                     max_rounds=max_rounds,
-                    max_tokens=actual_max_tokens
+                    max_tokens=actual_max_tokens,
+                    model=model
                 )
 
         except Exception as e:
             import traceback
             return f"Error during GitHub execution: {str(e)}\n\n{traceback.format_exc()}"
 
+    async def vision_analyze(
+        self,
+        task: str,
+        images: Union[str, List[str]],
+        model: Optional[str] = None,
+        max_tokens: Union[int, str] = "auto",
+        detail: str = "auto"
+    ) -> str:
+        """
+        Analyze images with a vision-capable local LLM.
+
+        This tool sends images along with a task to a vision-capable model
+        (like Qwen2-VL, LLaVA, or similar) for analysis.
+
+        Unlike other autonomous tools, this doesn't use MCP tool execution -
+        it directly uses the LLM's vision capabilities for image analysis.
+
+        Args:
+            task: The analysis task or question about the image(s)
+            images: Single image or list of images. Each can be:
+                - File path: "/path/to/image.png"
+                - URL: "https://example.com/image.jpg"
+                - Base64: "data:image/png;base64,..." or raw base64 string
+            model: Model to use (must be vision-capable). If None, uses configured default.
+            max_tokens: Maximum tokens for response ("auto" or integer)
+            detail: Vision detail level ("auto", "low", "high")
+
+        Returns:
+            LLM's analysis of the image(s)
+
+        Examples:
+            # Analyze a local image
+            result = await vision_analyze(
+                task="Describe what you see in this image",
+                images="/path/to/photo.jpg"
+            )
+
+            # Compare multiple images
+            result = await vision_analyze(
+                task="What are the differences between these images?",
+                images=["image1.png", "image2.png"]
+            )
+
+            # Use specific vision model
+            result = await vision_analyze(
+                task="Extract text from this screenshot",
+                images="screenshot.png",
+                model="qwen2-vl-7b"
+            )
+        """
+        try:
+            # Determine max_tokens
+            if max_tokens == "auto":
+                actual_max_tokens = self.llm.get_default_max_tokens()
+            else:
+                actual_max_tokens = max_tokens
+
+            # Use vision_completion method
+            response = self.llm.vision_completion(
+                prompt=task,
+                images=images,
+                temperature=0.7,
+                max_tokens=actual_max_tokens,
+                detail=detail,
+                model=model
+            )
+
+            message = response["choices"][0]["message"]
+            return self._format_response_with_reasoning(message)
+
+        except Exception as e:
+            import traceback
+            return f"Error during vision analysis: {str(e)}\n\n{traceback.format_exc()}"
 
 
 # Register tools with FastMCP
@@ -955,7 +1045,13 @@ def register_autonomous_tools(mcp, llm_client: Optional[LLMClient] = None):
             Field(
                 description="Maximum tokens per LLM response ('auto' for default 8192 based on Claude Code limits, or integer to override)"
             )
-        ] = "auto"
+        ] = "auto",
+        model: Annotated[
+            Optional[str],
+            Field(
+                description="Model to use for this task (e.g., 'qwen2.5-coder-14b'). If not specified, uses configured default."
+            )
+        ] = None
     ) -> str:
         """
         Full autonomous execution with ALL 14 filesystem MCP tools.
@@ -1007,7 +1103,7 @@ def register_autonomous_tools(mcp, llm_client: Optional[LLMClient] = None):
             - LM Studio's API doesn't expose model's actual max_context_length
             - If your model supports more (e.g., 32K, 128K), manually specify (e.g., max_tokens=8192)
         """
-        return await tools.autonomous_filesystem_full(task, working_directory, max_rounds, max_tokens)
+        return await tools.autonomous_filesystem_full(task, working_directory, max_rounds, max_tokens, model)
 
     @mcp.tool()
     async def autonomous_persistent_session(
@@ -1103,7 +1199,13 @@ def register_autonomous_tools(mcp, llm_client: Optional[LLMClient] = None):
             Field(
                 description="Maximum tokens per LLM response ('auto' for default, or integer to override)"
             )
-        ] = "auto"
+        ] = "auto",
+        model: Annotated[
+            Optional[str],
+            Field(
+                description="Model to use for this task (e.g., 'qwen2.5-coder-14b'). If not specified, uses configured default."
+            )
+        ] = None
     ) -> str:
         """
         Full autonomous execution with memory MCP (knowledge graph) tools.
@@ -1142,7 +1244,7 @@ def register_autonomous_tools(mcp, llm_client: Optional[LLMClient] = None):
             # Update knowledge
             "Add observation to Python entity: 'supports async/await'"
         """
-        return await tools.autonomous_memory_full(task, max_rounds, max_tokens)
+        return await tools.autonomous_memory_full(task, max_rounds, max_tokens, model)
 
     @mcp.tool()
     async def autonomous_fetch_full(
@@ -1160,7 +1262,13 @@ def register_autonomous_tools(mcp, llm_client: Optional[LLMClient] = None):
             Field(
                 description="Maximum tokens per LLM response ('auto' for default, or integer to override)"
             )
-        ] = "auto"
+        ] = "auto",
+        model: Annotated[
+            Optional[str],
+            Field(
+                description="Model to use for this task (e.g., 'qwen2.5-coder-14b'). If not specified, uses configured default."
+            )
+        ] = None
     ) -> str:
         """
         Full autonomous execution with fetch MCP (web content) tools.
@@ -1193,7 +1301,7 @@ def register_autonomous_tools(mcp, llm_client: Optional[LLMClient] = None):
             # Extract specific info
             "Fetch Python docs for asyncio and extract key features"
         """
-        return await tools.autonomous_fetch_full(task, max_rounds, max_tokens)
+        return await tools.autonomous_fetch_full(task, max_rounds, max_tokens, model)
 
     @mcp.tool()
     async def autonomous_github_full(
@@ -1217,7 +1325,13 @@ def register_autonomous_tools(mcp, llm_client: Optional[LLMClient] = None):
             Field(
                 description="Maximum tokens per LLM response ('auto' for default, or integer to override)"
             )
-        ] = "auto"
+        ] = "auto",
+        model: Annotated[
+            Optional[str],
+            Field(
+                description="Model to use for this task (e.g., 'qwen2.5-coder-14b'). If not specified, uses configured default."
+            )
+        ] = None
     ) -> str:
         """
         Full autonomous execution with GitHub MCP tools.
@@ -1255,8 +1369,85 @@ def register_autonomous_tools(mcp, llm_client: Optional[LLMClient] = None):
             # PR operations
             "List all open PRs in my-org/my-repo and summarize their status"
         """
-        return await tools.autonomous_github_full(task, github_token, max_rounds, max_tokens)
+        return await tools.autonomous_github_full(task, github_token, max_rounds, max_tokens, model)
 
+    @mcp.tool()
+    async def vision_analyze(
+        task: Annotated[str, Field(
+            min_length=1,
+            max_length=10000,
+            description="The analysis task or question about the image(s)"
+        )],
+        images: Annotated[
+            Union[str, List[str]],
+            Field(
+                description="Single image or list of images. Each can be: file path (/path/to/image.png), URL (https://example.com/image.jpg), or base64 data URI"
+            )
+        ],
+        model: Annotated[
+            Optional[str],
+            Field(
+                description="Vision-capable model to use (e.g., 'qwen2-vl-7b', 'llava-1.5'). If not specified, uses configured default."
+            )
+        ] = None,
+        max_tokens: Annotated[
+            Union[int, str],
+            Field(
+                description="Maximum tokens for response ('auto' for default, or integer to override)"
+            )
+        ] = "auto",
+        detail: Annotated[
+            str,
+            Field(
+                description="Vision detail level: 'auto' (recommended), 'low' (faster), or 'high' (more detailed)"
+            )
+        ] = "auto"
+    ) -> str:
+        """
+        Analyze images with a vision-capable local LLM.
+
+        **REQUIRES VISION-CAPABLE MODEL** (e.g., Qwen2-VL, LLaVA, MiniCPM-V)
+
+        This tool sends images along with a task to a vision-capable model
+        for analysis. Unlike other autonomous tools, this directly uses the
+        LLM's vision capabilities without MCP tool execution.
+
+        Supports multiple input formats:
+        - File paths: "/path/to/image.png"
+        - URLs: "https://example.com/image.jpg" (auto-fetched and converted to base64)
+        - Base64: "data:image/png;base64,..." or raw base64 strings
+
+        ## Use Cases
+        - Image description and analysis
+        - Object identification
+        - Text extraction (OCR)
+        - Image comparison
+        - Chart/diagram interpretation
+        - Screenshot analysis
+
+        ## Example Tasks
+        - "Describe what you see in this image"
+        - "Extract all text from this screenshot"
+        - "What objects are in this photo?"
+        - "Compare these two images and list differences"
+        - "What is the sentiment/mood of this image?"
+
+        Args:
+            task: The analysis task or question about the image(s)
+            images: Single image or list of images (file path, URL, or base64)
+            model: Vision-capable model name (optional, uses default if not specified)
+            max_tokens: Maximum tokens for response ("auto" or integer)
+            detail: Vision detail level ("auto", "low", "high")
+
+        Returns:
+            LLM's analysis/response about the image(s)
+
+        Note:
+            - Make sure a vision-capable model is loaded in LM Studio
+            - Large images may be slow to process; use detail="low" for faster results
+            - URLs are automatically fetched and converted to base64
+        """
+        return await tools.vision_analyze(task, images, model, max_tokens, detail)
 
 
 __all__ = [

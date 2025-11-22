@@ -159,7 +159,8 @@ class LLMClient:
         tools: Optional[List[Dict[str, Any]]] = None,
         tool_choice: str = "auto",
         timeout: int = DEFAULT_LLM_TIMEOUT,
-        response_format: Optional[Dict[str, Any]] = None
+        response_format: Optional[Dict[str, Any]] = None,
+        model: Optional[str] = None
     ) -> Dict[str, Any]:
         """Generate a chat completion from the local LLM.
 
@@ -178,6 +179,9 @@ class LLMClient:
                 - {"type": "json_object"} - Force valid JSON output
                 - {"type": "json_schema", "json_schema": {"name": "...", "schema": {...}}}
                   Force output to conform to a specific JSON schema (LM Studio v0.3.32+)
+            model: Model to use for this request. If None, uses the client's default model.
+                   Use this to override the model for specific requests (e.g., different
+                   models for different autonomous tasks).
 
         Returns:
             Response dictionary from LLM API
@@ -209,28 +213,31 @@ class LLMClient:
                 }
             )
         """
+        # Determine which model to use (per-request model overrides default)
+        target_model = model if model is not None else self.model
+
         # CRITICAL BUG FIX: Ensure model is loaded before making request
         # This prevents confusing 404 errors when models are auto-unloaded or ejected
         # Only attempt if LMS CLI is available (gracefully degrades without it)
-        if self.model and self.model != "default" and LMSHelper.is_installed():
+        if target_model and target_model != "default" and LMSHelper.is_installed():
             try:
                 # Check if model is loaded
-                is_loaded = LMSHelper.is_model_loaded(self.model)
+                is_loaded = LMSHelper.is_model_loaded(target_model)
 
                 if is_loaded is False:
                     # Model not loaded - try to load it
-                    logger.warning(f"Model '{self.model}' not loaded, attempting to load...")
-                    load_success = LMSHelper.ensure_model_loaded_with_verification(self.model, ttl=600)
+                    logger.warning(f"Model '{target_model}' not loaded, attempting to load...")
+                    load_success = LMSHelper.ensure_model_loaded_with_verification(target_model, ttl=600)
 
                     if not load_success:
                         raise LLMConnectionError(
-                            f"Model '{self.model}' is not loaded and failed to load automatically. "
+                            f"Model '{target_model}' is not loaded and failed to load automatically. "
                             f"Please load the model in LM Studio manually or check available models."
                         )
 
-                    logger.info(f"✅ Model '{self.model}' loaded successfully")
+                    logger.info(f"✅ Model '{target_model}' loaded successfully")
                 elif is_loaded is True:
-                    logger.debug(f"Model '{self.model}' already loaded")
+                    logger.debug(f"Model '{target_model}' already loaded")
                 # is_loaded is None means LMS CLI couldn't determine state - proceed anyway
 
             except LLMConnectionError:
@@ -247,8 +254,8 @@ class LLMClient:
         }
 
         # Only add model if not using default
-        if self.model and self.model != "default":
-            payload["model"] = self.model
+        if target_model and target_model != "default":
+            payload["model"] = target_model
 
         # Add tools if provided
         if tools:
@@ -541,7 +548,8 @@ class LLMClient:
         temperature: float = 0.7,
         max_tokens: int = DEFAULT_MAX_TOKENS,
         detail: str = "auto",
-        timeout: int = DEFAULT_LLM_TIMEOUT
+        timeout: int = DEFAULT_LLM_TIMEOUT,
+        model: Optional[str] = None
     ) -> Dict[str, Any]:
         """Generate a vision completion from a multimodal LLM.
 
@@ -559,6 +567,8 @@ class LLMClient:
             max_tokens: Maximum tokens to generate
             detail: Vision detail level ("auto", "low", "high")
             timeout: Request timeout in seconds
+            model: Model to use for this request. If None, uses the client's default model.
+                   Must be a vision-capable model (e.g., Qwen2-VL, LLaVA).
 
         Returns:
             Response dictionary from LLM API
@@ -626,7 +636,8 @@ class LLMClient:
             messages=messages,
             temperature=temperature,
             max_tokens=max_tokens,
-            timeout=timeout
+            timeout=timeout,
+            model=model
         )
 
     def list_models(self) -> List[str]:
