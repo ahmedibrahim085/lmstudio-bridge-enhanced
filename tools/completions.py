@@ -3,7 +3,7 @@
 Completion tools for LM Studio (chat and text completions).
 """
 
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from llm.llm_client import LLMClient
 import json
 
@@ -24,7 +24,8 @@ class CompletionTools:
         prompt: str,
         system_prompt: str = "",
         temperature: float = 0.7,
-        max_tokens: int = 1024
+        max_tokens: int = 1024,
+        response_format: Optional[Dict[str, Any]] = None
     ) -> str:
         """Generate a completion from the current LM Studio model.
 
@@ -33,6 +34,9 @@ class CompletionTools:
             system_prompt: Optional system instructions for the model
             temperature: Controls randomness (0.0 to 1.0)
             max_tokens: Maximum number of tokens to generate
+            response_format: Optional structured output format (LM Studio v0.3.32+)
+                - {"type": "json_object"} for valid JSON output
+                - {"type": "json_schema", "json_schema": {...}} for schema-conforming JSON
 
         Returns:
             The model's response to the prompt
@@ -50,7 +54,8 @@ class CompletionTools:
             response = self.llm.chat_completion(
                 messages=messages,
                 temperature=temperature,
-                max_tokens=max_tokens
+                max_tokens=max_tokens,
+                response_format=response_format
             )
 
             # Extract the assistant's message
@@ -165,7 +170,8 @@ def register_completion_tools(mcp, llm_client: Optional[LLMClient] = None):
         prompt: str,
         system_prompt: str = "",
         temperature: float = 0.7,
-        max_tokens: int = 1024
+        max_tokens: int = 1024,
+        response_format: Optional[Dict[str, Any]] = None
     ) -> str:
         """
         Delegate a task to the local LLM running in LM Studio.
@@ -262,18 +268,45 @@ def register_completion_tools(mcp, llm_client: Optional[LLMClient] = None):
         Correct: Answer directly with your own explanation
         Reason: Explaining concepts is YOUR job, not another LLM's
 
+        ## Structured Output (JSON Schema) - LM Studio v0.3.32+
+        Force the LLM to output valid JSON conforming to a schema:
+        ```python
+        chat_completion(
+            prompt="List 3 programming languages",
+            response_format={
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "languages",
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "languages": {"type": "array", "items": {"type": "string"}}
+                        },
+                        "required": ["languages"]
+                    }
+                }
+            }
+        )
+        # Returns: {"languages": ["Python", "JavaScript", "Rust"]}
+        ```
+
+        ⚠️ Not all models support structured output. Models < 7B may produce invalid JSON.
+
         Args:
             prompt: The specific task to delegate to the local LLM
             system_prompt: Optional system instructions for the local LLM
             temperature: Controls randomness (0.0 = deterministic, 1.0 = creative)
             max_tokens: Maximum response length
+            response_format: Optional structured output format:
+                - {"type": "json_object"} - Force valid JSON output
+                - {"type": "json_schema", "json_schema": {...}} - Force schema-conforming JSON
 
         Returns:
             The local LLM's response to the delegated task
 
         Note: This creates a SECOND LLM call. Only use when delegation is truly beneficial.
         """
-        return await tools.chat_completion(prompt, system_prompt, temperature, max_tokens)
+        return await tools.chat_completion(prompt, system_prompt, temperature, max_tokens, response_format)
 
     @mcp.tool()
     async def text_completion(
