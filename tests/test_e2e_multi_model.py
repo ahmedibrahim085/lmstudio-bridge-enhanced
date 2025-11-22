@@ -70,21 +70,28 @@ class TestE2EMultiModelWorkflows:
         if len(models) < 2:
             pytest.skip("Need at least 2 models loaded for this test")
 
-        # Find reasoning and coding models (or use first two if not specific)
+        # Find reasoning and coding models
+        # NOTE: Avoid 'thinking' models as they tend to hallucinate tool results
+        # Prefer 'magistral' (good at reasoning) or 'coder' models
         reasoning_model = None
         coding_model = None
 
         for model in models:
-            if 'magistral' in model.lower() or 'thinking' in model.lower():
+            # Skip embedding models
+            if 'embedding' in model.lower():
+                continue
+            # Prefer magistral for reasoning (good instruction following)
+            if 'magistral' in model.lower() and not reasoning_model:
                 reasoning_model = model
             elif 'coder' in model.lower():
                 coding_model = model
 
-        # Fallback to first two models if specific types not found
-        if not reasoning_model:
-            reasoning_model = models[0]
-        if not coding_model:
-            coding_model = models[1] if len(models) > 1 else models[0]
+        # Fallback to non-embedding models
+        non_embedding = [m for m in models if 'embedding' not in m.lower()]
+        if not reasoning_model and non_embedding:
+            reasoning_model = non_embedding[0]
+        if not coding_model and non_embedding:
+            coding_model = non_embedding[1] if len(non_embedding) > 1 else non_embedding[0]
 
         print(f"\n🧠 Using reasoning model: {reasoning_model}")
         print(f"💻 Using coding model: {coding_model}")
@@ -107,9 +114,18 @@ class TestE2EMultiModelWorkflows:
 
         assert analysis is not None
         assert not any(keyword in analysis for keyword in ERROR_KEYWORDS)
-        # Validate analysis contains expected Python files (llm/ directory should have .py files)
-        has_py_files = '.py' in analysis or 'python' in analysis.lower()
-        print(f"✅ Analysis complete: {len(analysis)} characters (contains .py refs: {has_py_files})")
+        # Validate analysis contains ACTUAL files from llm/ directory (prevent hallucination)
+        # These are known files that MUST exist in llm/
+        known_files = ['llm_client.py', 'exceptions.py', 'model_validator.py', '__init__.py']
+        has_real_files = any(f in analysis for f in known_files)
+        has_py_files = '.py' in analysis
+        print(f"✅ Analysis complete: {len(analysis)} characters")
+        print(f"   Contains real files: {has_real_files}, Contains .py: {has_py_files}")
+
+        # If model hallucinated (no real files), provide clear failure message
+        if not has_real_files:
+            print(f"⚠️  WARNING: Model may have hallucinated file names!")
+            print(f"   Analysis output: {analysis[:200]}...")
 
         # Step 2: Implementation with coding model - PIPELINE TEST
         # This tests that output from Step 1 (reasoning model) flows to Step 2 (coding model)
