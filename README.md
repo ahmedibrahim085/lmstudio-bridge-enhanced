@@ -1,4 +1,4 @@
-# LM Studio Bridge Enhanced v3.1.0
+# LM Studio Bridge Enhanced v3.2.0-alpha.1
 
 MCP server that connects Claude Code (or any MCP client) to local LLMs via LM Studio.
 
@@ -6,8 +6,8 @@ MCP server that connects Claude Code (or any MCP client) to local LLMs via LM St
 
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![LM Studio](https://img.shields.io/badge/LM%20Studio-0.3.29+-green.svg)](https://lmstudio.ai/)
-[![Tests](https://img.shields.io/badge/tests-171%2F172%20passing-brightgreen.svg)](#testing)
+[![LM Studio](https://img.shields.io/badge/LM%20Studio-0.3.32+-green.svg)](https://lmstudio.ai/)
+[![Tests](https://img.shields.io/badge/tests-267%20passing-brightgreen.svg)](#testing)
 
 ---
 
@@ -158,6 +158,48 @@ autonomous_with_mcp(
 - Backward compatible (model parameter is optional)
 - Handles IDLE state (models auto-activate)
 
+### Structured Output (v3.2.0) - JSON Schema
+
+Force the LLM to output valid JSON conforming to a schema (LM Studio v0.3.32+):
+
+```python
+# Get structured JSON output
+chat_completion(
+    prompt="List 3 programming languages with their use cases",
+    response_format={
+        "type": "json_schema",
+        "json_schema": {
+            "name": "languages",
+            "schema": {
+                "type": "object",
+                "properties": {
+                    "languages": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "name": {"type": "string"},
+                                "use_case": {"type": "string"}
+                            }
+                        }
+                    }
+                },
+                "required": ["languages"]
+            }
+        }
+    }
+)
+# Returns: {"languages": [{"name": "Python", "use_case": "Data science"}, ...]}
+```
+
+**Features**:
+- JSON schema validation with `validate_json_schema` tool
+- Schema depth and complexity limits (max 10 levels, 100 properties)
+- `json_object` mode for unstructured but valid JSON
+- Backward compatible (response_format is optional)
+
+**Note**: Models < 7B parameters may produce invalid JSON. Recommended: Qwen 7B+, Llama 3 8B+, or Mistral 7B+.
+
 ### Dynamic MCP Discovery
 
 No hardcoded configurations. Works with any MCP in your `.mcp.json`:
@@ -195,20 +237,21 @@ autonomous_discover_and_execute("Complete this task")
 
 ## Available Tools
 
-### Core LM Studio (7 tools)
+### Core LM Studio (8 tools)
 1. `health_check` - Check LM Studio connection
 2. `list_models` - List available models
 3. `get_current_model` - Get loaded model info
-4. `chat_completion` - Chat completions
+4. `chat_completion` - Chat completions (with optional `response_format` for structured output)
 5. `text_completion` - Text/code completion
 6. `generate_embeddings` - Vector embeddings
 7. `create_response` - Stateful conversations
+8. `validate_json_schema` - Validate JSON schema before use with structured output
 
 ### Autonomous MCP (4 tools)
-8. `autonomous_with_mcp` - Use any MCP by name
-9. `autonomous_with_multiple_mcps` - Use multiple MCPs
-10. `autonomous_discover_and_execute` - Auto-discover all MCPs
-11. `list_available_mcps` - List discovered MCPs
+9. `autonomous_with_mcp` - Use any MCP by name
+10. `autonomous_with_multiple_mcps` - Use multiple MCPs
+11. `autonomous_discover_and_execute` - Auto-discover all MCPs
+12. `list_available_mcps` - List discovered MCPs
 
 ---
 
