@@ -533,6 +533,102 @@ class LLMClient:
         except Exception as e:
             _handle_request_exception(e, "Create response")
 
+    def vision_completion(
+        self,
+        prompt: str,
+        images: Union[str, List[str]],
+        system_prompt: str = "",
+        temperature: float = 0.7,
+        max_tokens: int = DEFAULT_MAX_TOKENS,
+        detail: str = "auto",
+        timeout: int = DEFAULT_LLM_TIMEOUT
+    ) -> Dict[str, Any]:
+        """Generate a vision completion from a multimodal LLM.
+
+        Sends images along with a text prompt to vision-capable models.
+        Automatically detects input format (file path, URL, or base64).
+
+        Args:
+            prompt: Text prompt describing what to do with the image(s)
+            images: Single image or list of images. Each can be:
+                - File path: "/path/to/image.png"
+                - URL: "https://example.com/image.jpg"
+                - Base64: "data:image/png;base64,..." or raw base64 string
+            system_prompt: Optional system instructions
+            temperature: Controls randomness (0.0 to 1.0)
+            max_tokens: Maximum tokens to generate
+            detail: Vision detail level ("auto", "low", "high")
+            timeout: Request timeout in seconds
+
+        Returns:
+            Response dictionary from LLM API
+
+        Raises:
+            LLMTimeoutError: If request times out
+            LLMConnectionError: If cannot connect to LM Studio
+            LLMResponseError: If LM Studio returns an error or model doesn't support vision
+            LLMError: For other unexpected errors
+            ValueError: If image input is invalid
+
+        Example:
+            # Analyze a local image
+            response = client.vision_completion(
+                prompt="What's in this image?",
+                images="/path/to/photo.jpg"
+            )
+
+            # Compare multiple images
+            response = client.vision_completion(
+                prompt="What are the differences between these images?",
+                images=["image1.png", "image2.png"]
+            )
+
+            # Use URL
+            response = client.vision_completion(
+                prompt="Describe this image",
+                images="https://example.com/image.jpg"
+            )
+        """
+        from utils.image_utils import process_image_input, build_vision_content, ImageInput
+
+        # Normalize to list
+        if isinstance(images, str):
+            images = [images]
+
+        # Process all images
+        processed_images: List[ImageInput] = []
+        errors = []
+
+        for i, img in enumerate(images):
+            result = process_image_input(img, detail=detail)
+            if result.is_valid:
+                processed_images.append(result)
+            else:
+                errors.extend([f"Image {i+1}: {e}" for e in result.errors])
+
+        if errors:
+            raise ValueError(f"Invalid image input(s): {'; '.join(errors)}")
+
+        if not processed_images:
+            raise ValueError("No valid images provided")
+
+        # Build the vision content
+        content = build_vision_content(prompt, processed_images)
+
+        # Build messages
+        messages = []
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
+        messages.append({"role": "user", "content": content})
+
+        # Use the existing chat_completion method
+        return self.chat_completion(
+            messages=messages,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            timeout=timeout
+        )
+
     def list_models(self) -> List[str]:
         """List all available models in LM Studio.
 
