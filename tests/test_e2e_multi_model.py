@@ -113,7 +113,13 @@ class TestE2EMultiModelWorkflows:
         )
 
         assert analysis is not None
-        assert not any(keyword in analysis for keyword in ERROR_KEYWORDS)
+        # Check for actual error responses (not just the word "error" in legitimate content)
+        actual_error_patterns = [
+            "Error:", "ERROR:", "failed:", "FAILED:",
+            "Task incomplete", "No content in response"
+        ]
+        has_actual_error = any(pattern in analysis for pattern in actual_error_patterns)
+        assert not has_actual_error, f"Analysis contains error: {analysis[:200]}..."
         # Validate analysis contains ACTUAL files from llm/ directory (prevent hallucination)
         # These are known files that MUST exist in llm/
         known_files = ['llm_client.py', 'exceptions.py', 'model_validator.py', '__init__.py']
@@ -144,7 +150,14 @@ class TestE2EMultiModelWorkflows:
         )
 
         assert implementation is not None
-        assert not any(keyword in implementation for keyword in ERROR_KEYWORDS)
+        # Check for actual error responses (not just the word "error" in legitimate content)
+        # LLM may legitimately discuss "error handling" or "exceptions.py"
+        actual_error_patterns = [
+            "Error:", "ERROR:", "failed:", "FAILED:",
+            "Task incomplete", "No content in response"
+        ]
+        has_actual_error = any(pattern in implementation for pattern in actual_error_patterns)
+        assert not has_actual_error, f"Implementation contains error: {implementation[:200]}..."
         print(f"✅ Implementation complete: {len(implementation)} characters")
 
         # Verify both steps produced meaningful results
