@@ -7,7 +7,7 @@ MCP server that connects Claude Code (or any MCP client) to local LLMs via LM St
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![LM Studio](https://img.shields.io/badge/LM%20Studio-0.3.32+-green.svg)](https://lmstudio.ai/)
-[![Tests](https://img.shields.io/badge/tests-267%20passing-brightgreen.svg)](#testing)
+[![Tests](https://img.shields.io/badge/tests-317%20passing-brightgreen.svg)](#testing)
 
 ---
 
@@ -200,6 +200,42 @@ chat_completion(
 
 **Note**: Models < 7B parameters may produce invalid JSON. Recommended: Qwen 7B+, Llama 3 8B+, or Mistral 7B+.
 
+### Vision/Image Analysis (v3.2.0)
+
+Analyze images using multimodal models (LM Studio v0.3.30+):
+
+```python
+# Analyze any image (auto-detects input format)
+analyze_image(image="/path/to/photo.jpg")
+analyze_image(image="https://example.com/image.png")
+analyze_image(image="data:image/png;base64,...")
+
+# Generate descriptions with different styles
+describe_image(image="/path/to/image.jpg", style="detailed")  # or "brief", "creative", "technical"
+
+# Compare multiple images
+compare_images(
+    images=["design_v1.png", "design_v2.png"],
+    comparison_type="differences"  # or "similarities", "both"
+)
+
+# Extract text (OCR-like)
+extract_text_from_image(image="/path/to/document.png")
+
+# Ask specific questions
+answer_about_image(
+    image="/path/to/chart.png",
+    question="What is the value shown for Q3 2024?"
+)
+```
+
+**Supported Input Formats** (auto-detected):
+- File paths: `/path/to/image.png`, `./relative/path.jpg`
+- URLs: `https://example.com/image.jpg`
+- Base64: `data:image/png;base64,...` or raw base64 strings
+
+**Note**: Requires a vision-capable model (LLaVA, Qwen-VL, GPT-4V compatible). Text-only models will return an error.
+
 ### Dynamic MCP Discovery
 
 No hardcoded configurations. Works with any MCP in your `.mcp.json`:
@@ -247,11 +283,19 @@ autonomous_discover_and_execute("Complete this task")
 7. `create_response` - Stateful conversations
 8. `validate_json_schema` - Validate JSON schema before use with structured output
 
+### Vision Tools (6 tools)
+9. `analyze_image` - Comprehensive image analysis
+10. `describe_image` - Generate descriptions (detailed/brief/creative/technical)
+11. `compare_images` - Compare multiple images
+12. `extract_text_from_image` - OCR-like text extraction
+13. `identify_objects` - Identify objects with locations
+14. `answer_about_image` - Answer specific questions about images
+
 ### Autonomous MCP (4 tools)
-9. `autonomous_with_mcp` - Use any MCP by name
-10. `autonomous_with_multiple_mcps` - Use multiple MCPs
-11. `autonomous_discover_and_execute` - Auto-discover all MCPs
-12. `list_available_mcps` - List discovered MCPs
+15. `autonomous_with_mcp` - Use any MCP by name
+16. `autonomous_with_multiple_mcps` - Use multiple MCPs
+17. `autonomous_discover_and_execute` - Auto-discover all MCPs
+18. `list_available_mcps` - List discovered MCPs
 
 ---
 
