@@ -174,10 +174,24 @@ ALTERNATIVE:
                 logger.info(f"✅ Model loaded: {model_name} (TTL={actual_ttl}s)")
                 return True
             else:
-                logger.error(f"Failed to load model: {result.stderr}")
+                error_msg = result.stderr or result.stdout or ""
+                logger.error(f"Failed to load model: {error_msg}")
+
+                # Check for memory errors - LM Studio reports this in error message
+                import re
+                memory_match = re.search(r'requires approximately ([\d.]+\s*GB)', error_msg, re.IGNORECASE)
+                if memory_match or 'memory' in error_msg.lower() or 'insufficient' in error_msg.lower():
+                    from llm.exceptions import ModelMemoryError
+                    required_memory = memory_match.group(1) if memory_match else None
+                    raise ModelMemoryError(model_name, required_memory)
+
                 return False
 
         except Exception as e:
+            # Re-raise ModelMemoryError to allow proper handling upstream
+            from llm.exceptions import ModelMemoryError
+            if isinstance(e, ModelMemoryError):
+                raise
             logger.error(f"Error loading model with LMS: {e}")
             return False
 

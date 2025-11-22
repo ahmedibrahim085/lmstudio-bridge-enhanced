@@ -89,6 +89,42 @@ class LLMResponseError(LLMError):
     pass
 
 
+class ModelMemoryError(LLMError):
+    """Raised when a model cannot be loaded due to insufficient memory.
+
+    This indicates that the requested model requires more memory than is available.
+    Common when trying to load large models (e.g., 70B+) on systems with limited RAM/VRAM.
+
+    Attributes:
+        model_name: Name of the model that couldn't be loaded
+        required_memory: Estimated memory required (if known)
+    """
+
+    def __init__(self, model_name: str, required_memory: str = None, original_exception: Exception = None):
+        """Initialize ModelMemoryError.
+
+        Args:
+            model_name: Name of the model that was requested
+            required_memory: Estimated memory required (e.g., "117.19 GB")
+            original_exception: Original exception if this wraps another error
+        """
+        self.model_name = model_name
+        self.required_memory = required_memory
+
+        if required_memory:
+            message = (
+                f"Model '{model_name}' cannot be loaded - requires approximately {required_memory} of memory. "
+                f"Try a smaller model or free up system memory."
+            )
+        else:
+            message = (
+                f"Model '{model_name}' cannot be loaded due to insufficient memory. "
+                f"Try a smaller model or free up system memory."
+            )
+
+        super().__init__(message, original_exception)
+
+
 class ModelNotFoundError(LLMValidationError):
     """Raised when requested model is not available.
 
@@ -135,7 +171,8 @@ class ModelNotFoundError(LLMValidationError):
 #   ├── LLMValidationError (validation failed)
 #   │   └── ModelNotFoundError (specific model not available)
 #   ├── LLMConnectionError (cannot connect to API)
-#   └── LLMResponseError (invalid response format)
+#   ├── LLMResponseError (invalid response format)
+#   └── ModelMemoryError (model too large for available memory)
 
 
 __all__ = [
@@ -146,4 +183,5 @@ __all__ = [
     "LLMConnectionError",
     "LLMResponseError",
     "ModelNotFoundError",
+    "ModelMemoryError",
 ]

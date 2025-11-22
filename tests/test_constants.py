@@ -12,6 +12,7 @@ REASONING_MODEL = "mistralai/magistral-small-2509"
 CODING_MODEL = "qwen/qwen3-coder-30b"
 THINKING_MODEL = "qwen/qwen3-4b-thinking-2507"
 SMALL_MODEL = "ibm/granite-4-h-tiny"
+VISION_MODEL = "qwen/qwen-vl-7b"  # Vision-capable multimodal model
 
 # Alternative model names for fallback
 FALLBACK_MODELS = [

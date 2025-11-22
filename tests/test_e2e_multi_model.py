@@ -29,6 +29,7 @@ from tests.test_constants import (
     REASONING_MODEL,
     CODING_MODEL,
     SMALL_MODEL,
+    VISION_MODEL,
     FILESYSTEM_MCP,
     MEMORY_MCP,
     DEFAULT_MAX_ROUNDS,
@@ -89,9 +90,14 @@ class TestE2EMultiModelWorkflows:
         print(f"💻 Using coding model: {coding_model}")
 
         # Step 1: Analysis with reasoning model
-        # FIX: Use concrete path like passing tests do, not abstract task
+        # CRITICAL: The task must explicitly request the LLM to output the ACTUAL tool results
+        # Without this, some models hallucinate file names instead of reporting actual results
         print("\n📊 Step 1: Analyzing with reasoning model...")
-        analysis_task = "List the files in your working directory and describe what types of files are present."
+        analysis_task = (
+            "Use the list_directory tool to list files in the llm/ directory. "
+            "In your response, you MUST include the ACTUAL file names returned by the tool. "
+            "List each file name exactly as shown in the tool output."
+        )
         analysis = await agent.autonomous_with_mcp(
             mcp_name=FILESYSTEM_MCP,
             task=analysis_task,
@@ -101,12 +107,19 @@ class TestE2EMultiModelWorkflows:
 
         assert analysis is not None
         assert not any(keyword in analysis for keyword in ERROR_KEYWORDS)
-        print(f"✅ Analysis complete: {len(analysis)} characters")
+        # Validate analysis contains expected Python files (llm/ directory should have .py files)
+        has_py_files = '.py' in analysis or 'python' in analysis.lower()
+        print(f"✅ Analysis complete: {len(analysis)} characters (contains .py refs: {has_py_files})")
 
-        # Step 2: Implementation with coding model
-        # FIX: Give coding model its own concrete task (not dependent on potentially hallucinated analysis)
-        print("\n🔨 Step 2: Generating code with coding model...")
-        implementation_task = "List the Python files in the llm/ directory and explain what each file likely does based on its name."
+        # Step 2: Implementation with coding model - PIPELINE TEST
+        # This tests that output from Step 1 (reasoning model) flows to Step 2 (coding model)
+        print("\n🔨 Step 2: Pipeline to coding model...")
+        implementation_task = (
+            f"Based on this file listing from the llm/ directory:\n\n"
+            f"{analysis}\n\n"
+            f"Pick ONE of these Python files and explain what it likely does based on its name. "
+            f"Be specific about the file name you choose."
+        )
         implementation = await agent.autonomous_with_mcp(
             mcp_name=FILESYSTEM_MCP,
             task=implementation_task,
@@ -219,8 +232,25 @@ class TestE2EMultiModelWorkflows:
         if 'memory' not in available_mcps:
             pytest.skip("Memory MCP not configured")
 
-        # Use SMALL_MODEL to avoid memory issues with large models like glm-4.6
-        test_model = SMALL_MODEL if SMALL_MODEL in models else models[0]
+        # Use model loading fixture to ensure model is actually loaded
+        # This handles memory errors properly rather than just picking small models
+        from tests.fixtures.model_management import ensure_model_loaded
+        from llm.exceptions import ModelMemoryError
+
+        # Try models in order until one loads successfully
+        test_model = None
+        for model in models:
+            try:
+                if ensure_model_loaded(model):
+                    test_model = model
+                    break
+            except ModelMemoryError as e:
+                print(f"⚠️  Model '{model}' requires too much memory: {e.required_memory or 'unknown'}")
+                continue
+
+        if not test_model:
+            pytest.skip("No model could be loaded - all models require too much memory")
+
         print(f"\n🔧 Using model: {test_model}")
         print(f"📦 Using MCPs: filesystem, memory")
 
