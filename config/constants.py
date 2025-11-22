@@ -238,3 +238,61 @@ STRUCTURED_OUTPUT_MODEL_WARNING = (
     "Models with < 7B parameters may produce invalid JSON. "
     "Recommended: Use models like Qwen 7B+, Llama 3 8B+, or Mistral 7B+."
 )
+
+# ==============================================================================
+# VISION CONFIGURATION - Image/multimodal support (LM Studio v0.3.30+)
+# ==============================================================================
+
+# Supported image MIME types for vision models
+# Used in: utils/image_utils.py, tools/vision.py
+SUPPORTED_IMAGE_TYPES = [
+    "image/jpeg",
+    "image/png",
+    "image/gif",
+    "image/webp"
+]
+
+# File extensions mapped to MIME types
+# Used in: utils/image_utils.py (auto-detection)
+IMAGE_EXTENSION_MAP = {
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".png": "image/png",
+    ".gif": "image/gif",
+    ".webp": "image/webp"
+}
+
+# Maximum image size in bytes (10 MB default)
+# LM Studio may have its own limits; this is a client-side guard
+MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024  # 10 MB
+
+# Maximum image dimension (width or height) in pixels
+# Very large images may cause memory issues
+MAX_IMAGE_DIMENSION = 4096
+
+# Default detail level for vision requests
+# "auto" lets the model decide, "low" for faster processing, "high" for detail
+# Used in: tools/vision.py (image message building)
+DEFAULT_VISION_DETAIL = "auto"
+
+# Vision input types for auto-detection
+# Used in: utils/image_utils.py (input format detection)
+VISION_INPUT_TYPES = ["file_path", "url", "base64"]
+
+# URL patterns for detecting image URLs
+# Used in: utils/image_utils.py (URL detection)
+IMAGE_URL_PATTERNS = [
+    r"^https?://.*\.(jpg|jpeg|png|gif|webp)(\?.*)?$",
+    r"^https?://.*",  # Any URL (model will validate)
+]
+
+# Base64 data URI prefix pattern
+# Used in: utils/image_utils.py (base64 detection)
+BASE64_DATA_URI_PREFIX = "data:image/"
+
+# Warning message for models that may not support vision
+VISION_MODEL_WARNING = (
+    "Note: Not all models support vision/image input. "
+    "Requires multimodal models like LLaVA, GPT-4V compatible, or Qwen-VL. "
+    "Text-only models will return an error when given image input."
+)
