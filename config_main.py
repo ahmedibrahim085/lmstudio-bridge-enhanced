@@ -67,8 +67,11 @@ class LMStudioConfig:
     def _get_first_available_model(api_base: str) -> str:
         """Get first available non-embedding model from LM Studio.
 
-        This method queries LM Studio's /v1/models endpoint and returns
-        the first available model that isn't an embedding model.
+        This method:
+        1. First checks if any model is currently loaded (using LMS CLI)
+        2. If a model is loaded, uses that (avoids loading a new model)
+        3. Otherwise, selects a small model that's likely to load successfully
+        4. Prefers models with size indicators (e.g., "3b", "4b", "7b") over large ones
 
         Args:
             api_base: Base URL for LM Studio API
@@ -76,8 +79,24 @@ class LMStudioConfig:
         Returns:
             First available model name, or "default" if none found
         """
+        from config.constants import DEFAULT_MODEL_KEYWORD
+
+        # Step 1: Check if any model is already loaded using LMS CLI
+        try:
+            from utils.lms_helper import LMSHelper
+            if LMSHelper.is_installed():
+                loaded_models = LMSHelper.get_loaded_models()
+                if loaded_models:
+                    selected = loaded_models[0]
+                    logger.info(f"Using already-loaded model: {selected}")
+                    return selected
+        except Exception as e:
+            logger.debug(f"Could not check loaded models via LMS CLI: {e}")
+
+        # Step 2: Query available models from LM Studio API
         try:
             import requests
+            import re
 
             response = requests.get(
                 f"{api_base}/models",
@@ -90,7 +109,6 @@ class LMStudioConfig:
             models = [model["id"] for model in data.get("data", [])]
 
             if not models:
-                from config.constants import DEFAULT_MODEL_KEYWORD
                 logger.warning(f"No models available in LM Studio, using '{DEFAULT_MODEL_KEYWORD}'")
                 return DEFAULT_MODEL_KEYWORD
 
@@ -100,20 +118,45 @@ class LMStudioConfig:
                 if not m.startswith("text-embedding-")
             ]
 
-            if non_embedding_models:
-                selected = non_embedding_models[0]
-                logger.info(
-                    f"Selected model '{selected}' from {len(non_embedding_models)} "
-                    f"available non-embedding models"
-                )
-                return selected
-            else:
+            if not non_embedding_models:
                 # All models are embeddings, just use first one
                 logger.warning(
                     "All models are embedding models, using first one: "
                     f"{models[0]}"
                 )
                 return models[0]
+
+            # Step 3: Prefer smaller models to avoid memory issues
+            # Look for models with small size indicators (1b-8b are usually safe)
+            def get_model_size(model_name: str) -> int:
+                """Extract model size in billions from name. Returns 999 if unknown."""
+                # Match patterns like "3b", "4b", "7b", "8b" (case insensitive)
+                match = re.search(r'(\d+)b', model_name.lower())
+                if match:
+                    return int(match.group(1))
+                return 999  # Unknown size, sort last
+
+            # Sort by size (smallest first)
+            sorted_models = sorted(non_embedding_models, key=get_model_size)
+
+            # Prefer models <= 8B parameters
+            small_models = [m for m in sorted_models if get_model_size(m) <= 8]
+
+            if small_models:
+                selected = small_models[0]
+                logger.info(
+                    f"Selected small model '{selected}' from {len(non_embedding_models)} "
+                    f"available non-embedding models (preferring <=8B to avoid memory issues)"
+                )
+            else:
+                # No small models, use smallest available
+                selected = sorted_models[0]
+                logger.warning(
+                    f"No small models found, using '{selected}'. "
+                    f"This may require significant memory."
+                )
+
+            return selected
 
         except Exception as e:
             logger.warning(
