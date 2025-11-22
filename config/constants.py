@@ -209,3 +209,32 @@ MCP_PACKAGE_PATTERNS = [
     "@modelcontextprotocol",   # Official MCP packages
     "mcp-server"               # Community MCP packages
 ]
+
+# ==============================================================================
+# STRUCTURED OUTPUT CONFIGURATION - JSON Schema support (LM Studio v0.3.32+)
+# ==============================================================================
+
+# Supported response format types for structured output
+# Used in: llm/llm_client.py, tools/completions.py
+STRUCTURED_OUTPUT_TYPES = ["json_schema", "json_object"]
+
+# Default strict mode for JSON schema validation
+# When True, LM Studio enforces strict schema compliance
+# Used in: tools/completions.py (response_format building)
+DEFAULT_JSON_SCHEMA_STRICT = True
+
+# Maximum schema depth for validation (prevent deeply nested schemas)
+# Used in: utils/schema_utils.py (schema validation)
+MAX_JSON_SCHEMA_DEPTH = 10
+
+# Maximum number of properties in a single schema object
+# Used in: utils/schema_utils.py (schema validation)
+MAX_JSON_SCHEMA_PROPERTIES = 100
+
+# Warning message for models that may not support structured output
+# Models < 7B parameters often produce invalid JSON
+STRUCTURED_OUTPUT_MODEL_WARNING = (
+    "Note: Not all models support structured output reliably. "
+    "Models with < 7B parameters may produce invalid JSON. "
+    "Recommended: Use models like Qwen 7B+, Llama 3 8B+, or Mistral 7B+."
+)
