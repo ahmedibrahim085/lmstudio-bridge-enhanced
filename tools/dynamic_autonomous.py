@@ -500,20 +500,44 @@ class DynamicAutonomousAgent:
         max_tokens: int,
         model: Optional[str] = None
     ) -> str:
-        """Core autonomous loop for single MCP using stateful /v1/responses API."""
-        # Use stateful /v1/responses API for 97% token savings!
+        """Core autonomous loop using stateful /v1/responses API with explicit tool result injection.
+
+        HYBRID APPROACH that provides:
+        - Stateful conversation management (97% token savings via previous_response_id)
+        - Explicit tool result passing (injected into input_text)
+        - No context overflow (server handles history)
+
+        Based on LM Studio SDK's .act() internal behavior:
+        "run a tool → provide the result to the LLM → wait for the LLM to generate a response"
+
+        See: https://lmstudio.ai/docs/typescript/agent/act
+        """
         previous_response_id = None
+        pending_tool_results = []  # Track tool results to inject into next round
 
         for round_num in range(max_rounds):
             log_info(f"\n--- Round {round_num + 1}/{max_rounds} ---")
 
-            # Determine input text
+            # Build input text with tool results injection
             if round_num == 0:
                 input_text = task
             else:
-                # For subsequent rounds, just say "Continue"
-                # Tool results are automatically available via server-side state
-                input_text = "Continue with the task based on the tool results."
+                # CRITICAL: Inject tool results into input_text
+                # Server maintains conversation state, but LOCAL tool results must be passed explicitly
+                if pending_tool_results:
+                    results_text = "\n\n".join([
+                        f"Tool '{name}' returned:\n{result}"
+                        for name, result in pending_tool_results
+                    ])
+                    input_text = f"""Tool execution completed. Here are the ACTUAL results:
+
+{results_text}
+
+IMPORTANT: Use ONLY the actual results above. Do NOT make up or hallucinate information.
+Continue with the task based on these results."""
+                    pending_tool_results = []  # Clear for next round
+                else:
+                    input_text = "Continue with the task."
 
             # Call /v1/responses with tools (stateful API!)
             response = self.llm.create_response(
@@ -524,7 +548,7 @@ class DynamicAutonomousAgent:
                 model=model
             )
 
-            # Save response ID for next round (CRITICAL!)
+            # Save response ID for next round (maintains conversation state)
             previous_response_id = response["id"]
             log_info(f"Response ID: {previous_response_id}")
 
@@ -553,7 +577,7 @@ class DynamicAutonomousAgent:
             if function_calls:
                 log_info(f"LLM requested {len(function_calls)} tool call(s)")
 
-                # Execute tools
+                # Execute tools and collect results for next round
                 for fc in function_calls:
                     tool_name = fc["name"]
                     tool_args = fc.get("arguments", {})
@@ -580,7 +604,10 @@ class DynamicAutonomousAgent:
                         tool_result = f"Error: {e}"
                         log_error(f"Tool execution failed: {e}")
 
-                # Continue loop - tool results are automatically handled by stateful API
+                    # Collect tool result for injection in next round
+                    pending_tool_results.append((tool_name, tool_result))
+
+                # Continue loop - tool results will be injected in next iteration
             else:
                 # Final answer - no function calls
                 log_info("LLM provided final answer")
@@ -600,20 +627,44 @@ class DynamicAutonomousAgent:
         max_tokens: int,
         model: Optional[str] = None
     ) -> str:
-        """Core autonomous loop for multiple MCPs using stateful /v1/responses API."""
-        # Use stateful /v1/responses API for 97% token savings!
+        """Core autonomous loop for multiple MCPs using stateful /v1/responses API with explicit tool result injection.
+
+        HYBRID APPROACH that provides:
+        - Stateful conversation management (97% token savings via previous_response_id)
+        - Explicit tool result passing (injected into input_text)
+        - No context overflow (server handles history)
+
+        Based on LM Studio SDK's .act() internal behavior:
+        "run a tool → provide the result to the LLM → wait for the LLM to generate a response"
+
+        See: https://lmstudio.ai/docs/typescript/agent/act
+        """
         previous_response_id = None
+        pending_tool_results = []  # Track tool results to inject into next round
 
         for round_num in range(max_rounds):
             log_info(f"\n--- Round {round_num + 1}/{max_rounds} ---")
 
-            # Determine input text
+            # Build input text with tool results injection
             if round_num == 0:
                 input_text = task
             else:
-                # For subsequent rounds, just say "Continue"
-                # Tool results are automatically available via server-side state
-                input_text = "Continue with the task based on the tool results."
+                # CRITICAL: Inject tool results into input_text
+                # Server maintains conversation state, but LOCAL tool results must be passed explicitly
+                if pending_tool_results:
+                    results_text = "\n\n".join([
+                        f"Tool '{name}' returned:\n{result}"
+                        for name, result in pending_tool_results
+                    ])
+                    input_text = f"""Tool execution completed. Here are the ACTUAL results:
+
+{results_text}
+
+IMPORTANT: Use ONLY the actual results above. Do NOT make up or hallucinate information.
+Continue with the task based on these results."""
+                    pending_tool_results = []  # Clear for next round
+                else:
+                    input_text = "Continue with the task."
 
             # Call /v1/responses with tools (stateful API!)
             response = self.llm.create_response(
@@ -686,7 +737,10 @@ class DynamicAutonomousAgent:
                             tool_result = f"Error: {e}"
                             log_error(f"Tool execution failed: {e}")
 
-                # Continue loop - tool results are automatically handled by stateful API
+                    # Collect tool result for injection in next round
+                    pending_tool_results.append((namespaced_tool_name, tool_result))
+
+                # Continue loop - tool results will be injected in next iteration
             else:
                 # Final answer - no function calls
                 log_info("LLM provided final answer")
