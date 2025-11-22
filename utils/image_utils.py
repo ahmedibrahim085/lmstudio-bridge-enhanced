@@ -283,15 +283,20 @@ def _process_file_path(file_path: str, detail: str) -> ImageInput:
 
 
 def _process_url(url: str, detail: str) -> ImageInput:
-    """Process an image URL.
+    """Process an image URL by fetching and converting to base64.
+
+    LM Studio requires base64-encoded images, so we fetch the URL content
+    and convert it to a data URI.
 
     Args:
         url: The image URL
         detail: Vision detail level
 
     Returns:
-        ImageInput with the URL
+        ImageInput with base64 data URI (not the original URL)
     """
+    import requests
+
     warnings = []
 
     # Try to infer MIME type from URL extension
@@ -300,17 +305,82 @@ def _process_url(url: str, detail: str) -> ImageInput:
     ext = Path(url_path).suffix.lower()
     if ext in IMAGE_EXTENSION_MAP:
         mime_type = IMAGE_EXTENSION_MAP[ext]
-    else:
-        warnings.append("Could not determine image type from URL. Model will validate.")
 
-    return ImageInput(
-        input_type=ImageInputType.URL,
-        url=url,
-        mime_type=mime_type,
-        original_input=url,
-        detail=detail,
-        warnings=warnings
-    )
+    # Fetch the image from URL
+    try:
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (compatible; LMStudioBridge/3.2; +https://github.com/ahmedibrahim085/lmstudio-bridge-enhanced)'
+        }
+        response = requests.get(url, timeout=30, stream=True, headers=headers)
+        response.raise_for_status()
+
+        # Check content length if available
+        content_length = response.headers.get('content-length')
+        if content_length and int(content_length) > MAX_IMAGE_SIZE_BYTES:
+            return ImageInput(
+                input_type=ImageInputType.URL,
+                url="",
+                original_input=url,
+                detail=detail,
+                errors=[f"Image too large: {int(content_length) / (1024*1024):.1f} MB. Maximum: {MAX_IMAGE_SIZE_BYTES / (1024*1024):.0f} MB"]
+            )
+
+        # Read image data
+        image_data = response.content
+
+        # Check actual size
+        if len(image_data) > MAX_IMAGE_SIZE_BYTES:
+            return ImageInput(
+                input_type=ImageInputType.URL,
+                url="",
+                original_input=url,
+                detail=detail,
+                errors=[f"Image too large: {len(image_data) / (1024*1024):.1f} MB. Maximum: {MAX_IMAGE_SIZE_BYTES / (1024*1024):.0f} MB"]
+            )
+
+        # Detect MIME type from content if not known
+        if mime_type is None:
+            detected_mime = _detect_mime_from_bytes(image_data[:16])
+            if detected_mime:
+                mime_type = detected_mime
+            else:
+                # Try from content-type header
+                content_type = response.headers.get('content-type', '')
+                if content_type.startswith('image/'):
+                    mime_type = content_type.split(';')[0]
+                else:
+                    mime_type = "image/jpeg"  # Default assumption
+                    warnings.append("Could not determine image type. Assuming JPEG.")
+
+        # Convert to base64
+        base64_data = base64.b64encode(image_data).decode('utf-8')
+        data_uri = f"data:{mime_type};base64,{base64_data}"
+
+        return ImageInput(
+            input_type=ImageInputType.URL,
+            url=data_uri,  # Return data URI, not original URL
+            mime_type=mime_type,
+            original_input=url,
+            detail=detail,
+            warnings=warnings
+        )
+
+    except requests.exceptions.Timeout:
+        return ImageInput(
+            input_type=ImageInputType.URL,
+            url="",
+            original_input=url,
+            detail=detail,
+            errors=["Timeout fetching image from URL (30s limit)"]
+        )
+    except requests.exceptions.RequestException as e:
+        return ImageInput(
+            input_type=ImageInputType.URL,
+            url="",
+            original_input=url,
+            detail=detail,
+            errors=[f"Failed to fetch image from URL: {str(e)}"]
+        )
 
 
 def _process_base64(base64_input: str, detail: str) -> ImageInput:

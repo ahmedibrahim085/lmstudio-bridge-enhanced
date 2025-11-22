@@ -126,19 +126,35 @@ class TestProcessImageInput:
     """Test the process_image_input function."""
 
     def test_process_url(self):
-        """Test processing URL input."""
-        result = process_image_input("https://example.com/image.jpg")
-        assert result.is_valid
-        assert result.input_type == ImageInputType.URL
-        assert result.url == "https://example.com/image.jpg"
-        assert result.mime_type == "image/jpeg"
+        """Test processing URL input (mocked fetch)."""
+        # Mock the requests.get to return a fake image
+        with patch('requests.get') as mock_get:
+            mock_response = Mock()
+            mock_response.status_code = 200
+            mock_response.headers = {'content-type': 'image/jpeg'}
+            mock_response.content = b'\xff\xd8\xff\xe0' + b'\x00' * 100  # JPEG header
+            mock_get.return_value = mock_response
+
+            result = process_image_input("https://example.com/image.jpg")
+            assert result.is_valid
+            assert result.input_type == ImageInputType.URL
+            assert result.url.startswith("data:image/jpeg;base64,")
+            assert result.mime_type == "image/jpeg"
 
     def test_process_url_without_extension(self):
-        """Test processing URL without extension (valid but warns)."""
-        result = process_image_input("https://example.com/api/image")
-        assert result.is_valid
-        assert result.input_type == ImageInputType.URL
-        assert len(result.warnings) > 0  # Should warn about unknown type
+        """Test processing URL without extension (mocked fetch)."""
+        with patch('requests.get') as mock_get:
+            mock_response = Mock()
+            mock_response.status_code = 200
+            mock_response.headers = {'content-type': 'image/png'}
+            mock_response.content = b'\x89PNG\r\n\x1a\n' + b'\x00' * 100  # PNG header
+            mock_get.return_value = mock_response
+
+            result = process_image_input("https://example.com/api/image")
+            assert result.is_valid
+            assert result.input_type == ImageInputType.URL
+            # Should detect PNG from magic bytes
+            assert result.mime_type == "image/png"
 
     def test_process_file_not_found(self):
         """Test processing non-existent file."""
@@ -263,22 +279,36 @@ class TestValidateImageInputs:
     """Test the validate_image_inputs function."""
 
     def test_all_valid(self):
-        """Test validation with all valid inputs."""
-        valid, errors = validate_image_inputs([
-            "https://example.com/1.jpg",
-            "https://example.com/2.jpg"
-        ])
-        assert len(valid) == 2
-        assert len(errors) == 0
+        """Test validation with all valid inputs (mocked)."""
+        with patch('requests.get') as mock_get:
+            mock_response = Mock()
+            mock_response.status_code = 200
+            mock_response.headers = {'content-type': 'image/jpeg'}
+            mock_response.content = b'\xff\xd8\xff\xe0' + b'\x00' * 100
+            mock_get.return_value = mock_response
+
+            valid, errors = validate_image_inputs([
+                "https://example.com/1.jpg",
+                "https://example.com/2.jpg"
+            ])
+            assert len(valid) == 2
+            assert len(errors) == 0
 
     def test_mixed_valid_invalid(self):
         """Test validation with mixed valid and invalid inputs."""
-        valid, errors = validate_image_inputs([
-            "https://example.com/valid.jpg",
-            "/nonexistent/file.png"
-        ])
-        assert len(valid) == 1
-        assert len(errors) > 0
+        with patch('requests.get') as mock_get:
+            mock_response = Mock()
+            mock_response.status_code = 200
+            mock_response.headers = {'content-type': 'image/jpeg'}
+            mock_response.content = b'\xff\xd8\xff\xe0' + b'\x00' * 100
+            mock_get.return_value = mock_response
+
+            valid, errors = validate_image_inputs([
+                "https://example.com/valid.jpg",
+                "/nonexistent/file.png"
+            ])
+            assert len(valid) == 1
+            assert len(errors) > 0
 
     def test_empty_list(self):
         """Test validation with empty list."""
@@ -415,10 +445,19 @@ class TestLLMClientVisionCompletion:
     """Test the LLMClient.vision_completion method."""
 
     def test_vision_completion_single_image(self):
-        """Test vision_completion with single image."""
+        """Test vision_completion with single image (mocked)."""
         from llm.llm_client import LLMClient
 
-        with patch('requests.post') as mock_post:
+        with patch('requests.post') as mock_post, \
+             patch('requests.get') as mock_get:
+            # Mock URL fetch
+            mock_url_response = Mock()
+            mock_url_response.status_code = 200
+            mock_url_response.headers = {'content-type': 'image/jpeg'}
+            mock_url_response.content = b'\xff\xd8\xff\xe0' + b'\x00' * 100
+            mock_get.return_value = mock_url_response
+
+            # Mock LLM response
             mock_response = Mock()
             mock_response.status_code = 200
             mock_response.json.return_value = {
@@ -435,10 +474,19 @@ class TestLLMClientVisionCompletion:
             assert "choices" in response
 
     def test_vision_completion_multiple_images(self):
-        """Test vision_completion with multiple images."""
+        """Test vision_completion with multiple images (mocked)."""
         from llm.llm_client import LLMClient
 
-        with patch('requests.post') as mock_post:
+        with patch('requests.post') as mock_post, \
+             patch('requests.get') as mock_get:
+            # Mock URL fetch
+            mock_url_response = Mock()
+            mock_url_response.status_code = 200
+            mock_url_response.headers = {'content-type': 'image/jpeg'}
+            mock_url_response.content = b'\xff\xd8\xff\xe0' + b'\x00' * 100
+            mock_get.return_value = mock_url_response
+
+            # Mock LLM response
             mock_response = Mock()
             mock_response.status_code = 200
             mock_response.json.return_value = {
@@ -514,10 +562,17 @@ class TestEdgeCases:
     """Test edge cases and boundary conditions."""
 
     def test_whitespace_in_url(self):
-        """Test URL with surrounding whitespace."""
-        result = process_image_input("  https://example.com/image.jpg  ")
-        assert result.is_valid
-        assert result.input_type == ImageInputType.URL
+        """Test URL with surrounding whitespace (mocked)."""
+        with patch('requests.get') as mock_get:
+            mock_response = Mock()
+            mock_response.status_code = 200
+            mock_response.headers = {'content-type': 'image/jpeg'}
+            mock_response.content = b'\xff\xd8\xff\xe0' + b'\x00' * 100
+            mock_get.return_value = mock_response
+
+            result = process_image_input("  https://example.com/image.jpg  ")
+            assert result.is_valid
+            assert result.input_type == ImageInputType.URL
 
     def test_file_too_large(self):
         """Test file size limit enforcement."""
