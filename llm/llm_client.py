@@ -153,12 +153,13 @@ class LLMClient:
     )
     def chat_completion(
         self,
-        messages: List[Dict[str, str]],
+        messages: List[Dict[str, Any]],
         temperature: float = 0.7,
         max_tokens: int = DEFAULT_MAX_TOKENS,
         tools: Optional[List[Dict[str, Any]]] = None,
         tool_choice: str = "auto",
-        timeout: int = DEFAULT_LLM_TIMEOUT
+        timeout: int = DEFAULT_LLM_TIMEOUT,
+        response_format: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """Generate a chat completion from the local LLM.
 
@@ -166,12 +167,17 @@ class LLMClient:
         Automatically ensures the model is loaded before making the request (if LMS CLI available).
 
         Args:
-            messages: List of message dictionaries with 'role' and 'content'
+            messages: List of message dictionaries with 'role' and 'content'.
+                      Content can be a string or a list (for multimodal messages with images).
             temperature: Controls randomness (0.0 to 1.0)
             max_tokens: Maximum tokens to generate
             tools: Optional list of tools in OpenAI format
             tool_choice: Tool selection strategy ('auto', 'none', or specific tool)
             timeout: Request timeout in seconds (default 58s, safely under Claude Code's 60s MCP timeout)
+            response_format: Optional structured output format. Supported formats:
+                - {"type": "json_object"} - Force valid JSON output
+                - {"type": "json_schema", "json_schema": {"name": "...", "schema": {...}}}
+                  Force output to conform to a specific JSON schema (LM Studio v0.3.32+)
 
         Returns:
             Response dictionary from LLM API
@@ -182,6 +188,26 @@ class LLMClient:
             LLMRateLimitError: If rate limit exceeded
             LLMResponseError: If LM Studio returns an error
             LLMError: For other unexpected errors
+
+        Example:
+            # Basic chat completion
+            response = client.chat_completion(messages=[{"role": "user", "content": "Hello"}])
+
+            # With structured JSON output
+            response = client.chat_completion(
+                messages=[{"role": "user", "content": "List 3 colors"}],
+                response_format={
+                    "type": "json_schema",
+                    "json_schema": {
+                        "name": "colors",
+                        "schema": {
+                            "type": "object",
+                            "properties": {"colors": {"type": "array", "items": {"type": "string"}}},
+                            "required": ["colors"]
+                        }
+                    }
+                }
+            )
         """
         # CRITICAL BUG FIX: Ensure model is loaded before making request
         # This prevents confusing 404 errors when models are auto-unloaded or ejected
@@ -228,6 +254,10 @@ class LLMClient:
         if tools:
             payload["tools"] = tools
             payload["tool_choice"] = tool_choice
+
+        # Add response_format for structured output (LM Studio v0.3.32+)
+        if response_format is not None:
+            payload["response_format"] = response_format
 
         try:
             response = requests.post(
