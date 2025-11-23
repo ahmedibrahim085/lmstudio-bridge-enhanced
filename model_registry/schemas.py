@@ -366,9 +366,14 @@ class ModelMetadata:
         # Generate recommended_for based on capabilities
         recommended_for = cls._generate_recommendations(capabilities, model_family)
 
-        # Estimate VRAM from size_bytes
+        # Estimate VRAM from size_bytes (with context and param info for better estimate)
         size_bytes = lms_data.get("sizeBytes")
-        estimated_vram_gb = cls._estimate_vram_gb(size_bytes, quantization)
+        estimated_vram_gb = cls._estimate_vram_gb(
+            size_bytes,
+            quantization,
+            max_context_length=max_context if max_context > 0 else None,
+            size_billions=size_billions
+        )
 
         # Detect thinking models (use chain-of-thought reasoning)
         is_thinking_model = cls._is_thinking_model(model_id)
@@ -460,19 +465,39 @@ class ModelMetadata:
         return None
 
     @staticmethod
-    def _estimate_vram_gb(size_bytes: Optional[int], quantization: Optional[str]) -> Optional[float]:
+    def _estimate_vram_gb(
+        size_bytes: Optional[int],
+        quantization: Optional[str],
+        max_context_length: Optional[int] = None,
+        size_billions: Optional[float] = None
+    ) -> Optional[float]:
         """
-        Estimate VRAM requirement from model file size.
+        Estimate VRAM requirement from model characteristics.
 
-        VRAM estimation is roughly equal to file size for most quantized models.
-        For higher precision (FP16/FP32), VRAM may be higher.
+        This provides a **minimum VRAM estimate** for loading the model.
+        Actual VRAM usage varies based on:
+        - Context length used (KV cache scales with sequence length)
+        - Batch size (concurrent requests)
+        - Framework overhead (llama.cpp vs vLLM vs others)
+
+        Estimation approach:
+        1. Base: Model file size (weights in VRAM)
+        2. Quantization adjustment (FP16/FP32 need more)
+        3. KV cache estimate (~0.5-2GB for 32K context, scales with params)
+        4. Runtime overhead (~10%)
 
         Args:
             size_bytes: Model file size in bytes
             quantization: Quantization method (e.g., "Q4_K_M", "Q8", "FP16")
+            max_context_length: Maximum context window (for KV cache estimate)
+            size_billions: Parameter count in billions (for KV cache scaling)
 
         Returns:
-            Estimated VRAM requirement in GB, or None if unknown
+            Estimated minimum VRAM requirement in GB, or None if unknown
+
+        Note:
+            This is a heuristic estimate. For production deployments, run actual
+            benchmarks with your specific workload and batch size.
         """
         if not size_bytes:
             return None
@@ -484,17 +509,32 @@ class ModelMetadata:
         # Q4/Q5/Q6/Q8 models: VRAM ≈ file size
         # FP16: VRAM can be ~1.2x file size due to activations
         # FP32: VRAM can be ~1.5x file size
-        multiplier = 1.0
+        quant_multiplier = 1.0
         if quantization:
             quant_lower = quantization.lower()
             if "fp32" in quant_lower or "f32" in quant_lower:
-                multiplier = 1.5
+                quant_multiplier = 1.5
             elif "fp16" in quant_lower or "f16" in quant_lower:
-                multiplier = 1.2
+                quant_multiplier = 1.2
             # Q4/Q5/Q6/Q8 models: multiplier stays at 1.0
 
-        # Add ~10% overhead for KV cache and runtime buffers
-        estimated = base_gb * multiplier * 1.1
+        # Estimate KV cache VRAM (significant for long contexts)
+        # Formula: KV cache ≈ 2 * num_layers * hidden_dim * 2 * context_len * 2 bytes (K+V, FP16)
+        # Simplified heuristic: ~0.5GB per 10B params at 32K context
+        kv_cache_gb = 0.0
+        if max_context_length and size_billions:
+            # Scale: ~0.5GB per 10B params at 32K, linear with context
+            context_factor = max_context_length / 32768
+            param_factor = size_billions / 10
+            kv_cache_gb = 0.5 * param_factor * context_factor
+            # Cap at reasonable maximum (KV cache rarely exceeds model size)
+            kv_cache_gb = min(kv_cache_gb, base_gb * 0.5)
+
+        # Runtime overhead (~10% for framework buffers, activations)
+        overhead_multiplier = 1.1
+
+        # Final estimate
+        estimated = (base_gb * quant_multiplier + kv_cache_gb) * overhead_multiplier
 
         # Round to 1 decimal place
         return round(estimated, 1)
