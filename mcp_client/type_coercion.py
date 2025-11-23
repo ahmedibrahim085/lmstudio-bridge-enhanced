@@ -12,22 +12,55 @@ tool calls go through coercion regardless of the code path:
 - mcp_client/executor.py batch operations
 
 This centralizes the fix instead of duplicating it in multiple places.
+
+Configuration:
+    NUMERIC_PARAMS can be extended via environment variable:
+    LMS_EXTRA_NUMERIC_PARAMS=param1,param2,param3
+
+    This allows adding custom numeric parameters without code changes.
 """
 
+import os
 import logging
-from typing import Dict, Any
+from typing import Dict, Any, Set
 
 logger = logging.getLogger(__name__)
 
 
-# Known numeric parameters from common MCP tools (filesystem, git, etc.)
-NUMERIC_PARAMS = {
+# Default known numeric parameters from common MCP tools (filesystem, git, etc.)
+_DEFAULT_NUMERIC_PARAMS = {
     'head', 'tail', 'limit', 'offset',
     'max_count', 'context_lines',
     # Additional common numeric params
     'timeout', 'retries', 'depth', 'count',
     'start_line', 'end_line', 'line_number'
 }
+
+
+def _load_numeric_params() -> Set[str]:
+    """Load numeric params from defaults + environment variable.
+
+    Environment variable LMS_EXTRA_NUMERIC_PARAMS can add additional params:
+        LMS_EXTRA_NUMERIC_PARAMS=custom_limit,page_size,batch_size
+
+    Returns:
+        Set of all numeric parameter names
+    """
+    params = _DEFAULT_NUMERIC_PARAMS.copy()
+
+    # Load additional params from environment
+    extra_params_str = os.environ.get('LMS_EXTRA_NUMERIC_PARAMS', '')
+    if extra_params_str:
+        extra_params = {p.strip() for p in extra_params_str.split(',') if p.strip()}
+        if extra_params:
+            logger.debug(f"Adding extra numeric params from env: {extra_params}")
+            params.update(extra_params)
+
+    return params
+
+
+# Load at module import time (can be reloaded by calling _load_numeric_params())
+NUMERIC_PARAMS = _load_numeric_params()
 
 
 def coerce_tool_arg_types(args: Dict[str, Any]) -> Dict[str, Any]:

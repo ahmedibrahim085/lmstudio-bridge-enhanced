@@ -26,6 +26,8 @@ import logging
 from typing import Optional, Dict, List, Any
 from pathlib import Path
 
+from utils.retry import run_with_retry
+
 logger = logging.getLogger(__name__)
 
 # TTL Configuration
@@ -252,12 +254,8 @@ ALTERNATIVE:
             if llm_only:
                 cmd.append("--llm")
 
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=30
-            )
+            # Use retry for resilience against timeouts
+            result = run_with_retry(cmd, timeout=30)
 
             if result.returncode == 0:
                 models = json.loads(result.stdout)
@@ -286,12 +284,8 @@ ALTERNATIVE:
             return None
 
         try:
-            result = subprocess.run(
-                ["lms", "ps", "--json"],
-                capture_output=True,
-                text=True,
-                timeout=10
-            )
+            # Use retry for resilience against timeouts
+            result = run_with_retry(["lms", "ps", "--json"], timeout=10)
 
             if result.returncode == 0:
                 return json.loads(result.stdout)
