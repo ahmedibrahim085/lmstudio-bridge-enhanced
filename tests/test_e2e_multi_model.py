@@ -128,10 +128,13 @@ class TestE2EMultiModelWorkflows:
         print(f"✅ Analysis complete: {len(analysis)} characters")
         print(f"   Contains real files: {has_real_files}, Contains .py: {has_py_files}")
 
-        # If model hallucinated (no real files), provide clear failure message
-        if not has_real_files:
-            print(f"⚠️  WARNING: Model may have hallucinated file names!")
-            print(f"   Analysis output: {analysis[:200]}...")
+        # FAIL if model hallucinated (no real files found)
+        # This catches cases where LLM skips tool calls and makes up file names
+        assert has_real_files, (
+            f"HALLUCINATION DETECTED: Model did not use actual tool results!\n"
+            f"Expected one of: {known_files}\n"
+            f"Got: {analysis[:300]}..."
+        )
 
         # Step 2: Implementation with coding model - PIPELINE TEST
         # This tests that output from Step 1 (reasoning model) flows to Step 2 (coding model)
