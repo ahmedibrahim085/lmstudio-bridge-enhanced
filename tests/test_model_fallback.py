@@ -188,29 +188,15 @@ class TestModelFallbackManager:
 class TestLMSCLITools:
     """Tests for LMS CLI MCP tools."""
 
-    @patch('tools.lms_cli_tools.LMSHelper')
-    def test_lms_search_models_not_installed(self, mock_lms):
-        """Test search when LMS CLI is not installed."""
-        mock_lms.is_installed.return_value = False
-
+    def test_lms_search_models_not_supported(self):
+        """Test that search returns 'not supported' error (LMS CLI limitation)."""
         result = lms_search_models("qwen coder")
 
         assert result["success"] is False
-        assert "not installed" in result["error"].lower()
-
-    @patch('tools.lms_cli_tools.LMSHelper')
-    def test_lms_search_models_success(self, mock_lms):
-        """Test successful model search."""
-        mock_lms.is_installed.return_value = True
-        mock_lms.search_models.return_value = [
-            {"modelKey": "qwen/qwen3-coder-30b", "displayName": "Qwen3 Coder"}
-        ]
-
-        result = lms_search_models("qwen coder")
-
-        assert result["success"] is True
-        assert result["count"] == 1
+        assert "not supported" in result["error"].lower()
         assert result["query"] == "qwen coder"
+        assert "alternatives" in result
+        assert len(result["alternatives"]) > 0
 
     @patch('tools.lms_cli_tools.LMSHelper')
     def test_lms_download_model_already_downloaded(self, mock_lms):

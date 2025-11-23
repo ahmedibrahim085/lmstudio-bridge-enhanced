@@ -366,61 +366,50 @@ def lms_search_models(query: str, limit: int = 10) -> Dict[str, Any]:
     """
     Search for models available online in the LM Studio model hub.
 
-    Use this to:
-    - Find models matching specific criteria (e.g., "qwen coder", "llama 70b")
-    - Discover available versions of a model family
-    - Check if a specific model exists before downloading
-    - Compare model options for a task
+    ⚠️ NOTE: This feature is NOT SUPPORTED by the LMS CLI.
+    The LMS CLI only has `lms get` which is an interactive command that
+    searches AND downloads together - there is no search-only mode.
+
+    ALTERNATIVES:
+    1. Use lms_list_downloaded_models() to see what's already available
+    2. Use lms_download_model() to download a specific model by name
+    3. Browse models at https://lmstudio.ai/models or HuggingFace
 
     Args:
-        query: Search query (e.g., "qwen coder", "mistral instruct", "llama 70b")
-        limit: Maximum number of results to return (default: 10)
+        query: Search query (not used - feature not available)
+        limit: Maximum results (not used - feature not available)
 
     Returns:
-        Dictionary with:
-        - success (bool): Whether search succeeded
-        - models (list): List of matching models with metadata
-        - count (int): Number of results found
-        - query (str): The search query used
-        - error (str): Error message (if failed)
-
-    Example:
-        # Find Qwen coding models
-        result = lms_search_models("qwen coder")
-        if result["success"]:
-            for model in result["models"]:
-                print(f"{model['modelKey']} - {model.get('sizeBytes', 'N/A')} bytes")
+        Dictionary with error explaining the limitation
     """
-    if not LMSHelper.is_installed():
-        return {
-            "success": False,
-            "error": "LMS CLI not installed",
-            "installInstructions": (
-                "Install LMS CLI to search models:\n"
-                "  brew install lmstudio-ai/lms/lms"
-            )
-        }
-
-    models = LMSHelper.search_models(query, limit=limit)
-
-    if models is None:
-        return {
-            "success": False,
-            "query": query,
-            "error": "Search failed. Check LMS CLI is working.",
-            "troubleshooting": (
-                "1. Try: lms search <query>\n"
-                "2. Check internet connection\n"
-                "3. Verify LMS CLI version is up to date"
-            )
-        }
-
     return {
-        "success": True,
+        "success": False,
+        "error": "Model search is not supported by the LMS CLI",
         "query": query,
-        "models": models,
-        "count": len(models),
-        "summary": f"Found {len(models)} models matching '{query}'"
+        "explanation": (
+            "The LMS CLI only has 'lms get' which is an interactive command that "
+            "searches AND downloads together. There is no search-only or JSON output mode."
+        ),
+        "alternatives": [
+            {
+                "tool": "lms_list_downloaded_models",
+                "description": "See what models are already downloaded locally"
+            },
+            {
+                "tool": "lms_download_model",
+                "description": "Download a specific model by name (e.g., 'qwen/qwen3-coder-30b')"
+            },
+            {
+                "tool": "lms_resolve_model",
+                "description": "Check if a model is available and find alternatives"
+            }
+        ],
+        "browseModels": (
+            "To browse available models:\n"
+            "  - LM Studio app: Browse models tab\n"
+            "  - Web: https://lmstudio.ai/models\n"
+            "  - HuggingFace: https://huggingface.co/models"
+        )
     }
 
 

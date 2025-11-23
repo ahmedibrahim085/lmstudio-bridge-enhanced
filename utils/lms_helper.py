@@ -539,44 +539,6 @@ ALTERNATIVE:
         return True
 
     @classmethod
-    def search_models(cls, query: str, limit: int = 10) -> Optional[List[Dict[str, Any]]]:
-        """
-        Search for models online using lms search.
-
-        Args:
-            query: Search query (e.g., "qwen coder", "llama 70b")
-            limit: Maximum number of results to return (default: 10)
-
-        Returns:
-            List of matching models with metadata, or None if LMS not available
-        """
-        if not cls.is_installed():
-            return None
-
-        try:
-            result = subprocess.run(
-                ["lms", "search", query, "--json", "--limit", str(limit)],
-                capture_output=True,
-                text=True,
-                timeout=30
-            )
-
-            if result.returncode == 0:
-                models = json.loads(result.stdout)
-                logger.info(f"Found {len(models)} models matching '{query}'")
-                return models
-            else:
-                logger.error(f"Model search failed: {result.stderr}")
-                return None
-
-        except json.JSONDecodeError as e:
-            logger.error(f"Invalid JSON from lms search: {e}")
-            return None
-        except Exception as e:
-            logger.error(f"Error searching models: {e}")
-            return None
-
-    @classmethod
     def download_model(
         cls,
         model_key: str,
