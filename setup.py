@@ -4,14 +4,14 @@ with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
 setup(
-    name="lmstudio-mcp",
-    version="3.1.0",
-    author="infinitimeless",
-    author_email="127632852+infinitimeless@users.noreply.github.com",
-    description="A Model Control Protocol (MCP) server that allows Claude to communicate with locally running LLM models via LM Studio",
+    name="lmstudio-bridge-enhanced",
+    version="3.1.1",
+    author="Ahmed Maged",
+    author_email="ahmedibrahim085@users.noreply.github.com",
+    description="Enhanced MCP server bridging Claude with local LLMs via LM Studio - featuring autonomous agents, multi-model orchestration, and type coercion",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/infinitimeless/LMStudio-MCP",
+    url="https://github.com/ahmedibrahim085/lmstudio-bridge-enhanced",
     packages=find_packages(),
     classifiers=[
         "Programming Language :: Python :: 3",
