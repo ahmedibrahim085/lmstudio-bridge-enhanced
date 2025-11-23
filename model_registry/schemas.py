@@ -205,7 +205,7 @@ class ModelMetadata:
     estimated_vram_gb: Optional[float] = None  # Estimated VRAM requirement
     quantization: Optional[str] = None
     max_context_length: Optional[int] = None
-    is_thinking_model: bool = False  # Models with 'thinking' often ignore tool results
+    is_thinking_model: bool = False  # Thinking/reasoning model (e.g., QwQ, DeepSeek-R1, o1-style)
     capabilities: ModelCapabilities = field(default_factory=ModelCapabilities)
     benchmarks: BenchmarkData = field(default_factory=BenchmarkData)
     recommended_for: List[str] = field(default_factory=list)
@@ -370,7 +370,7 @@ class ModelMetadata:
         size_bytes = lms_data.get("sizeBytes")
         estimated_vram_gb = cls._estimate_vram_gb(size_bytes, quantization)
 
-        # Detect thinking models (often ignore tool results)
+        # Detect thinking models (use chain-of-thought reasoning)
         is_thinking_model = cls._is_thinking_model(model_id)
 
         return cls(
@@ -504,8 +504,10 @@ class ModelMetadata:
         """
         Detect if model is a 'thinking' model.
 
-        Thinking models (like QwQ, DeepSeek-R1, o1-style) often have issues with
-        tool calling because they tend to ignore tool results and continue reasoning.
+        Thinking models (like QwQ, DeepSeek-R1, o1-style) use chain-of-thought
+        reasoning internally. This is informational metadata - these models work
+        correctly with tool calling after the explicit tool result injection fix
+        (commits 656450a, 4777088).
 
         Args:
             model_id: Model identifier
