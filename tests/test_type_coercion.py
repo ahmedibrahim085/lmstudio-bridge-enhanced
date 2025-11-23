@@ -13,7 +13,12 @@ import os
 # Add parent directory to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from mcp_client.type_coercion import coerce_tool_arg_types, NUMERIC_PARAMS
+from mcp_client.type_coercion import (
+    coerce_tool_arg_types,
+    NUMERIC_PARAMS,
+    _load_numeric_params,
+    _DEFAULT_NUMERIC_PARAMS
+)
 
 
 class TestTypeCoercion:
@@ -116,6 +121,59 @@ class TestTypeCoercion:
         result = coerce_tool_arg_types(args)
 
         assert result['some_param'] == 'hello'
+
+
+class TestNumericParamsConfig:
+    """Tests for NUMERIC_PARAMS environment variable configuration."""
+
+    def test_default_params_exist(self):
+        """Test that default numeric params are present."""
+        # These core params should always exist
+        assert 'head' in _DEFAULT_NUMERIC_PARAMS
+        assert 'tail' in _DEFAULT_NUMERIC_PARAMS
+        assert 'limit' in _DEFAULT_NUMERIC_PARAMS
+        assert 'offset' in _DEFAULT_NUMERIC_PARAMS
+
+    def test_load_without_env_var(self, monkeypatch):
+        """Test loading params without env var set."""
+        monkeypatch.delenv('LMS_EXTRA_NUMERIC_PARAMS', raising=False)
+        params = _load_numeric_params()
+        assert params == _DEFAULT_NUMERIC_PARAMS
+
+    def test_load_with_env_var_adds_params(self, monkeypatch):
+        """Test that env var adds extra numeric params."""
+        monkeypatch.setenv('LMS_EXTRA_NUMERIC_PARAMS', 'custom_limit,page_size')
+        params = _load_numeric_params()
+
+        # Should contain defaults
+        assert 'head' in params
+        assert 'tail' in params
+
+        # Should contain extras from env var
+        assert 'custom_limit' in params
+        assert 'page_size' in params
+
+    def test_load_with_empty_env_var(self, monkeypatch):
+        """Test that empty env var doesn't break anything."""
+        monkeypatch.setenv('LMS_EXTRA_NUMERIC_PARAMS', '')
+        params = _load_numeric_params()
+        assert params == _DEFAULT_NUMERIC_PARAMS
+
+    def test_load_with_whitespace_handling(self, monkeypatch):
+        """Test that whitespace in env var is handled correctly."""
+        monkeypatch.setenv('LMS_EXTRA_NUMERIC_PARAMS', '  custom1 , custom2  ,  ')
+        params = _load_numeric_params()
+
+        # Should strip whitespace
+        assert 'custom1' in params
+        assert 'custom2' in params
+        # Should not have empty strings
+        assert '' not in params
+
+    def test_numeric_params_includes_defaults(self):
+        """Test that loaded NUMERIC_PARAMS includes all defaults."""
+        for default_param in _DEFAULT_NUMERIC_PARAMS:
+            assert default_param in NUMERIC_PARAMS
 
 
 if __name__ == "__main__":

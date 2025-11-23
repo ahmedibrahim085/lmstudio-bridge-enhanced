@@ -59,7 +59,7 @@ def _load_numeric_params() -> Set[str]:
     return params
 
 
-# Load at module import time (can be reloaded by calling _load_numeric_params())
+# Loaded at module import time from defaults + LMS_EXTRA_NUMERIC_PARAMS env var
 NUMERIC_PARAMS = _load_numeric_params()
 
 
