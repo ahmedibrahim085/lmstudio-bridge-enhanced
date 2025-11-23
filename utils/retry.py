@@ -11,8 +11,7 @@ import time
 import random
 import logging
 import subprocess
-from typing import List, Optional, Callable, Any
-from functools import wraps
+from typing import List, Any
 
 logger = logging.getLogger(__name__)
 
@@ -46,11 +45,12 @@ def run_with_retry(
         text: Return output as text (default: True)
 
     Returns:
-        subprocess.CompletedProcess from successful execution
+        subprocess.CompletedProcess from successful execution (may have non-zero returncode
+        if retry_on_error=False and command fails)
 
     Raises:
         subprocess.TimeoutExpired: If all retries exhausted due to timeout
-        subprocess.CalledProcessError: If command fails and retry_on_error=False
+        FileNotFoundError: If command executable not found
     """
     last_exception = None
 
@@ -134,60 +134,8 @@ def _calculate_delay(attempt: int, base_delay: float, max_delay: float) -> float
     return min(delay, max_delay)
 
 
-def retry_on_timeout(
-    max_retries: int = DEFAULT_MAX_RETRIES,
-    base_delay: float = DEFAULT_BASE_DELAY,
-    max_delay: float = DEFAULT_MAX_DELAY
-):
-    """
-    Decorator for retrying functions that may raise TimeoutExpired.
-
-    Usage:
-        @retry_on_timeout(max_retries=3)
-        def my_function():
-            result = subprocess.run(..., timeout=30)
-            return result
-
-    Args:
-        max_retries: Maximum retry attempts
-        base_delay: Initial delay between retries
-        max_delay: Maximum delay cap
-    """
-    def decorator(func: Callable) -> Callable:
-        @wraps(func)
-        def wrapper(*args, **kwargs) -> Any:
-            last_exception = None
-
-            for attempt in range(max_retries + 1):
-                try:
-                    return func(*args, **kwargs)
-
-                except subprocess.TimeoutExpired as e:
-                    last_exception = e
-                    if attempt < max_retries:
-                        delay = _calculate_delay(attempt, base_delay, max_delay)
-                        logger.warning(
-                            f"{func.__name__} timed out (attempt {attempt + 1}/{max_retries + 1}), "
-                            f"retrying in {delay:.1f}s"
-                        )
-                        time.sleep(delay)
-                    else:
-                        logger.error(
-                            f"{func.__name__} timed out after {max_retries + 1} attempts"
-                        )
-                        raise
-
-            if last_exception:
-                raise last_exception
-            raise RuntimeError("Retry decorator error")
-
-        return wrapper
-    return decorator
-
-
 __all__ = [
     'run_with_retry',
-    'retry_on_timeout',
     'DEFAULT_MAX_RETRIES',
     'DEFAULT_BASE_DELAY',
     'DEFAULT_MAX_DELAY',
