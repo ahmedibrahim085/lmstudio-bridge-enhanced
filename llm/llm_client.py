@@ -467,6 +467,7 @@ class LLMClient:
         stream: bool = False,
         model: Optional[str] = None,
         max_tokens: Optional[int] = None,
+        tool_choice: Optional[str] = None,
         timeout: int = DEFAULT_LLM_TIMEOUT
     ) -> Dict[str, Any]:
         """Create a stateful response with optional function calling.
@@ -482,6 +483,9 @@ class LLMClient:
             previous_response_id: Optional ID from previous response for conversation continuity
             stream: Whether to stream response
             model: Optional specific model
+            max_tokens: Maximum tokens to generate
+            tool_choice: Tool selection strategy ('auto', 'required', 'none').
+                        'required' forces the LLM to call a tool instead of responding with text.
             timeout: Request timeout in seconds (default 58s, safely under Claude Code's 60s MCP timeout)
 
         Returns:
@@ -527,6 +531,9 @@ class LLMClient:
         # Add tools in LM Studio's flattened format
         if tools:
             payload["tools"] = self.convert_tools_to_responses_format(tools)
+            # Add tool_choice if specified (default is 'auto')
+            if tool_choice:
+                payload["tool_choice"] = tool_choice
 
         try:
             response = requests.post(

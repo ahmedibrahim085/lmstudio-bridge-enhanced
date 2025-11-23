@@ -585,12 +585,17 @@ Continue with the task based on these results."""
                     input_text = "Continue with the task."
 
             # Call /v1/responses with tools (stateful API!)
+            # Use tool_choice="required" on first round to FORCE tool usage
+            # This prevents LLMs from hallucinating instead of calling tools
+            # On subsequent rounds, use "auto" to allow final answers
+            current_tool_choice = "required" if round_num == 0 else "auto"
             response = self.llm.create_response(
                 input_text=input_text,
                 tools=openai_tools,
                 previous_response_id=previous_response_id,
                 max_tokens=max_tokens,
-                model=model
+                model=model,
+                tool_choice=current_tool_choice
             )
 
             # Save response ID for next round (maintains conversation state)
@@ -716,12 +721,17 @@ Continue with the task based on these results."""
                     input_text = "Continue with the task."
 
             # Call /v1/responses with tools (stateful API!)
+            # Use tool_choice="required" on first round to FORCE tool usage
+            # This prevents LLMs from hallucinating instead of calling tools
+            # On subsequent rounds, use "auto" to allow final answers
+            current_tool_choice = "required" if round_num == 0 else "auto"
             response = self.llm.create_response(
                 input_text=input_text,
                 tools=openai_tools,
                 previous_response_id=previous_response_id,
                 max_tokens=max_tokens,
-                model=model
+                model=model,
+                tool_choice=current_tool_choice
             )
 
             # Save response ID for next round (CRITICAL!)
