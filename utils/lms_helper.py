@@ -229,6 +229,52 @@ ALTERNATIVE:
             return False
 
     @classmethod
+    def list_downloaded_models(cls, llm_only: bool = True) -> Optional[List[Dict[str, Any]]]:
+        """
+        List ALL downloaded models (loaded or not).
+
+        Returns rich metadata from lms ls --json:
+        - modelKey, displayName, sizeBytes
+        - trainedForToolUse, vision, maxContextLength
+        - paramsString, architecture, quantization
+
+        Args:
+            llm_only: If True, only return LLM models (exclude embeddings)
+
+        Returns:
+            List of all downloaded models with metadata, or None if LMS not available
+        """
+        if not cls.is_installed():
+            return None
+
+        try:
+            cmd = ["lms", "ls", "--json"]
+            if llm_only:
+                cmd.append("--llm")
+
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+
+            if result.returncode == 0:
+                models = json.loads(result.stdout)
+                logger.info(f"Found {len(models)} downloaded models")
+                return models
+            else:
+                logger.error(f"Failed to list downloaded models: {result.stderr}")
+                return None
+
+        except json.JSONDecodeError as e:
+            logger.error(f"Invalid JSON from lms ls: {e}")
+            return None
+        except Exception as e:
+            logger.error(f"Error listing downloaded models with LMS: {e}")
+            return None
+
+    @classmethod
     def list_loaded_models(cls) -> Optional[List[Dict[str, Any]]]:
         """
         List currently loaded models.
