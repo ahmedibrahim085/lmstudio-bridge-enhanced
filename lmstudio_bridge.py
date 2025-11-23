@@ -9,6 +9,9 @@ import os
 import asyncio
 from typing import List, Dict, Any, Optional, Union
 
+# Import centralized safe_call_tool wrapper
+from mcp_client.type_coercion import safe_call_tool
+
 # Import constants
 from config.constants import (
     DEFAULT_LMSTUDIO_HOST,
@@ -459,8 +462,8 @@ async def test_autonomous_poc(task: str, file_path: str = None) -> str:
 
                             log_info(f"Executing {tool_name} via filesystem MCP with args: {tool_args}")
 
-                            # Call REAL MCP tool
-                            result = await session.call_tool(tool_name, tool_args)
+                            # Use safe_call_tool wrapper - handles type coercion automatically
+                            result = await safe_call_tool(session, tool_name, tool_args)
 
                             log_info(f"MCP result: {str(result.content)[:200]}...")
 

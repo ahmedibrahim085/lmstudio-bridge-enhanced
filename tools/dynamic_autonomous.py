@@ -50,49 +50,9 @@ def log_error(message: str):
     print(f"ERROR: {message}", file=sys.stderr)
 
 
-def _coerce_tool_arg_types(args: Dict[str, Any]) -> Dict[str, Any]:
-    """Coerce tool argument types to help smaller models.
-
-    Some LLMs (especially smaller ones like llama-3.2-3b) may pass numeric
-    parameters as strings (e.g., "10" instead of 10). This causes MCP tools
-    to reject the arguments with type errors like:
-    "params.head is not of a type(s) number"
-
-    This function attempts to coerce common patterns:
-    - Numeric strings to integers for known numeric params (head, tail, limit, offset)
-    - Boolean strings to booleans ("true"/"false")
-
-    Args:
-        args: Tool arguments dictionary
-
-    Returns:
-        Arguments with coerced types where applicable
-    """
-    if not isinstance(args, dict):
-        return args
-
-    # Known numeric parameters from common MCP tools
-    numeric_params = {'head', 'tail', 'limit', 'offset', 'max_count', 'context_lines'}
-
-    coerced = {}
-    for key, value in args.items():
-        if key in numeric_params and isinstance(value, str):
-            # Try to coerce string to int
-            try:
-                coerced[key] = int(value)
-            except ValueError:
-                # Try float as fallback
-                try:
-                    coerced[key] = float(value)
-                except ValueError:
-                    coerced[key] = value  # Keep original if conversion fails
-        elif isinstance(value, str) and value.lower() in ('true', 'false'):
-            # Coerce boolean strings
-            coerced[key] = value.lower() == 'true'
-        else:
-            coerced[key] = value
-
-    return coerced
+# Import centralized safe_call_tool wrapper from mcp_client
+# This ensures ALL code paths use the same coercion logic via single entry point
+from mcp_client.type_coercion import safe_call_tool
 
 
 class DynamicAutonomousAgent:
@@ -641,14 +601,11 @@ Continue with the task based on these results."""
                             log_error(f"Failed to parse tool arguments: {tool_args}")
                             tool_args = {}
 
-                    # Coerce common argument types (helps smaller models that struggle with types)
-                    # e.g., "10" -> 10 for numeric parameters like head, tail, limit
-                    tool_args = _coerce_tool_arg_types(tool_args)
-
                     log_info(f"Executing {tool_name}")
 
                     try:
-                        result = await session.call_tool(tool_name, tool_args)
+                        # Use safe_call_tool wrapper - handles type coercion automatically
+                        result = await safe_call_tool(session, tool_name, tool_args)
                         tool_result = (
                             result.content[0].text if result.content
                             else "Tool executed successfully"
@@ -777,9 +734,6 @@ Continue with the task based on these results."""
                             log_error(f"Failed to parse tool arguments: {tool_args}")
                             tool_args = {}
 
-                    # Coerce common argument types (helps smaller models that struggle with types)
-                    tool_args = _coerce_tool_arg_types(tool_args)
-
                     # Get original tool name and session
                     if namespaced_tool_name not in tool_to_session:
                         tool_result = f"Error: Unknown tool {namespaced_tool_name}"
@@ -789,7 +743,8 @@ Continue with the task based on these results."""
                         log_info(f"Executing {namespaced_tool_name} (original: {original_tool_name})")
 
                         try:
-                            result = await session.call_tool(original_tool_name, tool_args)
+                            # Use safe_call_tool wrapper - handles type coercion automatically
+                            result = await safe_call_tool(session, original_tool_name, tool_args)
                             tool_result = (
                                 result.content[0].text if result.content
                                 else "Tool executed successfully"

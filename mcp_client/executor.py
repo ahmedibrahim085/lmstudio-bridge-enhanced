@@ -10,6 +10,8 @@ from typing import Dict, Any, Optional, List
 from mcp import ClientSession
 from mcp.types import CallToolResult, TextContent, ImageContent, EmbeddedResource
 
+from .type_coercion import safe_call_tool
+
 
 class ToolExecutor:
     """Executes tools on MCP servers."""
@@ -39,8 +41,8 @@ class ToolExecutor:
         Raises:
             Exception: If tool execution fails
         """
-        result = await self.session.call_tool(tool_name, arguments)
-        return result
+        # Use safe_call_tool wrapper - handles type coercion automatically
+        return await safe_call_tool(self.session, tool_name, arguments)
 
     @staticmethod
     def extract_text_content(result: CallToolResult) -> str:
