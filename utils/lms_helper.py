@@ -539,6 +539,117 @@ ALTERNATIVE:
         return True
 
     @classmethod
+    def search_models(cls, query: str, limit: int = 10) -> Optional[List[Dict[str, Any]]]:
+        """
+        Search for models online using lms search.
+
+        Args:
+            query: Search query (e.g., "qwen coder", "llama 70b")
+            limit: Maximum number of results to return (default: 10)
+
+        Returns:
+            List of matching models with metadata, or None if LMS not available
+        """
+        if not cls.is_installed():
+            return None
+
+        try:
+            result = subprocess.run(
+                ["lms", "search", query, "--json", "--limit", str(limit)],
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+
+            if result.returncode == 0:
+                models = json.loads(result.stdout)
+                logger.info(f"Found {len(models)} models matching '{query}'")
+                return models
+            else:
+                logger.error(f"Model search failed: {result.stderr}")
+                return None
+
+        except json.JSONDecodeError as e:
+            logger.error(f"Invalid JSON from lms search: {e}")
+            return None
+        except Exception as e:
+            logger.error(f"Error searching models: {e}")
+            return None
+
+    @classmethod
+    def download_model(
+        cls,
+        model_key: str,
+        wait: bool = True,
+        timeout: int = 3600
+    ) -> tuple[bool, str]:
+        """
+        Download a model using lms get.
+
+        Args:
+            model_key: Model identifier to download (e.g., "qwen/qwen3-coder-30b")
+            wait: If True, block until download completes (default: True)
+            timeout: Timeout in seconds for download (default: 3600 = 1 hour)
+
+        Returns:
+            Tuple of (success: bool, message: str)
+        """
+        if not cls.is_installed():
+            return False, "LMS CLI not installed"
+
+        try:
+            cmd = ["lms", "get", model_key, "--yes"]  # --yes to auto-confirm
+
+            if wait:
+                logger.info(f"Downloading model '{model_key}' (this may take a while)...")
+                result = subprocess.run(
+                    cmd,
+                    capture_output=True,
+                    text=True,
+                    timeout=timeout
+                )
+
+                if result.returncode == 0:
+                    logger.info(f"✅ Model '{model_key}' downloaded successfully")
+                    return True, f"Model '{model_key}' downloaded successfully"
+                else:
+                    error_msg = result.stderr or result.stdout or "Download failed"
+                    logger.error(f"Download failed: {error_msg}")
+                    return False, error_msg
+            else:
+                # Start download in background (non-blocking)
+                logger.info(f"Starting background download of '{model_key}'...")
+                subprocess.Popen(
+                    cmd,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL
+                )
+                return True, f"Download started for '{model_key}' (running in background)"
+
+        except subprocess.TimeoutExpired:
+            return False, f"Download timed out after {timeout} seconds"
+        except Exception as e:
+            logger.error(f"Error downloading model: {e}")
+            return False, str(e)
+
+    @classmethod
+    def is_model_downloaded(cls, model_key: str) -> Optional[bool]:
+        """
+        Check if a model is downloaded locally (may or may not be loaded).
+
+        Args:
+            model_key: Model identifier to check
+
+        Returns:
+            True if downloaded, False if not, None if LMS not available
+        """
+        downloaded = cls.list_downloaded_models()
+        if downloaded is None:
+            return None
+
+        return any(m.get("modelKey") == model_key for m in downloaded)
+
+    @classmethod
     def get_server_status(cls) -> Optional[Dict[str, Any]]:
         """
         Get LM Studio server status.

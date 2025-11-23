@@ -34,6 +34,7 @@ from typing import Dict, Any, List, Optional
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from utils.lms_helper import LMSHelper
+from utils.model_fallback import get_fallback_manager, ModelAlternative
 
 
 def lms_list_loaded_models() -> Dict[str, Any]:
@@ -361,6 +362,304 @@ def lms_ensure_model_loaded(model_name: str) -> Dict[str, Any]:
         }
 
 
+def lms_search_models(query: str, limit: int = 10) -> Dict[str, Any]:
+    """
+    Search for models available online in the LM Studio model hub.
+
+    Use this to:
+    - Find models matching specific criteria (e.g., "qwen coder", "llama 70b")
+    - Discover available versions of a model family
+    - Check if a specific model exists before downloading
+    - Compare model options for a task
+
+    Args:
+        query: Search query (e.g., "qwen coder", "mistral instruct", "llama 70b")
+        limit: Maximum number of results to return (default: 10)
+
+    Returns:
+        Dictionary with:
+        - success (bool): Whether search succeeded
+        - models (list): List of matching models with metadata
+        - count (int): Number of results found
+        - query (str): The search query used
+        - error (str): Error message (if failed)
+
+    Example:
+        # Find Qwen coding models
+        result = lms_search_models("qwen coder")
+        if result["success"]:
+            for model in result["models"]:
+                print(f"{model['modelKey']} - {model.get('sizeBytes', 'N/A')} bytes")
+    """
+    if not LMSHelper.is_installed():
+        return {
+            "success": False,
+            "error": "LMS CLI not installed",
+            "installInstructions": (
+                "Install LMS CLI to search models:\n"
+                "  brew install lmstudio-ai/lms/lms"
+            )
+        }
+
+    models = LMSHelper.search_models(query, limit=limit)
+
+    if models is None:
+        return {
+            "success": False,
+            "query": query,
+            "error": "Search failed. Check LMS CLI is working.",
+            "troubleshooting": (
+                "1. Try: lms search <query>\n"
+                "2. Check internet connection\n"
+                "3. Verify LMS CLI version is up to date"
+            )
+        }
+
+    return {
+        "success": True,
+        "query": query,
+        "models": models,
+        "count": len(models),
+        "summary": f"Found {len(models)} models matching '{query}'"
+    }
+
+
+def lms_download_model(model_key: str, wait: bool = False) -> Dict[str, Any]:
+    """
+    Download a model from the LM Studio model hub.
+
+    Use this to:
+    - Download a model that isn't available locally
+    - Get a specific model version for a task
+    - Prepare models in advance for workflows
+
+    ⚠️ WARNING: Model downloads can be large (GB) and take significant time.
+    Use wait=False for background downloads (recommended for large models).
+
+    Args:
+        model_key: Full model identifier (e.g., "qwen/qwen3-coder-30b")
+        wait: If True, block until download completes (can take hours!)
+              If False, start download in background (default, recommended)
+
+    Returns:
+        Dictionary with:
+        - success (bool): Whether download started/completed
+        - model (str): Model identifier
+        - message (str): Status message
+        - isBackground (bool): True if download is running in background
+        - error (str): Error message (if failed)
+
+    Example:
+        # Start background download (recommended)
+        result = lms_download_model("qwen/qwen3-coder-30b", wait=False)
+        if result["success"]:
+            print("Download started! Check LM Studio for progress.")
+
+        # Blocking download (use for small models only)
+        result = lms_download_model("mistralai/mistral-small-3.2", wait=True)
+    """
+    if not LMSHelper.is_installed():
+        return {
+            "success": False,
+            "error": "LMS CLI not installed",
+            "installInstructions": (
+                "Install LMS CLI to download models:\n"
+                "  brew install lmstudio-ai/lms/lms"
+            )
+        }
+
+    # Check if already downloaded
+    is_downloaded = LMSHelper.is_model_downloaded(model_key)
+    if is_downloaded:
+        return {
+            "success": True,
+            "model": model_key,
+            "alreadyDownloaded": True,
+            "message": f"Model '{model_key}' is already downloaded"
+        }
+
+    success, message = LMSHelper.download_model(model_key, wait=wait)
+
+    if success:
+        return {
+            "success": True,
+            "model": model_key,
+            "alreadyDownloaded": False,
+            "isBackground": not wait,
+            "message": message
+        }
+    else:
+        return {
+            "success": False,
+            "model": model_key,
+            "error": message,
+            "troubleshooting": (
+                "1. Check model key is correct (use lms_search_models to find exact name)\n"
+                "2. Check internet connection\n"
+                "3. Check disk space (models can be 10-100GB)\n"
+                "4. Try downloading manually in LM Studio app"
+            )
+        }
+
+
+def lms_list_downloaded_models() -> Dict[str, Any]:
+    """
+    List all downloaded models (loaded or not).
+
+    Unlike lms_list_loaded_models which shows only currently loaded models,
+    this shows ALL models downloaded to LM Studio, including those not in memory.
+
+    Use this to:
+    - See complete inventory of available models
+    - Check if a specific model is downloaded before use
+    - Plan which models to load based on what's available
+    - Review model metadata (size, capabilities, etc.)
+
+    Returns:
+        Dictionary with:
+        - success (bool): Whether operation succeeded
+        - models (list): All downloaded models with full metadata
+        - count (int): Number of downloaded models
+        - totalSizeBytes (int): Total disk space used
+        - totalSizeGB (float): Total size in GB
+        - error (str): Error message (if failed)
+
+    Example:
+        result = lms_list_downloaded_models()
+        if result["success"]:
+            for model in result["models"]:
+                tool_use = "✅" if model.get("trainedForToolUse") else "❌"
+                print(f"{model['modelKey']} - Tool use: {tool_use}")
+    """
+    if not LMSHelper.is_installed():
+        return {
+            "success": False,
+            "error": "LMS CLI not installed",
+            "installInstructions": (
+                "Install LMS CLI to list downloaded models:\n"
+                "  brew install lmstudio-ai/lms/lms"
+            )
+        }
+
+    models = LMSHelper.list_downloaded_models()
+
+    if models is None:
+        return {
+            "success": False,
+            "error": "Failed to list downloaded models",
+            "troubleshooting": "Check LM Studio is running and LMS CLI is working"
+        }
+
+    total_size = sum(m.get("sizeBytes", 0) for m in models)
+    total_gb = round(total_size / (1024**3), 2)
+
+    return {
+        "success": True,
+        "models": models,
+        "count": len(models),
+        "totalSizeBytes": total_size,
+        "totalSizeGB": total_gb,
+        "summary": f"Found {len(models)} downloaded models using {total_gb}GB disk space"
+    }
+
+
+def lms_resolve_model(
+    model_key: str,
+    auto_fallback: bool = False,
+    task_type: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Resolve a model request with intelligent fallback to alternatives.
+
+    This is the RECOMMENDED way to handle model requests when you're unsure
+    if a model is available. It checks availability and suggests or auto-selects
+    alternatives based on capability matching.
+
+    Use this when:
+    - Importing agent configs that specify models you may not have
+    - User requests a specific model that might not be downloaded
+    - You want graceful degradation instead of hard failures
+    - Building workflows that should work across different setups
+
+    Args:
+        model_key: The requested model identifier (e.g., "deepseek/deepseek-coder-33b")
+        auto_fallback: If True, automatically use best alternative if unavailable
+                       If False, return alternatives list for user to choose
+        task_type: Optional hint about the task for better matching
+                   ("coding", "reasoning", "chat", "analysis")
+
+    Returns:
+        Dictionary with:
+        - success (bool): Whether resolution succeeded
+        - requested_model (str): Original model requested
+        - resolved_model (str): Model to use (may be fallback)
+        - status (str): "available", "fallback", or "unavailable"
+        - alternatives (list): Alternative models if unavailable
+        - message (str): Human-readable status message
+
+    Example:
+        # Auto-fallback mode (for automation)
+        result = lms_resolve_model("deepseek/deepseek-coder-33b", auto_fallback=True, task_type="coding")
+        if result["success"]:
+            model_to_use = result["resolved_model"]
+            # Use model_to_use in your workflow
+
+        # Manual mode (for user interaction)
+        result = lms_resolve_model("deepseek/deepseek-coder-33b", auto_fallback=False)
+        if result["status"] == "unavailable":
+            print(result["message"])  # Shows alternatives
+            # Let user choose from result["alternatives"]
+    """
+    if not LMSHelper.is_installed():
+        return {
+            "success": False,
+            "error": "LMS CLI not installed",
+            "installInstructions": (
+                "Install LMS CLI to use model resolution:\n"
+                "  brew install lmstudio-ai/lms/lms"
+            )
+        }
+
+    manager = get_fallback_manager()
+    resolved_model, status, alternatives = manager.resolve_model(
+        model_key,
+        auto_fallback=auto_fallback,
+        task_type=task_type
+    )
+
+    result = {
+        "success": status != "unavailable" or auto_fallback,
+        "requested_model": model_key,
+        "resolved_model": resolved_model,
+        "status": status,
+    }
+
+    if status == "available":
+        result["message"] = f"Model '{model_key}' is available"
+    elif status == "fallback":
+        result["message"] = f"Using '{resolved_model}' as fallback for '{model_key}'"
+        result["fallback_reasons"] = alternatives[0].reasons if alternatives else []
+    else:  # unavailable
+        if alternatives:
+            result["alternatives"] = [
+                {
+                    "model_key": alt.model_key,
+                    "display_name": alt.display_name,
+                    "score": alt.score,
+                    "reasons": alt.reasons,
+                    "trained_for_tool_use": alt.trained_for_tool_use,
+                    "size_gb": round(alt.size_bytes / (1024**3), 1) if alt.size_bytes else None
+                }
+                for alt in alternatives
+            ]
+            result["message"] = manager.format_alternatives_message(model_key, alternatives)
+        else:
+            result["alternatives"] = []
+            result["message"] = f"Model '{model_key}' is not downloaded and no alternatives found"
+
+    return result
+
+
 def lms_server_status() -> Dict[str, Any]:
     """
     Get LM Studio server status and diagnostics.
@@ -426,26 +725,38 @@ def register_lms_cli_tools(mcp_server):
     Args:
         mcp_server: FastMCP server instance
 
-    Registers 5 tools:
-    - lms_list_loaded_models: List all loaded models
+    Registers 9 tools:
+    - lms_list_loaded_models: List currently loaded models
+    - lms_list_downloaded_models: List ALL downloaded models (loaded or not)
     - lms_load_model: Load specific model
     - lms_unload_model: Unload model to free memory
     - lms_ensure_model_loaded: Idempotent preload (RECOMMENDED)
+    - lms_search_models: Search for models online
+    - lms_download_model: Download a model from hub
+    - lms_resolve_model: Resolve model with intelligent fallback (RECOMMENDED)
     - lms_server_status: Server health diagnostics
     """
     mcp_server.tool()(lms_list_loaded_models)
+    mcp_server.tool()(lms_list_downloaded_models)
     mcp_server.tool()(lms_load_model)
     mcp_server.tool()(lms_unload_model)
     mcp_server.tool()(lms_ensure_model_loaded)
+    mcp_server.tool()(lms_search_models)
+    mcp_server.tool()(lms_download_model)
+    mcp_server.tool()(lms_resolve_model)
     mcp_server.tool()(lms_server_status)
 
 
 # Export all tools and registration function
 __all__ = [
     'lms_list_loaded_models',
+    'lms_list_downloaded_models',
     'lms_load_model',
     'lms_unload_model',
     'lms_ensure_model_loaded',
+    'lms_search_models',
+    'lms_download_model',
+    'lms_resolve_model',
     'lms_server_status',
     'register_lms_cli_tools'
 ]
