@@ -101,3 +101,14 @@ config.local.py
 # OS
 .DS_Store
 Thumbs.db
+
+# Claude Code
+CLAUDE.md
+
+# Temporary output files
+output.txt
+count_python_files.txt
+
+# Model Registry Cache
+.cache/
+model_registry.json
