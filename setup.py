@@ -5,10 +5,10 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="lmstudio-bridge-enhanced",
-    version="3.1.1",
+    version="3.2.0",
     author="Ahmed Maged",
     author_email="ahmedibrahim085@users.noreply.github.com",
-    description="Enhanced MCP server bridging Claude with local LLMs via LM Studio - featuring autonomous agents, multi-model orchestration, and type coercion",
+    description="Enhanced MCP server bridging Claude with local LLMs via LM Studio - featuring autonomous agents, multi-model orchestration, vision/multimodal support, structured JSON output, and model capability registry",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/ahmedibrahim085/lmstudio-bridge-enhanced",
