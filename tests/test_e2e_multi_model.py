@@ -70,28 +70,21 @@ class TestE2EMultiModelWorkflows:
         if len(models) < 2:
             pytest.skip("Need at least 2 models loaded for this test")
 
-        # Find reasoning and coding models
-        # NOTE: Avoid 'thinking' models as they tend to hallucinate tool results
-        # Prefer 'magistral' (good at reasoning) or 'coder' models
-        reasoning_model = None
-        coding_model = None
-
-        for model in models:
-            # Skip embedding models
-            if 'embedding' in model.lower():
-                continue
-            # Prefer magistral for reasoning (good instruction following)
-            if 'magistral' in model.lower() and not reasoning_model:
-                reasoning_model = model
-            elif 'coder' in model.lower():
-                coding_model = model
-
-        # Fallback to non-embedding models
+        # Select models for reasoning and coding roles
+        # Priority: Use user-configured constants from test_constants.py if available
         non_embedding = [m for m in models if 'embedding' not in m.lower()]
+
+        # Try configured models first, fallback to any available
+        reasoning_model = REASONING_MODEL if REASONING_MODEL in models else None
+        coding_model = CODING_MODEL if CODING_MODEL in models else None
+
+        # Fallback to non-embedding models if configured ones unavailable
         if not reasoning_model and non_embedding:
             reasoning_model = non_embedding[0]
         if not coding_model and non_embedding:
-            coding_model = non_embedding[1] if len(non_embedding) > 1 else non_embedding[0]
+            # Pick different model than reasoning if possible
+            available = [m for m in non_embedding if m != reasoning_model]
+            coding_model = available[0] if available else non_embedding[0]
 
         print(f"\n🧠 Using reasoning model: {reasoning_model}")
         print(f"💻 Using coding model: {coding_model}")
