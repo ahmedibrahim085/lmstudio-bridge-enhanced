@@ -112,3 +112,15 @@ count_python_files.txt
 # Model Registry Cache
 .cache/
 model_registry.json
+
+# Internal development artifacts
+review_*.txt
+*_PROGRESS.txt
+SESSION_*.md
+docs/archive/
+get_llm_reviews.py
+run_code_review.py
+test_*_working.py
+*_research.txt
+*_thinking.txt
+*_notes.txt
