@@ -205,7 +205,7 @@ class ModelMetadata:
     estimated_vram_gb: Optional[float] = None  # Estimated VRAM requirement
     quantization: Optional[str] = None
     max_context_length: Optional[int] = None
-    is_thinking_model: bool = False  # Thinking/reasoning model (e.g., QwQ, DeepSeek-R1, o1-style)
+    is_thinking_model: bool = False  # Informational: uses chain-of-thought (QwQ, DeepSeek-R1, o1-style)
     capabilities: ModelCapabilities = field(default_factory=ModelCapabilities)
     benchmarks: BenchmarkData = field(default_factory=BenchmarkData)
     recommended_for: List[str] = field(default_factory=list)
