@@ -28,6 +28,8 @@ from llm.exceptions import ModelNotFoundError, LLMConnectionError
 from tests.test_constants import (
     REASONING_MODEL,
     CODING_MODEL,
+    SMALL_MODEL,
+    VISION_MODEL,
     FILESYSTEM_MCP,
     MEMORY_MCP,
     DEFAULT_MAX_ROUNDS,
@@ -68,29 +70,34 @@ class TestE2EMultiModelWorkflows:
         if len(models) < 2:
             pytest.skip("Need at least 2 models loaded for this test")
 
-        # Find reasoning and coding models (or use first two if not specific)
-        reasoning_model = None
-        coding_model = None
+        # Select models for reasoning and coding roles
+        # Priority: Use user-configured constants from test_constants.py if available
+        non_embedding = [m for m in models if 'embedding' not in m.lower()]
 
-        for model in models:
-            if 'magistral' in model.lower() or 'thinking' in model.lower():
-                reasoning_model = model
-            elif 'coder' in model.lower():
-                coding_model = model
+        # Try configured models first, fallback to any available
+        reasoning_model = REASONING_MODEL if REASONING_MODEL in models else None
+        coding_model = CODING_MODEL if CODING_MODEL in models else None
 
-        # Fallback to first two models if specific types not found
-        if not reasoning_model:
-            reasoning_model = models[0]
-        if not coding_model:
-            coding_model = models[1] if len(models) > 1 else models[0]
+        # Fallback to non-embedding models if configured ones unavailable
+        if not reasoning_model and non_embedding:
+            reasoning_model = non_embedding[0]
+        if not coding_model and non_embedding:
+            # Pick different model than reasoning if possible
+            available = [m for m in non_embedding if m != reasoning_model]
+            coding_model = available[0] if available else non_embedding[0]
 
         print(f"\n🧠 Using reasoning model: {reasoning_model}")
         print(f"💻 Using coding model: {coding_model}")
 
         # Step 1: Analysis with reasoning model
-        # FIX: Use concrete path like passing tests do, not abstract task
+        # CRITICAL: The task must explicitly request the LLM to output the ACTUAL tool results
+        # Without this, some models hallucinate file names instead of reporting actual results
         print("\n📊 Step 1: Analyzing with reasoning model...")
-        analysis_task = "List the files in your working directory and describe what types of files are present."
+        analysis_task = (
+            "Use the list_directory tool to list files in the llm/ directory. "
+            "In your response, you MUST include the ACTUAL file names returned by the tool. "
+            "List each file name exactly as shown in the tool output."
+        )
         analysis = await agent.autonomous_with_mcp(
             mcp_name=FILESYSTEM_MCP,
             task=analysis_task,
@@ -99,16 +106,37 @@ class TestE2EMultiModelWorkflows:
         )
 
         assert analysis is not None
-        assert not any(keyword in analysis for keyword in ERROR_KEYWORDS)
+        # Check for actual error responses (not just the word "error" in legitimate content)
+        actual_error_patterns = [
+            "Error:", "ERROR:", "failed:", "FAILED:",
+            "Task incomplete", "No content in response"
+        ]
+        has_actual_error = any(pattern in analysis for pattern in actual_error_patterns)
+        assert not has_actual_error, f"Analysis contains error: {analysis[:200]}..."
+        # Validate analysis contains ACTUAL files from llm/ directory (prevent hallucination)
+        # These are known files that MUST exist in llm/
+        known_files = ['llm_client.py', 'exceptions.py', 'model_validator.py', '__init__.py']
+        has_real_files = any(f in analysis for f in known_files)
+        has_py_files = '.py' in analysis
         print(f"✅ Analysis complete: {len(analysis)} characters")
+        print(f"   Contains real files: {has_real_files}, Contains .py: {has_py_files}")
 
-        # Step 2: Implementation with coding model
-        # FIX: Pass analysis context explicitly (learning from passing tests)
-        print("\n🔨 Step 2: Generating code with coding model...")
+        # FAIL if model hallucinated (no real files found)
+        # This catches cases where LLM skips tool calls and makes up file names
+        assert has_real_files, (
+            f"HALLUCINATION DETECTED: Model did not use actual tool results!\n"
+            f"Expected one of: {known_files}\n"
+            f"Got: {analysis[:300]}..."
+        )
+
+        # Step 2: Implementation with coding model - PIPELINE TEST
+        # This tests that output from Step 1 (reasoning model) flows to Step 2 (coding model)
+        print("\n🔨 Step 2: Pipeline to coding model...")
         implementation_task = (
-            f"Based on this analysis of the project files:\n\n"
+            f"Based on this file listing from the llm/ directory:\n\n"
             f"{analysis}\n\n"
-            f"Now describe what this project might be about and what patterns you see."
+            f"Pick ONE of these Python files and explain what it likely does based on its name. "
+            f"Be specific about the file name you choose."
         )
         implementation = await agent.autonomous_with_mcp(
             mcp_name=FILESYSTEM_MCP,
@@ -118,7 +146,14 @@ class TestE2EMultiModelWorkflows:
         )
 
         assert implementation is not None
-        assert not any(keyword in implementation for keyword in ERROR_KEYWORDS)
+        # Check for actual error responses (not just the word "error" in legitimate content)
+        # LLM may legitimately discuss "error handling" or "exceptions.py"
+        actual_error_patterns = [
+            "Error:", "ERROR:", "failed:", "FAILED:",
+            "Task incomplete", "No content in response"
+        ]
+        has_actual_error = any(pattern in implementation for pattern in actual_error_patterns)
+        assert not has_actual_error, f"Implementation contains error: {implementation[:200]}..."
         print(f"✅ Implementation complete: {len(implementation)} characters")
 
         # Verify both steps produced meaningful results
@@ -222,7 +257,26 @@ class TestE2EMultiModelWorkflows:
         if 'memory' not in available_mcps:
             pytest.skip("Memory MCP not configured")
 
-        print(f"\n🔧 Using model: {models[0]}")
+        # Use model loading fixture to ensure model is actually loaded
+        # This handles memory errors properly rather than just picking small models
+        from tests.fixtures.model_management import ensure_model_loaded
+        from llm.exceptions import ModelMemoryError
+
+        # Try models in order until one loads successfully
+        test_model = None
+        for model in models:
+            try:
+                if ensure_model_loaded(model):
+                    test_model = model
+                    break
+            except ModelMemoryError as e:
+                print(f"⚠️  Model '{model}' requires too much memory: {e.required_memory or 'unknown'}")
+                continue
+
+        if not test_model:
+            pytest.skip("No model could be loaded - all models require too much memory")
+
+        print(f"\n🔧 Using model: {test_model}")
         print(f"📦 Using MCPs: filesystem, memory")
 
         # Execute multi-MCP task with model
@@ -230,7 +284,7 @@ class TestE2EMultiModelWorkflows:
             mcp_names=["filesystem", "memory"],
             task="Read the README.md file and create a knowledge graph entity summarizing the project",
             max_rounds=30,
-            model=models[0]
+            model=test_model
         )
 
         assert result is not None

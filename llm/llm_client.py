@@ -153,12 +153,14 @@ class LLMClient:
     )
     def chat_completion(
         self,
-        messages: List[Dict[str, str]],
+        messages: List[Dict[str, Any]],
         temperature: float = 0.7,
         max_tokens: int = DEFAULT_MAX_TOKENS,
         tools: Optional[List[Dict[str, Any]]] = None,
         tool_choice: str = "auto",
-        timeout: int = DEFAULT_LLM_TIMEOUT
+        timeout: int = DEFAULT_LLM_TIMEOUT,
+        response_format: Optional[Dict[str, Any]] = None,
+        model: Optional[str] = None
     ) -> Dict[str, Any]:
         """Generate a chat completion from the local LLM.
 
@@ -166,12 +168,20 @@ class LLMClient:
         Automatically ensures the model is loaded before making the request (if LMS CLI available).
 
         Args:
-            messages: List of message dictionaries with 'role' and 'content'
+            messages: List of message dictionaries with 'role' and 'content'.
+                      Content can be a string or a list (for multimodal messages with images).
             temperature: Controls randomness (0.0 to 1.0)
             max_tokens: Maximum tokens to generate
             tools: Optional list of tools in OpenAI format
             tool_choice: Tool selection strategy ('auto', 'none', or specific tool)
             timeout: Request timeout in seconds (default 58s, safely under Claude Code's 60s MCP timeout)
+            response_format: Optional structured output format. Supported formats:
+                - {"type": "json_object"} - Force valid JSON output
+                - {"type": "json_schema", "json_schema": {"name": "...", "schema": {...}}}
+                  Force output to conform to a specific JSON schema (LM Studio v0.3.32+)
+            model: Model to use for this request. If None, uses the client's default model.
+                   Use this to override the model for specific requests (e.g., different
+                   models for different autonomous tasks).
 
         Returns:
             Response dictionary from LLM API
@@ -182,29 +192,52 @@ class LLMClient:
             LLMRateLimitError: If rate limit exceeded
             LLMResponseError: If LM Studio returns an error
             LLMError: For other unexpected errors
+
+        Example:
+            # Basic chat completion
+            response = client.chat_completion(messages=[{"role": "user", "content": "Hello"}])
+
+            # With structured JSON output
+            response = client.chat_completion(
+                messages=[{"role": "user", "content": "List 3 colors"}],
+                response_format={
+                    "type": "json_schema",
+                    "json_schema": {
+                        "name": "colors",
+                        "schema": {
+                            "type": "object",
+                            "properties": {"colors": {"type": "array", "items": {"type": "string"}}},
+                            "required": ["colors"]
+                        }
+                    }
+                }
+            )
         """
+        # Determine which model to use (per-request model overrides default)
+        target_model = model if model is not None else self.model
+
         # CRITICAL BUG FIX: Ensure model is loaded before making request
         # This prevents confusing 404 errors when models are auto-unloaded or ejected
         # Only attempt if LMS CLI is available (gracefully degrades without it)
-        if self.model and self.model != "default" and LMSHelper.is_installed():
+        if target_model and target_model != "default" and LMSHelper.is_installed():
             try:
                 # Check if model is loaded
-                is_loaded = LMSHelper.is_model_loaded(self.model)
+                is_loaded = LMSHelper.is_model_loaded(target_model)
 
                 if is_loaded is False:
                     # Model not loaded - try to load it
-                    logger.warning(f"Model '{self.model}' not loaded, attempting to load...")
-                    load_success = LMSHelper.ensure_model_loaded_with_verification(self.model, ttl=600)
+                    logger.warning(f"Model '{target_model}' not loaded, attempting to load...")
+                    load_success = LMSHelper.ensure_model_loaded_with_verification(target_model, ttl=600)
 
                     if not load_success:
                         raise LLMConnectionError(
-                            f"Model '{self.model}' is not loaded and failed to load automatically. "
+                            f"Model '{target_model}' is not loaded and failed to load automatically. "
                             f"Please load the model in LM Studio manually or check available models."
                         )
 
-                    logger.info(f"✅ Model '{self.model}' loaded successfully")
+                    logger.info(f"✅ Model '{target_model}' loaded successfully")
                 elif is_loaded is True:
-                    logger.debug(f"Model '{self.model}' already loaded")
+                    logger.debug(f"Model '{target_model}' already loaded")
                 # is_loaded is None means LMS CLI couldn't determine state - proceed anyway
 
             except LLMConnectionError:
@@ -221,13 +254,17 @@ class LLMClient:
         }
 
         # Only add model if not using default
-        if self.model and self.model != "default":
-            payload["model"] = self.model
+        if target_model and target_model != "default":
+            payload["model"] = target_model
 
         # Add tools if provided
         if tools:
             payload["tools"] = tools
             payload["tool_choice"] = tool_choice
+
+        # Add response_format for structured output (LM Studio v0.3.32+)
+        if response_format is not None:
+            payload["response_format"] = response_format
 
         try:
             response = requests.post(
@@ -430,6 +467,7 @@ class LLMClient:
         stream: bool = False,
         model: Optional[str] = None,
         max_tokens: Optional[int] = None,
+        tool_choice: Optional[str] = None,
         timeout: int = DEFAULT_LLM_TIMEOUT
     ) -> Dict[str, Any]:
         """Create a stateful response with optional function calling.
@@ -445,6 +483,9 @@ class LLMClient:
             previous_response_id: Optional ID from previous response for conversation continuity
             stream: Whether to stream response
             model: Optional specific model
+            max_tokens: Maximum tokens to generate
+            tool_choice: Tool selection strategy ('auto', 'required', 'none').
+                        'required' forces the LLM to call a tool instead of responding with text.
             timeout: Request timeout in seconds (default 58s, safely under Claude Code's 60s MCP timeout)
 
         Returns:
@@ -490,6 +531,9 @@ class LLMClient:
         # Add tools in LM Studio's flattened format
         if tools:
             payload["tools"] = self.convert_tools_to_responses_format(tools)
+            # Add tool_choice if specified (default is 'auto')
+            if tool_choice:
+                payload["tool_choice"] = tool_choice
 
         try:
             response = requests.post(
@@ -502,6 +546,106 @@ class LLMClient:
 
         except Exception as e:
             _handle_request_exception(e, "Create response")
+
+    def vision_completion(
+        self,
+        prompt: str,
+        images: Union[str, List[str]],
+        system_prompt: str = "",
+        temperature: float = 0.7,
+        max_tokens: int = DEFAULT_MAX_TOKENS,
+        detail: str = "auto",
+        timeout: int = DEFAULT_LLM_TIMEOUT,
+        model: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Generate a vision completion from a multimodal LLM.
+
+        Sends images along with a text prompt to vision-capable models.
+        Automatically detects input format (file path, URL, or base64).
+
+        Args:
+            prompt: Text prompt describing what to do with the image(s)
+            images: Single image or list of images. Each can be:
+                - File path: "/path/to/image.png"
+                - URL: "https://example.com/image.jpg"
+                - Base64: "data:image/png;base64,..." or raw base64 string
+            system_prompt: Optional system instructions
+            temperature: Controls randomness (0.0 to 1.0)
+            max_tokens: Maximum tokens to generate
+            detail: Vision detail level ("auto", "low", "high")
+            timeout: Request timeout in seconds
+            model: Model to use for this request. If None, uses the client's default model.
+                   Must be a vision-capable model (e.g., Qwen2-VL, LLaVA).
+
+        Returns:
+            Response dictionary from LLM API
+
+        Raises:
+            LLMTimeoutError: If request times out
+            LLMConnectionError: If cannot connect to LM Studio
+            LLMResponseError: If LM Studio returns an error or model doesn't support vision
+            LLMError: For other unexpected errors
+            ValueError: If image input is invalid
+
+        Example:
+            # Analyze a local image
+            response = client.vision_completion(
+                prompt="What's in this image?",
+                images="/path/to/photo.jpg"
+            )
+
+            # Compare multiple images
+            response = client.vision_completion(
+                prompt="What are the differences between these images?",
+                images=["image1.png", "image2.png"]
+            )
+
+            # Use URL
+            response = client.vision_completion(
+                prompt="Describe this image",
+                images="https://example.com/image.jpg"
+            )
+        """
+        from utils.image_utils import process_image_input, build_vision_content, ImageInput
+
+        # Normalize to list
+        if isinstance(images, str):
+            images = [images]
+
+        # Process all images
+        processed_images: List[ImageInput] = []
+        errors = []
+
+        for i, img in enumerate(images):
+            result = process_image_input(img, detail=detail)
+            if result.is_valid:
+                processed_images.append(result)
+            else:
+                errors.extend([f"Image {i+1}: {e}" for e in result.errors])
+
+        if errors:
+            raise ValueError(f"Invalid image input(s): {'; '.join(errors)}")
+
+        if not processed_images:
+            raise ValueError("No valid images provided")
+
+        # Build the vision content
+        content = build_vision_content(prompt, processed_images)
+
+        # Build messages
+        messages = []
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
+        messages.append({"role": "user", "content": content})
+
+        # Use the existing chat_completion method
+        return self.chat_completion(
+            messages=messages,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            timeout=timeout,
+            model=model
+        )
 
     def list_models(self) -> List[str]:
         """List all available models in LM Studio.

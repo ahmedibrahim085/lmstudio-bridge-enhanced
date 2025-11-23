@@ -3,7 +3,7 @@
 Completion tools for LM Studio (chat and text completions).
 """
 
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from llm.llm_client import LLMClient
 import json
 
@@ -24,7 +24,8 @@ class CompletionTools:
         prompt: str,
         system_prompt: str = "",
         temperature: float = 0.7,
-        max_tokens: int = 1024
+        max_tokens: int = 1024,
+        response_format: Optional[Dict[str, Any]] = None
     ) -> str:
         """Generate a completion from the current LM Studio model.
 
@@ -33,6 +34,9 @@ class CompletionTools:
             system_prompt: Optional system instructions for the model
             temperature: Controls randomness (0.0 to 1.0)
             max_tokens: Maximum number of tokens to generate
+            response_format: Optional structured output format (LM Studio v0.3.32+)
+                - {"type": "json_object"} for valid JSON output
+                - {"type": "json_schema", "json_schema": {...}} for schema-conforming JSON
 
         Returns:
             The model's response to the prompt
@@ -50,7 +54,8 @@ class CompletionTools:
             response = self.llm.chat_completion(
                 messages=messages,
                 temperature=temperature,
-                max_tokens=max_tokens
+                max_tokens=max_tokens,
+                response_format=response_format
             )
 
             # Extract the assistant's message
@@ -165,7 +170,8 @@ def register_completion_tools(mcp, llm_client: Optional[LLMClient] = None):
         prompt: str,
         system_prompt: str = "",
         temperature: float = 0.7,
-        max_tokens: int = 1024
+        max_tokens: int = 1024,
+        response_format: Optional[Dict[str, Any]] = None
     ) -> str:
         """
         Delegate a task to the local LLM running in LM Studio.
@@ -262,18 +268,45 @@ def register_completion_tools(mcp, llm_client: Optional[LLMClient] = None):
         Correct: Answer directly with your own explanation
         Reason: Explaining concepts is YOUR job, not another LLM's
 
+        ## Structured Output (JSON Schema) - LM Studio v0.3.32+
+        Force the LLM to output valid JSON conforming to a schema:
+        ```python
+        chat_completion(
+            prompt="List 3 programming languages",
+            response_format={
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "languages",
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "languages": {"type": "array", "items": {"type": "string"}}
+                        },
+                        "required": ["languages"]
+                    }
+                }
+            }
+        )
+        # Returns: {"languages": ["Python", "JavaScript", "Rust"]}
+        ```
+
+        ⚠️ Not all models support structured output. Models < 7B may produce invalid JSON.
+
         Args:
             prompt: The specific task to delegate to the local LLM
             system_prompt: Optional system instructions for the local LLM
             temperature: Controls randomness (0.0 = deterministic, 1.0 = creative)
             max_tokens: Maximum response length
+            response_format: Optional structured output format:
+                - {"type": "json_object"} - Force valid JSON output
+                - {"type": "json_schema", "json_schema": {...}} - Force schema-conforming JSON
 
         Returns:
             The local LLM's response to the delegated task
 
         Note: This creates a SECOND LLM call. Only use when delegation is truly beneficial.
         """
-        return await tools.chat_completion(prompt, system_prompt, temperature, max_tokens)
+        return await tools.chat_completion(prompt, system_prompt, temperature, max_tokens, response_format)
 
     @mcp.tool()
     async def text_completion(
@@ -411,6 +444,76 @@ def register_completion_tools(mcp, llm_client: Optional[LLMClient] = None):
         return await tools.create_response(
             input_text, previous_response_id, stream, model
         )
+
+    @mcp.tool()
+    async def validate_json_schema(
+        schema: Dict[str, Any]
+    ) -> str:
+        """
+        Validate a JSON schema before using it with structured output.
+
+        Use this tool to check if your JSON schema is valid BEFORE passing it
+        to chat_completion's response_format parameter. This helps catch errors
+        early and provides helpful suggestions.
+
+        ## When to Use This Tool
+        ✅ Use BEFORE chat_completion with response_format to:
+        - Verify schema syntax is correct
+        - Check for common mistakes (missing required fields, invalid types)
+        - Get warnings about potential issues
+        - Ensure schema isn't too complex (depth/property limits)
+
+        ## Validation Checks
+        - Required 'type' field present and valid
+        - 'properties' field for object types
+        - 'items' field for array types
+        - Schema depth within limits (max 10 levels)
+        - Property count within limits (max 100)
+        - 'required' field is an array
+
+        ## Example
+        ```python
+        # First, validate your schema
+        result = validate_json_schema({
+            "type": "object",
+            "properties": {
+                "name": {"type": "string"},
+                "age": {"type": "integer"}
+            },
+            "required": ["name"]
+        })
+
+        # If valid, use it with chat_completion
+        if "valid: true" in result:
+            response = chat_completion(
+                prompt="Get user info",
+                response_format={
+                    "type": "json_schema",
+                    "json_schema": {
+                        "name": "user",
+                        "schema": your_schema
+                    }
+                }
+            )
+        ```
+
+        Args:
+            schema: JSON schema dictionary to validate
+
+        Returns:
+            JSON string with validation result:
+            - valid: boolean indicating if schema is valid
+            - errors: list of error messages (if any)
+            - warnings: list of warning messages (if any)
+        """
+        from utils.schema_utils import validate_json_schema as validate_schema
+
+        result = validate_schema(schema)
+        return json.dumps({
+            "valid": result.valid,
+            "errors": result.errors,
+            "warnings": result.warnings
+        }, indent=2)
 
 
 __all__ = [

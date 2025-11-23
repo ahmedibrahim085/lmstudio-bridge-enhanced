@@ -26,6 +26,8 @@ import logging
 from typing import Optional, Dict, List, Any
 from pathlib import Path
 
+from utils.retry import run_with_retry
+
 logger = logging.getLogger(__name__)
 
 # TTL Configuration
@@ -37,6 +39,7 @@ class LMSHelper:
     """Helper for LM Studio CLI operations (optional)."""
 
     _is_installed = None  # Cache the installation check
+    LM_STUDIO_BASE_URL = "http://localhost:1234/v1"  # Default LM Studio API endpoint
 
     @classmethod
     def is_installed(cls) -> bool:
@@ -174,10 +177,24 @@ ALTERNATIVE:
                 logger.info(f"✅ Model loaded: {model_name} (TTL={actual_ttl}s)")
                 return True
             else:
-                logger.error(f"Failed to load model: {result.stderr}")
+                error_msg = result.stderr or result.stdout or ""
+                logger.error(f"Failed to load model: {error_msg}")
+
+                # Check for memory errors - LM Studio reports this in error message
+                import re
+                memory_match = re.search(r'requires approximately ([\d.]+\s*GB)', error_msg, re.IGNORECASE)
+                if memory_match or 'memory' in error_msg.lower() or 'insufficient' in error_msg.lower():
+                    from llm.exceptions import ModelMemoryError
+                    required_memory = memory_match.group(1) if memory_match else None
+                    raise ModelMemoryError(model_name, required_memory)
+
                 return False
 
         except Exception as e:
+            # Re-raise ModelMemoryError to allow proper handling upstream
+            from llm.exceptions import ModelMemoryError
+            if isinstance(e, ModelMemoryError):
+                raise
             logger.error(f"Error loading model with LMS: {e}")
             return False
 
@@ -215,6 +232,48 @@ ALTERNATIVE:
             return False
 
     @classmethod
+    def list_downloaded_models(cls, llm_only: bool = True) -> Optional[List[Dict[str, Any]]]:
+        """
+        List ALL downloaded models (loaded or not).
+
+        Returns rich metadata from lms ls --json:
+        - modelKey, displayName, sizeBytes
+        - trainedForToolUse, vision, maxContextLength
+        - paramsString, architecture, quantization
+
+        Args:
+            llm_only: If True, only return LLM models (exclude embeddings)
+
+        Returns:
+            List of all downloaded models with metadata, or None if LMS not available
+        """
+        if not cls.is_installed():
+            return None
+
+        try:
+            cmd = ["lms", "ls", "--json"]
+            if llm_only:
+                cmd.append("--llm")
+
+            # Use retry for resilience against timeouts
+            result = run_with_retry(cmd, timeout=30)
+
+            if result.returncode == 0:
+                models = json.loads(result.stdout)
+                logger.info(f"Found {len(models)} downloaded models")
+                return models
+            else:
+                logger.error(f"Failed to list downloaded models: {result.stderr}")
+                return None
+
+        except json.JSONDecodeError as e:
+            logger.error(f"Invalid JSON from lms ls: {e}")
+            return None
+        except Exception as e:
+            logger.error(f"Error listing downloaded models with LMS: {e}")
+            return None
+
+    @classmethod
     def list_loaded_models(cls) -> Optional[List[Dict[str, Any]]]:
         """
         List currently loaded models.
@@ -226,12 +285,8 @@ ALTERNATIVE:
             return None
 
         try:
-            result = subprocess.run(
-                ["lms", "ps", "--json"],
-                capture_output=True,
-                text=True,
-                timeout=10
-            )
+            # Use retry for resilience against timeouts
+            result = run_with_retry(["lms", "ps", "--json"], timeout=10)
 
             if result.returncode == 0:
                 return json.loads(result.stdout)
@@ -477,6 +532,79 @@ ALTERNATIVE:
 
         logger.info(f"✅ Model '{model_name}' loaded and verified")
         return True
+
+    @classmethod
+    def download_model(
+        cls,
+        model_key: str,
+        wait: bool = True,
+        timeout: int = 3600
+    ) -> tuple[bool, str]:
+        """
+        Download a model using lms get.
+
+        Args:
+            model_key: Model identifier to download (e.g., "qwen/qwen3-coder-30b")
+            wait: If True, block until download completes (default: True)
+            timeout: Timeout in seconds for download (default: 3600 = 1 hour)
+
+        Returns:
+            Tuple of (success: bool, message: str)
+        """
+        if not cls.is_installed():
+            return False, "LMS CLI not installed"
+
+        try:
+            cmd = ["lms", "get", model_key, "--yes"]  # --yes to auto-confirm
+
+            if wait:
+                logger.info(f"Downloading model '{model_key}' (this may take a while)...")
+                result = subprocess.run(
+                    cmd,
+                    capture_output=True,
+                    text=True,
+                    timeout=timeout
+                )
+
+                if result.returncode == 0:
+                    logger.info(f"✅ Model '{model_key}' downloaded successfully")
+                    return True, f"Model '{model_key}' downloaded successfully"
+                else:
+                    error_msg = result.stderr or result.stdout or "Download failed"
+                    logger.error(f"Download failed: {error_msg}")
+                    return False, error_msg
+            else:
+                # Start download in background (non-blocking)
+                logger.info(f"Starting background download of '{model_key}'...")
+                subprocess.Popen(
+                    cmd,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL
+                )
+                return True, f"Download started for '{model_key}' (running in background)"
+
+        except subprocess.TimeoutExpired:
+            return False, f"Download timed out after {timeout} seconds"
+        except Exception as e:
+            logger.error(f"Error downloading model: {e}")
+            return False, str(e)
+
+    @classmethod
+    def is_model_downloaded(cls, model_key: str) -> Optional[bool]:
+        """
+        Check if a model is downloaded locally (may or may not be loaded).
+
+        Args:
+            model_key: Model identifier to check
+
+        Returns:
+            True if downloaded, False if not, None if LMS not available
+        """
+        downloaded = cls.list_downloaded_models()
+        if downloaded is None:
+            return None
+
+        return any(m.get("modelKey") == model_key for m in downloaded)
 
     @classmethod
     def get_server_status(cls) -> Optional[Dict[str, Any]]:

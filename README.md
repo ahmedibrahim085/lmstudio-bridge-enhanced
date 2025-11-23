@@ -1,4 +1,4 @@
-# LM Studio Bridge Enhanced v3.1.0
+# LM Studio Bridge Enhanced v3.2.0-alpha.1
 
 MCP server that connects Claude Code (or any MCP client) to local LLMs via LM Studio.
 
@@ -6,8 +6,8 @@ MCP server that connects Claude Code (or any MCP client) to local LLMs via LM St
 
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![LM Studio](https://img.shields.io/badge/LM%20Studio-0.3.29+-green.svg)](https://lmstudio.ai/)
-[![Tests](https://img.shields.io/badge/tests-171%2F172%20passing-brightgreen.svg)](#testing)
+[![LM Studio](https://img.shields.io/badge/LM%20Studio-0.3.32+-green.svg)](https://lmstudio.ai/)
+[![Tests](https://img.shields.io/badge/tests-317%20passing-brightgreen.svg)](#testing)
 
 ---
 
@@ -158,6 +158,84 @@ autonomous_with_mcp(
 - Backward compatible (model parameter is optional)
 - Handles IDLE state (models auto-activate)
 
+### Structured Output (v3.2.0) - JSON Schema
+
+Force the LLM to output valid JSON conforming to a schema (LM Studio v0.3.32+):
+
+```python
+# Get structured JSON output
+chat_completion(
+    prompt="List 3 programming languages with their use cases",
+    response_format={
+        "type": "json_schema",
+        "json_schema": {
+            "name": "languages",
+            "schema": {
+                "type": "object",
+                "properties": {
+                    "languages": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "name": {"type": "string"},
+                                "use_case": {"type": "string"}
+                            }
+                        }
+                    }
+                },
+                "required": ["languages"]
+            }
+        }
+    }
+)
+# Returns: {"languages": [{"name": "Python", "use_case": "Data science"}, ...]}
+```
+
+**Features**:
+- JSON schema validation with `validate_json_schema` tool
+- Schema depth and complexity limits (max 10 levels, 100 properties)
+- `json_object` mode for unstructured but valid JSON
+- Backward compatible (response_format is optional)
+
+**Note**: Models < 7B parameters may produce invalid JSON. Recommended: Qwen 7B+, Llama 3 8B+, or Mistral 7B+.
+
+### Vision/Image Analysis (v3.2.0)
+
+Analyze images using multimodal models (LM Studio v0.3.30+):
+
+```python
+# Analyze any image (auto-detects input format)
+analyze_image(image="/path/to/photo.jpg")
+analyze_image(image="https://example.com/image.png")
+analyze_image(image="data:image/png;base64,...")
+
+# Generate descriptions with different styles
+describe_image(image="/path/to/image.jpg", style="detailed")  # or "brief", "creative", "technical"
+
+# Compare multiple images
+compare_images(
+    images=["design_v1.png", "design_v2.png"],
+    comparison_type="differences"  # or "similarities", "both"
+)
+
+# Extract text (OCR-like)
+extract_text_from_image(image="/path/to/document.png")
+
+# Ask specific questions
+answer_about_image(
+    image="/path/to/chart.png",
+    question="What is the value shown for Q3 2024?"
+)
+```
+
+**Supported Input Formats** (auto-detected):
+- File paths: `/path/to/image.png`, `./relative/path.jpg`
+- URLs: `https://example.com/image.jpg`
+- Base64: `data:image/png;base64,...` or raw base64 strings
+
+**Note**: Requires a vision-capable model (LLaVA, Qwen-VL, GPT-4V compatible). Text-only models will return an error.
+
 ### Dynamic MCP Discovery
 
 No hardcoded configurations. Works with any MCP in your `.mcp.json`:
@@ -195,20 +273,29 @@ autonomous_discover_and_execute("Complete this task")
 
 ## Available Tools
 
-### Core LM Studio (7 tools)
+### Core LM Studio (8 tools)
 1. `health_check` - Check LM Studio connection
 2. `list_models` - List available models
 3. `get_current_model` - Get loaded model info
-4. `chat_completion` - Chat completions
+4. `chat_completion` - Chat completions (with optional `response_format` for structured output)
 5. `text_completion` - Text/code completion
 6. `generate_embeddings` - Vector embeddings
 7. `create_response` - Stateful conversations
+8. `validate_json_schema` - Validate JSON schema before use with structured output
+
+### Vision Tools (6 tools)
+9. `analyze_image` - Comprehensive image analysis
+10. `describe_image` - Generate descriptions (detailed/brief/creative/technical)
+11. `compare_images` - Compare multiple images
+12. `extract_text_from_image` - OCR-like text extraction
+13. `identify_objects` - Identify objects with locations
+14. `answer_about_image` - Answer specific questions about images
 
 ### Autonomous MCP (4 tools)
-8. `autonomous_with_mcp` - Use any MCP by name
-9. `autonomous_with_multiple_mcps` - Use multiple MCPs
-10. `autonomous_discover_and_execute` - Auto-discover all MCPs
-11. `list_available_mcps` - List discovered MCPs
+15. `autonomous_with_mcp` - Use any MCP by name
+16. `autonomous_with_multiple_mcps` - Use multiple MCPs
+17. `autonomous_discover_and_execute` - Auto-discover all MCPs
+18. `list_available_mcps` - List discovered MCPs
 
 ---
 

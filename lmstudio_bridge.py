@@ -9,6 +9,9 @@ import os
 import asyncio
 from typing import List, Dict, Any, Optional, Union
 
+# Import centralized safe_call_tool wrapper
+from mcp_client.type_coercion import safe_call_tool
+
 # Import constants
 from config.constants import (
     DEFAULT_LMSTUDIO_HOST,
@@ -40,7 +43,7 @@ async def health_check() -> str:
         A message indicating whether the LM Studio API is running.
     """
     try:
-        response = requests.get(f"{LMSTUDIO_API_BASE}/models")
+        response = requests.get(f"{LMSTUDIO_API_BASE}/models", timeout=5)
         if response.status_code == 200:
             return "LM Studio API is running and accessible."
         else:
@@ -56,7 +59,7 @@ async def list_models() -> str:
         A formatted list of available models.
     """
     try:
-        response = requests.get(f"{LMSTUDIO_API_BASE}/models")
+        response = requests.get(f"{LMSTUDIO_API_BASE}/models", timeout=10)
         if response.status_code != 200:
             return f"Failed to fetch models. Status code: {response.status_code}"
         
@@ -89,7 +92,8 @@ async def get_current_model() -> str:
                 "messages": [{"role": "system", "content": "What model are you?"}],
                 "temperature": 0.7,
                 "max_tokens": 10
-            }
+            },
+            timeout=10
         )
         
         if response.status_code != 200:
@@ -133,7 +137,8 @@ async def chat_completion(prompt: str, system_prompt: str = "", temperature: flo
                 "messages": messages,
                 "temperature": temperature,
                 "max_tokens": max_tokens
-            }
+            },
+            timeout=58  # Under Claude Code's 60s MCP timeout limit
         )
 
         if response.status_code != 200:
@@ -459,8 +464,8 @@ async def test_autonomous_poc(task: str, file_path: str = None) -> str:
 
                             log_info(f"Executing {tool_name} via filesystem MCP with args: {tool_args}")
 
-                            # Call REAL MCP tool
-                            result = await session.call_tool(tool_name, tool_args)
+                            # Use safe_call_tool wrapper - handles type coercion automatically
+                            result = await safe_call_tool(session, tool_name, tool_args)
 
                             log_info(f"MCP result: {str(result.content)[:200]}...")
 

@@ -22,6 +22,7 @@ from tools.embeddings import register_embeddings_tools
 from tools.autonomous import register_autonomous_tools
 from tools.dynamic_autonomous_register import register_dynamic_autonomous_tools
 from tools.lms_cli_tools import register_lms_cli_tools
+from tools.vision import register_vision_tools
 
 
 # Initialize FastMCP server
@@ -72,6 +73,10 @@ def initialize_server():
     # LMS CLI tools (model lifecycle management)
     register_lms_cli_tools(mcp)
     logger.info("Registered LMS CLI tools (model management enabled)")
+
+    # Vision tools (image analysis, multimodal support)
+    register_vision_tools(mcp, llm_client)
+    logger.info("Registered vision tools (multimodal support enabled)")
 
     log_info("Server initialization complete")
 
