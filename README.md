@@ -1,4 +1,4 @@
-# LM Studio Bridge Enhanced v3.2.0-alpha.1
+# LM Studio Bridge Enhanced v3.2.0
 
 MCP server that connects Claude Code (or any MCP client) to local LLMs via LM Studio.
 
@@ -7,7 +7,7 @@ MCP server that connects Claude Code (or any MCP client) to local LLMs via LM St
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![LM Studio](https://img.shields.io/badge/LM%20Studio-0.3.32+-green.svg)](https://lmstudio.ai/)
-[![Tests](https://img.shields.io/badge/tests-317%20passing-brightgreen.svg)](#testing)
+[![Tests](https://img.shields.io/badge/tests-331%20passing-brightgreen.svg)](#testing)
 
 ---
 
@@ -236,6 +236,48 @@ answer_about_image(
 
 **Note**: Requires a vision-capable model (LLaVA, Qwen-VL, GPT-4V compatible). Text-only models will return an error.
 
+### Model Capability Registry (v3.2.0)
+
+Query model capabilities, VRAM requirements, and find the best model for your task:
+
+```python
+# List all downloaded models with metadata
+lms_list_downloaded_models()
+# Returns: [{"model_key": "qwen/qwen3-coder-30b", "size_bytes": 19000000000, ...}]
+
+# Get detailed capabilities with BFCL benchmark scores
+get_model_capabilities(model="qwen/qwen3-coder-30b")
+# Returns: {
+#   "model_key": "qwen/qwen3-coder-30b",
+#   "tool_use_score": 0.933,  # BFCL benchmark
+#   "estimated_vram_gb": 18.5,
+#   "is_thinking_model": false,
+#   "max_context_length": 32768
+# }
+
+# Intelligent model resolution with fallback
+lms_resolve_model(
+    requested_model="large-model-not-downloaded",
+    task_type="coding"
+)
+# Returns: Alternative model suggestion if requested not available
+
+# Download a model
+lms_download_model(model_key="huggingface/model-name")
+```
+
+**Features**:
+- VRAM estimation (accounts for quantization, KV cache, context length)
+- Thinking model detection (QwQ, DeepSeek-R1, o1 patterns)
+- BFCL benchmark scores for tool calling capability
+- Intelligent fallback suggestions
+- Persistent cache with delta updates
+
+**VRAM Estimation Formula**:
+```
+VRAM = (file_size × quant_multiplier + kv_cache) × 1.1 overhead
+```
+
 ### Dynamic MCP Discovery
 
 No hardcoded configurations. Works with any MCP in your `.mcp.json`:
@@ -291,11 +333,17 @@ autonomous_discover_and_execute("Complete this task")
 13. `identify_objects` - Identify objects with locations
 14. `answer_about_image` - Answer specific questions about images
 
+### Model Registry Tools (4 tools)
+15. `lms_list_downloaded_models` - List all downloaded models with metadata
+16. `lms_download_model` - Download models from Hugging Face
+17. `lms_resolve_model` - Intelligent model resolution with fallback
+18. `get_model_capabilities` - Get capabilities with BFCL benchmark scores
+
 ### Autonomous MCP (4 tools)
-15. `autonomous_with_mcp` - Use any MCP by name
-16. `autonomous_with_multiple_mcps` - Use multiple MCPs
-17. `autonomous_discover_and_execute` - Auto-discover all MCPs
-18. `list_available_mcps` - List discovered MCPs
+19. `autonomous_with_mcp` - Use any MCP by name
+20. `autonomous_with_multiple_mcps` - Use multiple MCPs
+21. `autonomous_discover_and_execute` - Auto-discover all MCPs
+22. `list_available_mcps` - List discovered MCPs
 
 ---
 
@@ -329,6 +377,10 @@ The bridge acts as both:
 | `LMSTUDIO_PORT` | `1234` | LM Studio API port |
 | `MCP_JSON_PATH` | (auto-detect) | Custom `.mcp.json` path |
 | `DEFAULT_MODEL` | (auto-detect) | Default model to use (e.g., `qwen/qwen3-coder-30b`) |
+| `LMS_MAX_RETRIES` | `3` | Max retry attempts for LMS CLI operations |
+| `LMS_RETRY_BASE_DELAY` | `1.0` | Base delay between retries (seconds) |
+| `LMS_RETRY_MAX_DELAY` | `10.0` | Maximum delay cap (seconds) |
+| `LMS_EXTRA_NUMERIC_PARAMS` | `""` | Additional numeric params for type coercion (comma-separated) |
 
 ### System Prompt (Recommended)
 
@@ -396,9 +448,15 @@ cd lmstudio-bridge-enhanced
 python3 -m pytest tests/ -v
 ```
 
-**Test Results**: 171/172 tests passing (99.4%)
+**Test Results**: 331 tests passing (100%)
 
-The single failing test is for LM Studio's `/v1/responses` endpoint which is not yet implemented by LM Studio. Use `chat_completion()` instead.
+Test coverage includes:
+- Structured output (51 tests)
+- Vision/multimodal (50 tests)
+- Type coercion (16 tests)
+- Model registry (18 tests)
+- Retry logic (8 tests)
+- E2E multi-model workflows
 
 ---
 
@@ -440,20 +498,32 @@ See [Troubleshooting Guide](docs/TROUBLESHOOTING.md) for more.
 
 ## Version History
 
-### v3.1.0 (November 2, 2025) - Current
+### v3.2.0 (November 23, 2025) - Current
+- **Structured JSON Output** - Force valid JSON with schema validation
+- **Vision/Multimodal Support** - 6 new tools for image analysis
+- **Model Capability Registry** - BFCL scores, VRAM estimation, fallback
+- **Autonomous Agent Improvements** - Type coercion, tool_choice=required
+- **Resilience** - Retry logic with exponential backoff, API timeouts
+- 331 tests (up from 171), 100% pass rate
+- 44 commits, 10 new MCP tools
+
+### v3.1.1 (November 4, 2025)
+- Ultra-prominent model parameter documentation
+- MCP selection decision tree
+- Anti-patterns documentation
+
+### v3.1.0 (November 2, 2025)
 - Multi-model support with validation
 - Model validation layer (async, cached)
 - 7 custom exception classes
 - Critical IDLE state bug fix
-- 99.4% test coverage
-- 100% backward compatible
 
 ### v3.0.0 (October 2025)
 - Reasoning display enhancements
 - Evidence-based safety features
 - Type safety improvements
 
-See [RELEASE_NOTES_v3.1.0.md](RELEASE_NOTES_v3.1.0.md) for complete details.
+See [RELEASE_NOTES_v3.2.0.md](RELEASE_NOTES_v3.2.0.md) for complete details.
 
 ---
 
