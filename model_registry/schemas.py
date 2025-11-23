@@ -202,8 +202,10 @@ class ModelMetadata:
     architecture: str
     size_billions: Optional[float] = None
     size_bytes: Optional[int] = None
+    estimated_vram_gb: Optional[float] = None  # Estimated VRAM requirement
     quantization: Optional[str] = None
     max_context_length: Optional[int] = None
+    is_thinking_model: bool = False  # Models with 'thinking' often ignore tool results
     capabilities: ModelCapabilities = field(default_factory=ModelCapabilities)
     benchmarks: BenchmarkData = field(default_factory=BenchmarkData)
     recommended_for: List[str] = field(default_factory=list)
@@ -227,6 +229,10 @@ class ModelMetadata:
             result["size_billions"] = self.size_billions
         if self.size_bytes is not None:
             result["size_bytes"] = self.size_bytes
+        if self.estimated_vram_gb is not None:
+            result["estimated_vram_gb"] = self.estimated_vram_gb
+        if self.is_thinking_model:
+            result["is_thinking_model"] = self.is_thinking_model
         if self.quantization:
             result["quantization"] = self.quantization
         if self.max_context_length is not None:
@@ -273,7 +279,9 @@ class ModelMetadata:
             architecture=data["architecture"],
             size_billions=data.get("size_billions"),
             size_bytes=data.get("size_bytes"),
+            estimated_vram_gb=data.get("estimated_vram_gb"),
             quantization=data.get("quantization"),
+            is_thinking_model=data.get("is_thinking_model", False),
             max_context_length=data.get("max_context_length"),
             capabilities=capabilities,
             benchmarks=benchmarks,
@@ -358,6 +366,13 @@ class ModelMetadata:
         # Generate recommended_for based on capabilities
         recommended_for = cls._generate_recommendations(capabilities, model_family)
 
+        # Estimate VRAM from size_bytes
+        size_bytes = lms_data.get("sizeBytes")
+        estimated_vram_gb = cls._estimate_vram_gb(size_bytes, quantization)
+
+        # Detect thinking models (often ignore tool results)
+        is_thinking_model = cls._is_thinking_model(model_id)
+
         return cls(
             model_id=model_id,
             model_type=model_type,
@@ -366,9 +381,11 @@ class ModelMetadata:
             model_family=model_family,
             architecture=lms_data.get("architecture", ""),
             size_billions=size_billions,
-            size_bytes=lms_data.get("sizeBytes"),
+            size_bytes=size_bytes,
+            estimated_vram_gb=estimated_vram_gb,
             quantization=quantization,
             max_context_length=max_context if max_context > 0 else None,
+            is_thinking_model=is_thinking_model,
             capabilities=capabilities,
             benchmarks=BenchmarkData(),
             recommended_for=recommended_for,
@@ -441,6 +458,75 @@ class ModelMetadata:
             pass
 
         return None
+
+    @staticmethod
+    def _estimate_vram_gb(size_bytes: Optional[int], quantization: Optional[str]) -> Optional[float]:
+        """
+        Estimate VRAM requirement from model file size.
+
+        VRAM estimation is roughly equal to file size for most quantized models.
+        For higher precision (FP16/FP32), VRAM may be higher.
+
+        Args:
+            size_bytes: Model file size in bytes
+            quantization: Quantization method (e.g., "Q4_K_M", "Q8", "FP16")
+
+        Returns:
+            Estimated VRAM requirement in GB, or None if unknown
+        """
+        if not size_bytes:
+            return None
+
+        # Base estimate: file size in GB (most accurate for quantized models)
+        base_gb = size_bytes / (1024 ** 3)
+
+        # Adjust for quantization type
+        # Q4/Q5/Q6/Q8 models: VRAM ≈ file size
+        # FP16: VRAM can be ~1.2x file size due to activations
+        # FP32: VRAM can be ~1.5x file size
+        multiplier = 1.0
+        if quantization:
+            quant_lower = quantization.lower()
+            if "fp32" in quant_lower or "f32" in quant_lower:
+                multiplier = 1.5
+            elif "fp16" in quant_lower or "f16" in quant_lower:
+                multiplier = 1.2
+            # Q4/Q5/Q6/Q8 models: multiplier stays at 1.0
+
+        # Add ~10% overhead for KV cache and runtime buffers
+        estimated = base_gb * multiplier * 1.1
+
+        # Round to 1 decimal place
+        return round(estimated, 1)
+
+    @staticmethod
+    def _is_thinking_model(model_id: str) -> bool:
+        """
+        Detect if model is a 'thinking' model.
+
+        Thinking models (like QwQ, DeepSeek-R1, o1-style) often have issues with
+        tool calling because they tend to ignore tool results and continue reasoning.
+
+        Args:
+            model_id: Model identifier
+
+        Returns:
+            True if model appears to be a thinking/reasoning model
+        """
+        model_lower = model_id.lower()
+
+        # Known thinking model patterns
+        thinking_patterns = [
+            "thinking",
+            "qwq",           # QwQ models
+            "deepseek-r1",   # DeepSeek R1
+            "r1-",           # R1 variants
+            "-r1",
+            "o1-",           # o1-style models
+            "reasoning",
+        ]
+
+        return any(pattern in model_lower for pattern in thinking_patterns)
 
     @staticmethod
     def _infer_reasoning_capability(model_id: str, family: str) -> Optional[bool]:
