@@ -39,6 +39,7 @@ class LMSHelper:
     """Helper for LM Studio CLI operations (optional)."""
 
     _is_installed = None  # Cache the installation check
+    LM_STUDIO_BASE_URL = "http://localhost:1234/v1"  # Default LM Studio API endpoint
 
     @classmethod
     def is_installed(cls) -> bool:
