@@ -37,7 +37,7 @@ def test_phase_2_3():
     print("TEST SUITE 1: Exception Imports")
     print("-" * 80)
 
-    file_path = Path(__file__).parent / "llm" / "llm_client.py"
+    file_path = Path(__file__).parent.parent.parent / "llm" / "llm_client.py"
     with open(file_path, 'r') as f:
         content = f.read()
 

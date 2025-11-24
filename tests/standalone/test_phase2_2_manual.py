@@ -18,7 +18,7 @@ def test_phase_2_2_manual():
     print("=" * 80)
     print()
 
-    file_path = Path(__file__).parent / "tools" / "dynamic_autonomous_register.py"
+    file_path = Path(__file__).parent.parent.parent / "tools" / "dynamic_autonomous_register.py"
     with open(file_path, 'r') as f:
         content = f.read()
 
