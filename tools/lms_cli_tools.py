@@ -30,8 +30,8 @@ import sys
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 
-# Add parent directory to path
-sys.path.insert(0, str(Path(__file__).parent.parent))
+# Add parent directory to path for imports
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from utils.lms_helper import LMSHelper
 from utils.model_fallback import get_fallback_manager, ModelAlternative
