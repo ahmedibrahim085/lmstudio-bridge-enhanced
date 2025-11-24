@@ -19,7 +19,7 @@ python3 -c "from mcp_client.discovery import MCPDiscovery; print(MCPDiscovery().
 python3 -c "from mcp_client.discovery import MCPDiscovery; print(MCPDiscovery().list_available_mcps())"
 
 # 4. Test MCP connection
-python3 test_dynamic_mcp_discovery.py
+python3 tests/standalone/test_dynamic_mcp_discovery.py
 ```
 
 ---
@@ -416,9 +416,9 @@ Error executing tool 'read_file': File not found: /path/to/file.txt
 
 2. **Run tests individually** to isolate issues:
    ```bash
-   python3 test_lmstudio_integration.py
-   python3 test_dynamic_discovery.py
-   python3 test_autonomous_tools.py
+   python3 tests/standalone/test_lmstudio_integration.py
+   python3 tests/standalone/test_dynamic_discovery.py
+   python3 tests/standalone/test_autonomous_tools.py
    ```
 
 3. **Check test logs** for specific error messages
@@ -1045,12 +1045,12 @@ python3 -c "from mcp_client.discovery import MCPDiscovery; print(MCPDiscovery().
 python3 -m json.tool < ~/.lmstudio/mcp.json
 
 # Run tests
-python3 test_lmstudio_integration.py
-python3 test_dynamic_discovery.py
-python3 test_autonomous_tools.py
+python3 tests/standalone/test_lmstudio_integration.py
+python3 tests/standalone/test_dynamic_discovery.py
+python3 tests/standalone/test_autonomous_tools.py
 
 # Performance benchmark
-python3 benchmark_hot_reload.py
+python3 scripts/benchmark_hot_reload.py
 ```
 
 ---
