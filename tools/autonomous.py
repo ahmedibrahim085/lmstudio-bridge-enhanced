@@ -189,113 +189,6 @@ class AutonomousExecutionTools:
         # No reasoning available or reasoning was empty - return content only
         return content if content else "No content in response"
 
-    async def _execute_autonomous_stateful(
-        self,
-        task: str,
-        session: Any,
-        openai_tools: List[Dict],
-        executor: ToolExecutor,
-        max_rounds: int,
-        max_tokens: int
-    ) -> str:
-        """
-        Core implementation using stateful /v1/responses API.
-
-        ⚠️ NOTE: This implementation does NOT currently work with tool execution
-        because tool results are not passed back to the LLM. Preserved for
-        future use when we figure out how to properly pass tool results with
-        the create_response API.
-
-        For tool execution, use _execute_autonomous_with_tools instead.
-
-        Status: NOT CURRENTLY USED (see Option 4A implementation)
-        Date: 2025-10-31
-        See: OPTION_4A_IMPLEMENTATION_PLAN.md, ROOT_CAUSE_ANALYSIS_TOOL_RESULTS_NOT_RETURNED.md
-
-        This was the optimized implementation with constant token usage.
-        Uses LM Studio's stateful conversation API where the server maintains
-        conversation history automatically. The optimization is preserved for
-        future research into proper tool result passing with create_response.
-
-        Args:
-            task: The task for the local LLM
-            session: Active MCP session
-            openai_tools: List of tools in OpenAI format
-            executor: Tool executor for the session
-            max_rounds: Maximum rounds for autonomous loop
-            max_tokens: Maximum tokens per response
-
-        Returns:
-            Final answer from the LLM
-        """
-        # Autonomous loop with /v1/responses API (stateful!)
-        previous_response_id = None
-
-        for round_num in range(max_rounds):
-            # Determine input text
-            if round_num == 0:
-                input_text = task
-            else:
-                # For subsequent rounds, just say "Continue"
-                # Tool results are automatically available via server-side state
-                input_text = "Continue with the task based on the tool results."
-
-            # Call /v1/responses with tools (auto-converts to flattened format)
-            response = self.llm.create_response(
-                input_text=input_text,
-                tools=openai_tools,
-                previous_response_id=previous_response_id,
-                model="default"
-            )
-
-            # Save response ID for next round
-            previous_response_id = response["id"]
-
-            # DEBUG: Log the entire response to understand what LLM is returning
-            logger.info(f"[Round {round_num + 1}] LLM Response: {json.dumps(response, indent=2)}")
-
-            # Process output array (not choices!)
-            output = response.get("output", [])
-
-            # Check for function calls
-            function_calls = [
-                item for item in output
-                if item.get("type") == "function_call"
-            ]
-
-            # DEBUG: Log what we found
-            logger.info(f"[Round {round_num + 1}] Found {len(function_calls)} function_calls in output")
-            if not function_calls:
-                # Log what types we DID find
-                types_found = [item.get("type") for item in output]
-                logger.info(f"[Round {round_num + 1}] Output types found instead: {types_found}")
-
-            if function_calls:
-                # Execute each tool
-                for fc in function_calls:
-                    tool_name = fc["name"]
-                    tool_args = json.loads(fc["arguments"])
-
-                    # Execute via MCP
-                    await executor.execute_tool(tool_name, tool_args)
-
-                # Continue loop (tool results automatically available to LLM)
-                continue
-
-            # Check for final answer (message output)
-            for item in output:
-                if item.get("type") == "message":
-                    # Extract text from content
-                    content = item.get("content", [])
-                    for content_item in content:
-                        if content_item.get("type") == "output_text":
-                            return content_item.get("text", "")
-
-            # If neither function calls nor message, something unexpected happened
-            return f"Unexpected output format in round {round_num + 1}"
-
-        return f"Max rounds ({max_rounds}) reached without final answer."
-
     async def _execute_autonomous_with_tools(
         self,
         task: str,
@@ -506,9 +399,7 @@ class AutonomousExecutionTools:
                 openai_tools = SchemaConverter.mcp_tools_to_openai(all_tools)
                 executor = ToolExecutor(session)
 
-                # Using _execute_autonomous_with_tools (chat_completion)
-                # instead of _execute_autonomous_stateful (create_response)
-                # because we need explicit tool result passing.
+                # Uses chat_completion API with explicit tool result passing
                 # See Option 4A implementation: OPTION_4A_IMPLEMENTATION_PLAN.md
                 return await self._execute_autonomous_with_tools(
                     task=task,
@@ -762,9 +653,7 @@ class AutonomousExecutionTools:
                 openai_tools = SchemaConverter.mcp_tools_to_openai(all_tools)
                 executor = ToolExecutor(session)
 
-                # Using _execute_autonomous_with_tools (chat_completion)
-                # instead of _execute_autonomous_stateful (create_response)
-                # because we need explicit tool result passing.
+                # Uses chat_completion API with explicit tool result passing
                 # See Option 4A implementation: OPTION_4A_IMPLEMENTATION_PLAN.md
                 return await self._execute_autonomous_with_tools(
                     task=task,
@@ -835,9 +724,7 @@ class AutonomousExecutionTools:
                 openai_tools = SchemaConverter.mcp_tools_to_openai(all_tools)
                 executor = ToolExecutor(session)
 
-                # Using _execute_autonomous_with_tools (chat_completion)
-                # instead of _execute_autonomous_stateful (create_response)
-                # because we need explicit tool result passing.
+                # Uses chat_completion API with explicit tool result passing
                 # See Option 4A implementation: OPTION_4A_IMPLEMENTATION_PLAN.md
                 return await self._execute_autonomous_with_tools(
                     task=task,
@@ -920,9 +807,7 @@ class AutonomousExecutionTools:
                 openai_tools = SchemaConverter.mcp_tools_to_openai(all_tools)
                 executor = ToolExecutor(session)
 
-                # Using _execute_autonomous_with_tools (chat_completion)
-                # instead of _execute_autonomous_stateful (create_response)
-                # because we need explicit tool result passing.
+                # Uses chat_completion API with explicit tool result passing
                 # See Option 4A implementation: OPTION_4A_IMPLEMENTATION_PLAN.md
                 return await self._execute_autonomous_with_tools(
                     task=task,
