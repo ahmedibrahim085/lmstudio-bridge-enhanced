@@ -180,13 +180,17 @@ ALTERNATIVE:
         """
         Load a model using LMS CLI with configurable TTL.
 
+        IMPORTANT: This method checks if the model is already loaded (by base name)
+        before attempting to load. This prevents creating duplicate instances like
+        "model:2", "model:3" that waste memory.
+
         Args:
             model_name: Name of model to load
             keep_loaded: If True, use longer TTL (10m); if False, use shorter TTL (5m)
             ttl: Optional explicit TTL override in seconds
 
         Returns:
-            True if successful, False otherwise
+            True if successful (or already loaded), False otherwise
 
         Raises:
             ValueError: If model_name is None
@@ -203,6 +207,13 @@ ALTERNATIVE:
         if not cls.is_installed():
             logger.warning("LMS CLI not available - cannot load model")
             return False
+
+        # CRITICAL: Check if model is already loaded to prevent duplicates
+        # LM Studio creates instances like "model:2", "model:3" when the same
+        # model is loaded multiple times without unloading first
+        if cls.is_model_loaded(model_name):
+            logger.info(f"✅ Model '{model_name}' already loaded - skipping load to prevent duplicate")
+            return True
 
         try:
             cmd = ["lms", "load", model_name, "--yes"]  # --yes suppresses confirmations
