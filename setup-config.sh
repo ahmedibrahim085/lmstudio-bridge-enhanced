@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Setup script to configure lmstudio-bridge-enhanced for your system
 # This script creates the MCP configuration with the correct paths
 
