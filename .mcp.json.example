@@ -10,6 +10,14 @@
         "LMSTUDIO_HOST": "localhost",
         "LMSTUDIO_PORT": "1234"
       }
+    },
+    "anythingllm-rag": {
+      "command": "npx",
+      "args": ["-y", "anythingllm-mcp-server@2.0.0"],
+      "env": {
+        "ANYTHINGLLM_API_KEY": "YOUR_API_KEY_HERE",
+        "ANYTHINGLLM_BASE_URL": "http://localhost:3001"
+      }
     }
   }
 }
