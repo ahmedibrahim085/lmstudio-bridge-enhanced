@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # Comprehensive Standalone Test Runner
 # Date: November 2, 2025
@@ -7,14 +7,19 @@
 RESULTS_FILE="/tmp/standalone_tests_results.txt"
 SUMMARY_FILE="/tmp/standalone_tests_summary.txt"
 
+# Get the script directory (project root)
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+TESTS_DIR="${SCRIPT_DIR}/tests/standalone"
+
 echo "=== STANDALONE TEST SCRIPTS EXECUTION ===" | tee "$RESULTS_FILE"
 echo "Started at: $(date)" | tee -a "$RESULTS_FILE"
+echo "Tests directory: ${TESTS_DIR}" | tee -a "$RESULTS_FILE"
 echo "" | tee -a "$RESULTS_FILE"
 
-cd /Users/ahmedmaged/ai_storage/MyMCPs/lmstudio-bridge-enhanced
+cd "$SCRIPT_DIR"
 
-# Get all test scripts
-TEST_SCRIPTS=$(ls -1 test*.py 2>/dev/null)
+# Get all test scripts from tests/standalone/
+TEST_SCRIPTS=$(ls -1 "${TESTS_DIR}"/test*.py 2>/dev/null)
 TOTAL_SCRIPTS=$(echo "$TEST_SCRIPTS" | wc -l | tr -d ' ')
 PASSED=0
 FAILED=0
