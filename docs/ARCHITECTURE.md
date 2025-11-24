@@ -292,7 +292,7 @@ class DynamicAutonomousAgent:
 
 ### Performance
 
-**Benchmark results** (benchmark_hot_reload.py):
+**Benchmark results** (scripts/benchmark_hot_reload.py):
 
 ```
 Hot reload per call:       0.0110 ms (11 microseconds)
@@ -957,14 +957,14 @@ def get_connection_params(self, mcp_name: str):
 
 ### Unit Tests
 
-- `test_dynamic_mcp_discovery.py` - Discovery system
-- `test_generic_tool_discovery.py` - Tool discovery for any MCP
-- `benchmark_hot_reload.py` - Performance verification
+- `tests/standalone/test_dynamic_mcp_discovery.py` - Discovery system
+- `tests/standalone/test_generic_tool_discovery.py` - Tool discovery for any MCP
+- `scripts/benchmark_hot_reload.py` - Performance verification
 
 ### Integration Tests
 
-- `test_autonomous_tools.py` - End-to-end autonomous execution
-- `test_local_llm_uses_sqlite.py` - Dynamically added MCP
+- `tests/standalone/test_autonomous_tools.py` - End-to-end autonomous execution
+- `tests/standalone/test_local_llm_uses_sqlite.py` - Dynamically added MCP
 
 ---
 

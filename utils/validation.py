@@ -4,6 +4,7 @@ Input validation utilities for autonomous execution tools.
 """
 
 import os
+import re
 from pathlib import Path
 from typing import Optional, Union, List
 
@@ -262,10 +263,93 @@ def validate_max_tokens(max_tokens: int, model_max: Optional[int] = None) -> int
     return max_tokens
 
 
+# Pattern for valid MCP server names
+# Allows: alphanumeric, @, /, -, _, .
+# Examples: "filesystem", "@modelcontextprotocol/server-filesystem", "my_custom-mcp.v2"
+MCP_NAME_PATTERN = re.compile(r'^[a-zA-Z0-9@/_.-]+$')
+
+# Pattern for valid model names
+# Allows: alphanumeric, /, -, _, .
+# Examples: "qwen/qwen3-4b", "mistral-7b-instruct-v0.2", "local_model.gguf"
+MODEL_NAME_PATTERN = re.compile(r'^[a-zA-Z0-9/_.-]+$')
+
+
+def validate_mcp_name(name: str) -> str:
+    """Validate MCP server name to prevent injection attacks.
+
+    Args:
+        name: MCP server name to validate
+
+    Returns:
+        Validated name (unchanged if valid)
+
+    Raises:
+        ValidationError: If name contains invalid characters
+
+    Examples:
+        >>> validate_mcp_name("filesystem")  # Valid
+        'filesystem'
+        >>> validate_mcp_name("@modelcontextprotocol/server-filesystem")  # Valid
+        '@modelcontextprotocol/server-filesystem'
+        >>> validate_mcp_name("bad;name")  # Raises ValidationError
+    """
+    if not name:
+        raise ValidationError("MCP name cannot be empty")
+
+    if not isinstance(name, str):
+        raise ValidationError(f"MCP name must be a string, got {type(name).__name__}")
+
+    if not MCP_NAME_PATTERN.match(name):
+        raise ValidationError(
+            f"Invalid MCP name: '{name}'. "
+            f"Names may only contain alphanumeric characters, @, /, -, _, and ."
+        )
+
+    return name
+
+
+def validate_model_name(name: str) -> str:
+    """Validate model name to prevent injection attacks.
+
+    Args:
+        name: Model name to validate
+
+    Returns:
+        Validated name (unchanged if valid)
+
+    Raises:
+        ValidationError: If name contains invalid characters
+
+    Examples:
+        >>> validate_model_name("qwen/qwen3-4b")  # Valid
+        'qwen/qwen3-4b'
+        >>> validate_model_name("mistral-7b-instruct-v0.2")  # Valid
+        'mistral-7b-instruct-v0.2'
+        >>> validate_model_name("bad;model")  # Raises ValidationError
+    """
+    if not name:
+        raise ValidationError("Model name cannot be empty")
+
+    if not isinstance(name, str):
+        raise ValidationError(f"Model name must be a string, got {type(name).__name__}")
+
+    if not MODEL_NAME_PATTERN.match(name):
+        raise ValidationError(
+            f"Invalid model name: '{name}'. "
+            f"Names may only contain alphanumeric characters, /, -, _, and ."
+        )
+
+    return name
+
+
 __all__ = [
     "ValidationError",
     "validate_task",
     "validate_working_directory",
     "validate_max_rounds",
-    "validate_max_tokens"
+    "validate_max_tokens",
+    "validate_mcp_name",
+    "validate_model_name",
+    "MCP_NAME_PATTERN",
+    "MODEL_NAME_PATTERN"
 ]

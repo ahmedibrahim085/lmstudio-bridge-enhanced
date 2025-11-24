@@ -85,7 +85,7 @@ Create a test configuration:
   "mcpServers": {
     "lmstudio-bridge-dev": {
       "command": "python3",
-      "args": ["/path/to/your/fork/lmstudio_bridge.py"],
+      "args": ["/path/to/your/fork/main.py"],
       "env": {
         "LMSTUDIO_HOST": "localhost",
         "LMSTUDIO_PORT": "1234",
@@ -120,8 +120,8 @@ Create a test configuration:
 
 ```
 lmstudio-bridge-enhanced/
-├── lmstudio_bridge.py          # Main entry point
-├── main.py                     # FastMCP server setup
+├── main.py                     # Main entry point (FastMCP server)
+├── lmstudio_bridge.py          # DEPRECATED - use main.py instead
 ├── config.py                   # Configuration
 ├── requirements.txt            # Dependencies
 │
@@ -140,10 +140,16 @@ lmstudio-bridge-enhanced/
 │   └── dynamic_autonomous_register.py  # Tool registration
 │
 ├── tests/                      # Test files
-│   ├── test_lmstudio_integration.py
-│   ├── test_dynamic_discovery.py
-│   ├── test_autonomous_tools.py
-│   └── benchmark_hot_reload.py
+│   ├── conftest.py             # Pytest fixtures
+│   ├── standalone/             # Standalone test scripts
+│   └── ...
+│
+├── scripts/                    # Development utilities
+│   ├── benchmark_hot_reload.py # Performance benchmarking
+│   └── ...
+│
+├── examples/                   # Usage examples
+│   └── llm_client_example.py
 │
 └── docs/                       # Documentation
     ├── QUICKSTART.md
@@ -189,7 +195,7 @@ python3 test_dynamic_discovery.py
 python3 test_autonomous_tools.py
 
 # Run performance benchmarks
-python3 benchmark_hot_reload.py
+python3 scripts/benchmark_hot_reload.py
 ```
 
 ### 4. Commit Changes
@@ -537,7 +543,7 @@ import pdb; pdb.set_trace()
 
 ```bash
 # Benchmark hot reload
-python3 benchmark_hot_reload.py
+python3 scripts/benchmark_hot_reload.py
 
 # Profile code
 python3 -m cProfile -s cumtime your_script.py

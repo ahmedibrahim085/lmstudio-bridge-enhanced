@@ -408,7 +408,24 @@ def get_mcp_discovery(mcp_json_path: Optional[str] = None) -> MCPDiscovery:
     return _discovery_instance
 
 
+def reset_mcp_discovery() -> None:
+    """
+    Reset the global MCP discovery instance.
+
+    This is primarily useful for testing to ensure test isolation.
+    After calling this function, the next call to get_mcp_discovery()
+    will create a fresh instance.
+
+    Example:
+        >>> # In test teardown
+        >>> reset_mcp_discovery()
+    """
+    global _discovery_instance
+    _discovery_instance = None
+
+
 __all__ = [
     "MCPDiscovery",
-    "get_mcp_discovery"
+    "get_mcp_discovery",
+    "reset_mcp_discovery"
 ]

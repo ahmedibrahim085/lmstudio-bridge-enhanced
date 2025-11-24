@@ -17,6 +17,11 @@ import logging
 from datetime import datetime
 from typing import Dict, List, Optional, Any
 
+# Enable nested asyncio.run() calls to prevent RuntimeError when called from
+# within an already-running event loop (e.g., from FastMCP async context)
+import nest_asyncio
+nest_asyncio.apply()
+
 from .schemas import (
     ModelMetadata,
     ModelCapabilities,

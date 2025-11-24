@@ -1,4 +1,25 @@
 #!/usr/bin/env python3
+"""
+DEPRECATED: This module is deprecated and will be removed in a future version.
+
+Please use main.py as the entry point instead. The setup.py entry point
+already points to main:main.
+
+Migration:
+  Old: python lmstudio_bridge.py
+  New: python main.py (or use the installed 'lmstudio-mcp' command)
+
+This module is kept for backward compatibility but may be removed.
+"""
+
+import warnings
+warnings.warn(
+    "lmstudio_bridge.py is deprecated. Use main.py instead. "
+    "The 'lmstudio-mcp' command already uses main.py.",
+    DeprecationWarning,
+    stacklevel=2
+)
+
 from mcp.server.fastmcp import FastMCP
 from mcp import ClientSession
 from mcp.client.stdio import stdio_client, StdioServerParameters
@@ -297,7 +318,7 @@ async def create_response(input_text: str, previous_response_id: Optional[str] =
             try:
                 current_model_response = await get_current_model()
                 model = current_model_response.replace("Currently loaded model: ", "").strip()
-            except:
+            except Exception:
                 from config.constants import DEFAULT_FALLBACK_MODEL
                 model = DEFAULT_FALLBACK_MODEL
 

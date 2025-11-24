@@ -41,6 +41,58 @@ class LMSHelper:
     _is_installed = None  # Cache the installation check
     LM_STUDIO_BASE_URL = "http://localhost:1234/v1"  # Default LM Studio API endpoint
 
+    @staticmethod
+    def _get_base_model_name(model_identifier: str) -> str:
+        """
+        Extract base model name from LM Studio model identifier.
+
+        LM Studio creates instances with suffixes like:
+        - "llama-3.2-3b-instruct" (first instance)
+        - "llama-3.2-3b-instruct:2" (second instance)
+        - "llama-3.2-3b-instruct:9" (ninth instance)
+
+        This function strips the ":N" suffix to get the base model name.
+
+        Args:
+            model_identifier: Full model identifier (may include :N suffix)
+
+        Returns:
+            Base model name without instance suffix
+        """
+        if not model_identifier:
+            return model_identifier
+
+        # Split on ":" and check if last part is a number (instance suffix)
+        parts = model_identifier.rsplit(":", 1)
+        if len(parts) == 2 and parts[1].isdigit():
+            return parts[0]
+        return model_identifier
+
+    @classmethod
+    def _model_matches(cls, loaded_identifier: str, requested_model: str) -> bool:
+        """
+        Check if a loaded model identifier matches the requested model.
+
+        Handles LM Studio's instance numbering where the same model can be loaded
+        multiple times with suffixes like ":2", ":3", etc.
+
+        Args:
+            loaded_identifier: Identifier from loaded model (may have :N suffix)
+            requested_model: Model name requested by user
+
+        Returns:
+            True if the loaded model is an instance of the requested model
+        """
+        if not loaded_identifier or not requested_model:
+            return False
+
+        # Get base names for both
+        loaded_base = cls._get_base_model_name(loaded_identifier)
+        requested_base = cls._get_base_model_name(requested_model)
+
+        # Exact base name match
+        return loaded_base == requested_base
+
     @classmethod
     def is_installed(cls) -> bool:
         """
@@ -128,13 +180,17 @@ ALTERNATIVE:
         """
         Load a model using LMS CLI with configurable TTL.
 
+        IMPORTANT: This method checks if the model is already loaded (by base name)
+        before attempting to load. This prevents creating duplicate instances like
+        "model:2", "model:3" that waste memory.
+
         Args:
             model_name: Name of model to load
             keep_loaded: If True, use longer TTL (10m); if False, use shorter TTL (5m)
             ttl: Optional explicit TTL override in seconds
 
         Returns:
-            True if successful, False otherwise
+            True if successful (or already loaded), False otherwise
 
         Raises:
             ValueError: If model_name is None
@@ -151,6 +207,13 @@ ALTERNATIVE:
         if not cls.is_installed():
             logger.warning("LMS CLI not available - cannot load model")
             return False
+
+        # CRITICAL: Check if model is already loaded to prevent duplicates
+        # LM Studio creates instances like "model:2", "model:3" when the same
+        # model is loaded multiple times without unloading first
+        if cls.is_model_loaded(model_name):
+            logger.info(f"✅ Model '{model_name}' already loaded - skipping load to prevent duplicate")
+            return True
 
         try:
             cmd = ["lms", "load", model_name, "--yes"]  # --yes suppresses confirmations
@@ -309,14 +372,20 @@ ALTERNATIVE:
         According to LM Studio docs: "Any API request to an idle model automatically reactivates it"
         So we treat both "loaded" and "idle" as available.
 
+        CRITICAL FIX: LM Studio creates multiple instances of the same model with
+        suffixes like ":2", ":3", etc. This method now matches by BASE model name,
+        not exact identifier. For example, if "llama-3.2-3b-instruct:2" is loaded,
+        checking for "llama-3.2-3b-instruct" will return True.
+
         Status meanings:
         - "loaded" (active, ready to serve) → Returns True
         - "idle" (present in memory, will auto-activate) → Returns True
         - "loading" (currently loading) → Returns False
+        - "processingprompt" (currently processing) → Returns True (busy but loaded)
         - Not in list → Returns False
 
         Args:
-            model_name: Name of model to check
+            model_name: Name of model to check (base name without instance suffix)
 
         Returns:
             True if model is available (loaded or idle), False otherwise, None if LMS not available
@@ -325,18 +394,27 @@ ALTERNATIVE:
         if models is None:
             return None
 
-        # Check if model exists and verify its status
+        # Check if any loaded model matches the requested base model name
         for m in models:
-            if m.get("identifier") == model_name or m.get("modelKey") == model_name:
+            identifier = m.get("identifier", "")
+            model_key = m.get("modelKey", "")
+
+            # Use _model_matches to handle instance suffixes (e.g., ":2", ":3")
+            if cls._model_matches(identifier, model_name) or cls._model_matches(model_key, model_name):
                 status = m.get("status", "").lower()
 
-                # Both "loaded" and "idle" are usable (idle auto-activates on API call)
-                is_available = status in ("loaded", "idle")
+                # "loaded", "idle", and "processingprompt" are all usable states
+                # (processingprompt means model is loaded but busy - still valid)
+                is_available = status in ("loaded", "idle", "processingprompt")
 
                 if not is_available:
                     logger.debug(
                         f"Model '{model_name}' found but status='{status}'. "
-                        f"Expected 'loaded' or 'idle'"
+                        f"Expected 'loaded', 'idle', or 'processingprompt'"
+                    )
+                else:
+                    logger.debug(
+                        f"Model '{model_name}' found as '{identifier}' with status='{status}'"
                     )
 
                 return is_available
@@ -372,14 +450,17 @@ ALTERNATIVE:
             logger.info(f"No models loaded, loading: {model_name}")
             return cls.load_model(model_name, keep_loaded=True)
 
-        # Check if model exists and its status
+        # Check if model exists and its status (using base name matching)
         for m in models:
-            if m.get("identifier") == model_name or m.get("modelKey") == model_name:
+            identifier = m.get("identifier", "")
+            model_key = m.get("modelKey", "")
+
+            if cls._model_matches(identifier, model_name) or cls._model_matches(model_key, model_name):
                 status = m.get("status", "").lower()
 
-                if status == "loaded":
-                    # Model is active and ready
-                    logger.info(f"✅ Model already active: {model_name}")
+                if status in ("loaded", "processingprompt"):
+                    # Model is active and ready (or busy processing)
+                    logger.info(f"✅ Model already active: {model_name} (as '{identifier}')")
                     return True
 
                 if status == "idle":
@@ -458,10 +539,14 @@ ALTERNATIVE:
         According to LM Studio docs: "Any API request to an idle model automatically reactivates it"
         So both "loaded" and "idle" status are acceptable.
 
+        CRITICAL FIX: Uses base name matching to handle LM Studio's instance suffixes
+        (e.g., ":2", ":3"). If "llama-3.2-3b-instruct:2" is loaded, verifying
+        "llama-3.2-3b-instruct" will return True.
+
         This is a health check to catch cases where model isn't available at all.
 
         Args:
-            model_name: Name of model to verify
+            model_name: Name of model to verify (base name without instance suffix)
 
         Returns:
             True if model is available (loaded or idle), False otherwise
@@ -472,18 +557,23 @@ ALTERNATIVE:
                 return False
 
             for model in loaded_models:
-                if model.get('identifier') == model_name:
+                identifier = model.get('identifier', '')
+
+                # Use _model_matches for base name matching
+                if cls._model_matches(identifier, model_name):
                     status = model.get('status', '').lower()
 
-                    # Both "loaded" and "idle" are acceptable
-                    is_available = status in ("loaded", "idle")
+                    # "loaded", "idle", and "processingprompt" are acceptable
+                    is_available = status in ("loaded", "idle", "processingprompt")
 
                     if is_available:
-                        logger.debug(f"Model '{model_name}' verified available (status={status})")
+                        logger.debug(
+                            f"Model '{model_name}' verified available as '{identifier}' (status={status})"
+                        )
                         return True
                     else:
                         logger.warning(
-                            f"Model '{model_name}' found but status={status}. "
+                            f"Model '{model_name}' found as '{identifier}' but status={status}. "
                             f"Expected 'loaded' or 'idle'"
                         )
                         return False

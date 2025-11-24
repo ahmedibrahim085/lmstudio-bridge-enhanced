@@ -21,9 +21,10 @@ from typing import List, Dict, Any, Optional, Union
 from contextlib import AsyncExitStack
 import sys
 import os
+from pathlib import Path
 
-# Add parent directory to path
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Add parent directory to path for imports
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from mcp.client.stdio import stdio_client, StdioServerParameters
 from mcp import ClientSession
@@ -32,23 +33,8 @@ from llm.llm_client import LLMClient
 from llm.model_validator import ModelValidator
 from llm.exceptions import ModelNotFoundError
 from utils.lms_helper import LMSHelper
-
-
-# Default configuration constants
-# These align with the philosophy of letting the local LLM work until task complete
-DEFAULT_MAX_ROUNDS = 10000  # No artificial limit - let LLM work until done
-DEFAULT_MAX_TOKENS = 8192   # Based on Claude Code's 30K character limit
-
-
-def log_info(message: str):
-    """Log informational messages to stderr"""
-    print(f"INFO: {message}", file=sys.stderr)
-
-
-def log_error(message: str):
-    """Log error messages to stderr"""
-    print(f"ERROR: {message}", file=sys.stderr)
-
+from utils.custom_logging import log_info, log_error
+from config.constants import DEFAULT_MAX_ROUNDS, DEFAULT_MAX_TOKENS
 
 # Import centralized safe_call_tool wrapper from mcp_client
 # This ensures ALL code paths use the same coercion logic via single entry point
@@ -400,10 +386,19 @@ class DynamicAutonomousAgent:
             log_error(f"Configuration error: {e}")
             return f"Error: {e}"
         except Exception as e:
-            log_error(f"Multi-MCP execution failed: {e}")
+            # Handle Python 3.11+ ExceptionGroups from anyio TaskGroups
+            # Extract root cause from nested exception groups for clearer error messages
+            import sys
+            root_cause = e
+            if sys.version_info >= (3, 11) and isinstance(e, BaseExceptionGroup):
+                # Unwrap nested ExceptionGroups to find the actual error
+                while hasattr(root_cause, 'exceptions') and root_cause.exceptions:
+                    root_cause = root_cause.exceptions[0]
+
+            log_error(f"Multi-MCP execution failed: {root_cause}")
             import traceback
             log_error(traceback.format_exc())
-            return f"Error during multi-MCP execution: {e}"
+            return f"Error during multi-MCP execution: {root_cause}"
 
     async def autonomous_discover_and_execute(
         self,
@@ -549,7 +544,11 @@ Continue with the task based on these results."""
             # This prevents LLMs from hallucinating instead of calling tools
             # On subsequent rounds, use "auto" to allow final answers
             current_tool_choice = "required" if round_num == 0 else "auto"
-            response = self.llm.create_response(
+
+            # CRITICAL: Run sync HTTP call in thread pool to avoid blocking event loop
+            # This prevents MCP connection TaskGroup failures during long LLM calls
+            response = await asyncio.to_thread(
+                self.llm.create_response,
                 input_text=input_text,
                 tools=openai_tools,
                 previous_response_id=previous_response_id,
@@ -682,7 +681,11 @@ Continue with the task based on these results."""
             # This prevents LLMs from hallucinating instead of calling tools
             # On subsequent rounds, use "auto" to allow final answers
             current_tool_choice = "required" if round_num == 0 else "auto"
-            response = self.llm.create_response(
+
+            # CRITICAL: Run sync HTTP call in thread pool to avoid blocking event loop
+            # This prevents MCP connection TaskGroup failures during long LLM calls
+            response = await asyncio.to_thread(
+                self.llm.create_response,
                 input_text=input_text,
                 tools=openai_tools,
                 previous_response_id=previous_response_id,

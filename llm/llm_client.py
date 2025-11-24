@@ -79,7 +79,9 @@ def _handle_request_exception(e: Exception, operation: str = "LLM request") -> N
         )
 
     elif isinstance(e, requests.exceptions.HTTPError):
-        status_code = e.response.status_code if e.response else None
+        # Note: Use "is not None" instead of truthy check because Response.__bool__
+        # returns False for status_code >= 400, which would incorrectly give us None
+        status_code = e.response.status_code if e.response is not None else None
 
         if status_code == 429:
             raise LLMRateLimitError(

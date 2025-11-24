@@ -25,8 +25,8 @@ print("TEST: Generic Tool Discovery for ANY MCP")
 print("=" * 80)
 print()
 
-async def test_tool_discovery_for_mcp(mcp_name: str):
-    """Test tool discovery for a specific MCP."""
+async def _discover_tools_for_mcp(mcp_name: str):
+    """Discover tools for a specific MCP (helper function, not a pytest test)."""
     print(f"Testing: {mcp_name}")
     print("-" * 80)
 
@@ -121,7 +121,7 @@ async def main():
 
     results = {}
     for mcp_name in test_mcps:
-        tools = await test_tool_discovery_for_mcp(mcp_name)
+        tools = await _discover_tools_for_mcp(mcp_name)
         results[mcp_name] = tools
         print()
         print("=" * 80)

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Setup script to configure lmstudio-bridge-enhanced for your system
 # This script creates the MCP configuration with the correct paths
 
@@ -20,12 +20,12 @@ echo "Which MCP client are you configuring?"
 echo "1) Claude Code (project .mcp.json)"
 echo "2) LM Studio (~/.lmstudio/mcp.json)"
 echo "3) Both"
-read -p "Enter choice [1-3]: " choice
+read -rp "Enter choice [1-3]: " choice
 
 case $choice in
     1|3)
         # Claude Code configuration
-        read -p "Enter path to your Claude Code project directory: " project_dir
+        read -rp "Enter path to your Claude Code project directory: " project_dir
         if [ ! -d "$project_dir" ]; then
             echo "Error: Directory $project_dir does not exist"
             exit 1
@@ -36,7 +36,7 @@ case $choice in
         # Create or update .mcp.json
         if [ -f "$MCP_JSON" ]; then
             echo "Warning: $MCP_JSON already exists"
-            read -p "Backup and overwrite? (y/n): " backup
+            read -rp "Backup and overwrite? (y/n): " backup
             if [ "$backup" = "y" ]; then
                 cp "$MCP_JSON" "$MCP_JSON.backup"
                 echo "Backup created: $MCP_JSON.backup"
@@ -79,7 +79,7 @@ case $choice in
         # Create or update mcp.json
         if [ -f "$LMSTUDIO_CONFIG" ]; then
             echo "Warning: $LMSTUDIO_CONFIG already exists"
-            read -p "Backup and overwrite? (y/n): " backup
+            read -rp "Backup and overwrite? (y/n): " backup
             if [ "$backup" = "y" ]; then
                 cp "$LMSTUDIO_CONFIG" "$LMSTUDIO_CONFIG.backup"
                 echo "Backup created: $LMSTUDIO_CONFIG.backup"
