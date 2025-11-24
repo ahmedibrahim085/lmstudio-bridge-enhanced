@@ -399,7 +399,7 @@ ALTERNATIVE:
                 if not is_available:
                     logger.debug(
                         f"Model '{model_name}' found but status='{status}'. "
-                        f"Expected 'loaded' or 'idle'"
+                        f"Expected 'loaded', 'idle', or 'processingprompt'"
                     )
                 else:
                     logger.debug(
