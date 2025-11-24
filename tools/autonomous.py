@@ -21,7 +21,8 @@ from utils.lms_helper import LMSHelper
 from config.constants import (
     DEFAULT_MCP_NPX_COMMAND,
     DEFAULT_MCP_NPX_ARGS,
-    MCP_PACKAGES
+    MCP_PACKAGES,
+    DEFAULT_MAX_ROUNDS
 )
 import html
 import json
@@ -276,7 +277,7 @@ class AutonomousExecutionTools:
         self,
         task: str,
         working_directory: Optional[Union[str, List[str]]] = None,
-        max_rounds: int = 100,
+        max_rounds: int = DEFAULT_MAX_ROUNDS,
         max_tokens: Union[int, str] = "auto",
         model: Optional[str] = None,
         response_format: Optional[Dict[str, Any]] = None
@@ -468,7 +469,7 @@ class AutonomousExecutionTools:
         self,
         tasks: List[Dict[str, Any]],
         initial_directory: Optional[Union[str, List[str]]] = None,
-        max_rounds: int = 100,
+        max_rounds: int = DEFAULT_MAX_ROUNDS,
         max_tokens: Union[int, str] = "auto"
     ) -> List[str]:
         """Execute multiple tasks in a persistent session with dynamic directory updates.
@@ -595,7 +596,7 @@ class AutonomousExecutionTools:
     async def autonomous_memory_full(
         self,
         task: str,
-        max_rounds: int = 100,
+        max_rounds: int = DEFAULT_MAX_ROUNDS,
         max_tokens: Union[int, str] = "auto",
         model: Optional[str] = None
     ) -> str:
@@ -672,7 +673,7 @@ class AutonomousExecutionTools:
     async def autonomous_fetch_full(
         self,
         task: str,
-        max_rounds: int = 100,
+        max_rounds: int = DEFAULT_MAX_ROUNDS,
         max_tokens: Union[int, str] = "auto",
         model: Optional[str] = None
     ) -> str:
@@ -744,7 +745,7 @@ class AutonomousExecutionTools:
         self,
         task: str,
         github_token: Optional[str] = None,
-        max_rounds: int = 100,
+        max_rounds: int = DEFAULT_MAX_ROUNDS,
         max_tokens: Union[int, str] = "auto",
         model: Optional[str] = None
     ) -> str:

@@ -34,13 +34,7 @@ from llm.model_validator import ModelValidator
 from llm.exceptions import ModelNotFoundError
 from utils.lms_helper import LMSHelper
 from utils.custom_logging import log_info, log_error
-
-
-# Default configuration constants
-# These align with the philosophy of letting the local LLM work until task complete
-DEFAULT_MAX_ROUNDS = 10000  # No artificial limit - let LLM work until done
-DEFAULT_MAX_TOKENS = 8192   # Based on Claude Code's 30K character limit
-
+from config.constants import DEFAULT_MAX_ROUNDS, DEFAULT_MAX_TOKENS
 
 # Import centralized safe_call_tool wrapper from mcp_client
 # This ensures ALL code paths use the same coercion logic via single entry point
