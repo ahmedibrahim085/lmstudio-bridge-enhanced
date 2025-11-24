@@ -85,11 +85,21 @@ class LMStudioConfig:
         try:
             from utils.lms_helper import LMSHelper
             if LMSHelper.is_installed():
-                loaded_models = LMSHelper.get_loaded_models()
+                loaded_models = LMSHelper.list_loaded_models()
                 if loaded_models:
-                    selected = loaded_models[0]
-                    logger.info(f"Using already-loaded model: {selected}")
-                    return selected
+                    # list_loaded_models() returns list of dicts with model info
+                    # Extract the identifier (base model name) from first loaded model
+                    first_model = loaded_models[0]
+                    selected = first_model.get("identifier", "")
+
+                    # CRITICAL: Strip instance suffix (e.g., ":2", ":3") to get base model name
+                    # LM Studio adds these suffixes when same model loaded multiple times
+                    # We must use base name for config to avoid issues when model reloads
+                    selected = LMSHelper._get_base_model_name(selected)
+
+                    if selected:
+                        logger.info(f"Using already-loaded model: {selected}")
+                        return selected
         except Exception as e:
             logger.debug(f"Could not check loaded models via LMS CLI: {e}")
 
