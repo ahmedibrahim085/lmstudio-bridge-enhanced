@@ -386,10 +386,19 @@ class DynamicAutonomousAgent:
             log_error(f"Configuration error: {e}")
             return f"Error: {e}"
         except Exception as e:
-            log_error(f"Multi-MCP execution failed: {e}")
+            # Handle Python 3.11+ ExceptionGroups from anyio TaskGroups
+            # Extract root cause from nested exception groups for clearer error messages
+            import sys
+            root_cause = e
+            if sys.version_info >= (3, 11) and isinstance(e, BaseExceptionGroup):
+                # Unwrap nested ExceptionGroups to find the actual error
+                while hasattr(root_cause, 'exceptions') and root_cause.exceptions:
+                    root_cause = root_cause.exceptions[0]
+
+            log_error(f"Multi-MCP execution failed: {root_cause}")
             import traceback
             log_error(traceback.format_exc())
-            return f"Error during multi-MCP execution: {e}"
+            return f"Error during multi-MCP execution: {root_cause}"
 
     async def autonomous_discover_and_execute(
         self,
@@ -535,7 +544,11 @@ Continue with the task based on these results."""
             # This prevents LLMs from hallucinating instead of calling tools
             # On subsequent rounds, use "auto" to allow final answers
             current_tool_choice = "required" if round_num == 0 else "auto"
-            response = self.llm.create_response(
+
+            # CRITICAL: Run sync HTTP call in thread pool to avoid blocking event loop
+            # This prevents MCP connection TaskGroup failures during long LLM calls
+            response = await asyncio.to_thread(
+                self.llm.create_response,
                 input_text=input_text,
                 tools=openai_tools,
                 previous_response_id=previous_response_id,
@@ -668,7 +681,11 @@ Continue with the task based on these results."""
             # This prevents LLMs from hallucinating instead of calling tools
             # On subsequent rounds, use "auto" to allow final answers
             current_tool_choice = "required" if round_num == 0 else "auto"
-            response = self.llm.create_response(
+
+            # CRITICAL: Run sync HTTP call in thread pool to avoid blocking event loop
+            # This prevents MCP connection TaskGroup failures during long LLM calls
+            response = await asyncio.to_thread(
+                self.llm.create_response,
                 input_text=input_text,
                 tools=openai_tools,
                 previous_response_id=previous_response_id,
