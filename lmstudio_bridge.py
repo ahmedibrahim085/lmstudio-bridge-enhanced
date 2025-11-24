@@ -297,7 +297,7 @@ async def create_response(input_text: str, previous_response_id: Optional[str] =
             try:
                 current_model_response = await get_current_model()
                 model = current_model_response.replace("Currently loaded model: ", "").strip()
-            except:
+            except Exception:
                 from config.constants import DEFAULT_FALLBACK_MODEL
                 model = DEFAULT_FALLBACK_MODEL
 
