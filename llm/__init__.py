@@ -4,7 +4,6 @@ from .llm_client import LLMClient, AutonomousLLMClient
 from .message_manager import (
     Message,
     ConversationHistory,
-    ToolCallTracker,
     MessageFormatter
 )
 from .exceptions import (
@@ -22,7 +21,6 @@ __all__ = [
     "AutonomousLLMClient",
     "Message",
     "ConversationHistory",
-    "ToolCallTracker",
     "MessageFormatter",
     "LLMError",
     "LLMTimeoutError",
