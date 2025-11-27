@@ -504,60 +504,60 @@ class TestLLMClientPayloadBuilding:
         """Test payload is built correctly without response_format."""
         from llm.llm_client import LLMClient
 
-        with patch('requests.post') as mock_post:
-            mock_response = Mock()
-            mock_response.status_code = 200
-            mock_response.json.return_value = {
-                "choices": [{"message": {"content": "test"}}]
-            }
-            mock_post.return_value = mock_response
+        # Create client and mock its session for HTTP pooling
+        client = LLMClient()
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "choices": [{"message": {"content": "test"}}]
+        }
+        client.session.post = Mock(return_value=mock_response)
 
-            client = LLMClient()
-            client.chat_completion(
-                messages=[{"role": "user", "content": "Hello"}],
-                response_format=None
-            )
+        client.chat_completion(
+            messages=[{"role": "user", "content": "Hello"}],
+            response_format=None
+        )
 
-            # Get the payload sent
-            call_args = mock_post.call_args
-            payload = call_args[1]["json"]
+        # Get the payload sent
+        call_args = client.session.post.call_args
+        payload = call_args[1]["json"]
 
-            # response_format should not be in payload
-            assert "response_format" not in payload
+        # response_format should not be in payload
+        assert "response_format" not in payload
 
     def test_payload_with_response_format(self):
         """Test payload is built correctly with response_format."""
         from llm.llm_client import LLMClient
 
-        with patch('requests.post') as mock_post:
-            mock_response = Mock()
-            mock_response.status_code = 200
-            mock_response.json.return_value = {
-                "choices": [{"message": {"content": '{"result": "test"}'}}]
+        response_format = {
+            "type": "json_schema",
+            "json_schema": {
+                "name": "test",
+                "schema": {"type": "object", "properties": {"result": {"type": "string"}}}
             }
-            mock_post.return_value = mock_response
+        }
 
-            response_format = {
-                "type": "json_schema",
-                "json_schema": {
-                    "name": "test",
-                    "schema": {"type": "object", "properties": {"result": {"type": "string"}}}
-                }
-            }
+        # Create client and mock its session for HTTP pooling
+        client = LLMClient()
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "choices": [{"message": {"content": '{"result": "test"}'}}]
+        }
+        client.session.post = Mock(return_value=mock_response)
 
-            client = LLMClient()
-            client.chat_completion(
-                messages=[{"role": "user", "content": "Hello"}],
-                response_format=response_format
-            )
+        client.chat_completion(
+            messages=[{"role": "user", "content": "Hello"}],
+            response_format=response_format
+        )
 
-            # Get the payload sent
-            call_args = mock_post.call_args
-            payload = call_args[1]["json"]
+        # Get the payload sent
+        call_args = client.session.post.call_args
+        payload = call_args[1]["json"]
 
-            # response_format should be in payload
-            assert "response_format" in payload
-            assert payload["response_format"] == response_format
+        # response_format should be in payload
+        assert "response_format" in payload
+        assert payload["response_format"] == response_format
 
 
 class TestBackwardCompatibility:

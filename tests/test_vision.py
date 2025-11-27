@@ -127,13 +127,15 @@ class TestProcessImageInput:
 
     def test_process_url(self):
         """Test processing URL input (mocked fetch)."""
-        # Mock the requests.get to return a fake image
-        with patch('requests.get') as mock_get:
+        # Mock the HTTP session to return a fake image
+        with patch('utils.image_utils._get_http_session') as mock_get_session:
+            mock_session = Mock()
             mock_response = Mock()
             mock_response.status_code = 200
             mock_response.headers = {'content-type': 'image/jpeg'}
             mock_response.content = b'\xff\xd8\xff\xe0' + b'\x00' * 100  # JPEG header
-            mock_get.return_value = mock_response
+            mock_session.get.return_value = mock_response
+            mock_get_session.return_value = mock_session
 
             result = process_image_input("https://example.com/image.jpg")
             assert result.is_valid
@@ -143,12 +145,14 @@ class TestProcessImageInput:
 
     def test_process_url_without_extension(self):
         """Test processing URL without extension (mocked fetch)."""
-        with patch('requests.get') as mock_get:
+        with patch('utils.image_utils._get_http_session') as mock_get_session:
+            mock_session = Mock()
             mock_response = Mock()
             mock_response.status_code = 200
             mock_response.headers = {'content-type': 'image/png'}
             mock_response.content = b'\x89PNG\r\n\x1a\n' + b'\x00' * 100  # PNG header
-            mock_get.return_value = mock_response
+            mock_session.get.return_value = mock_response
+            mock_get_session.return_value = mock_session
 
             result = process_image_input("https://example.com/api/image")
             assert result.is_valid
@@ -280,12 +284,14 @@ class TestValidateImageInputs:
 
     def test_all_valid(self):
         """Test validation with all valid inputs (mocked)."""
-        with patch('requests.get') as mock_get:
+        with patch('utils.image_utils._get_http_session') as mock_get_session:
+            mock_session = Mock()
             mock_response = Mock()
             mock_response.status_code = 200
             mock_response.headers = {'content-type': 'image/jpeg'}
             mock_response.content = b'\xff\xd8\xff\xe0' + b'\x00' * 100
-            mock_get.return_value = mock_response
+            mock_session.get.return_value = mock_response
+            mock_get_session.return_value = mock_session
 
             valid, errors = validate_image_inputs([
                 "https://example.com/1.jpg",
@@ -296,12 +302,14 @@ class TestValidateImageInputs:
 
     def test_mixed_valid_invalid(self):
         """Test validation with mixed valid and invalid inputs."""
-        with patch('requests.get') as mock_get:
+        with patch('utils.image_utils._get_http_session') as mock_get_session:
+            mock_session = Mock()
             mock_response = Mock()
             mock_response.status_code = 200
             mock_response.headers = {'content-type': 'image/jpeg'}
             mock_response.content = b'\xff\xd8\xff\xe0' + b'\x00' * 100
-            mock_get.return_value = mock_response
+            mock_session.get.return_value = mock_response
+            mock_get_session.return_value = mock_session
 
             valid, errors = validate_image_inputs([
                 "https://example.com/valid.jpg",
@@ -448,24 +456,25 @@ class TestLLMClientVisionCompletion:
         """Test vision_completion with single image (mocked)."""
         from llm.llm_client import LLMClient
 
-        with patch('requests.post') as mock_post, \
-             patch('requests.get') as mock_get:
-            # Mock URL fetch
+        with patch('utils.image_utils._get_http_session') as mock_get_session:
+            # Mock URL fetch for image
+            mock_img_session = Mock()
             mock_url_response = Mock()
             mock_url_response.status_code = 200
             mock_url_response.headers = {'content-type': 'image/jpeg'}
             mock_url_response.content = b'\xff\xd8\xff\xe0' + b'\x00' * 100
-            mock_get.return_value = mock_url_response
+            mock_img_session.get.return_value = mock_url_response
+            mock_get_session.return_value = mock_img_session
 
-            # Mock LLM response
-            mock_response = Mock()
-            mock_response.status_code = 200
-            mock_response.json.return_value = {
+            # Create client and mock its session for LLM requests
+            client = LLMClient()
+            mock_llm_response = Mock()
+            mock_llm_response.status_code = 200
+            mock_llm_response.json.return_value = {
                 "choices": [{"message": {"content": "Test response"}}]
             }
-            mock_post.return_value = mock_response
+            client.session.post = Mock(return_value=mock_llm_response)
 
-            client = LLMClient()
             response = client.vision_completion(
                 prompt="Describe this",
                 images="https://example.com/image.jpg"
@@ -477,24 +486,25 @@ class TestLLMClientVisionCompletion:
         """Test vision_completion with multiple images (mocked)."""
         from llm.llm_client import LLMClient
 
-        with patch('requests.post') as mock_post, \
-             patch('requests.get') as mock_get:
-            # Mock URL fetch
+        with patch('utils.image_utils._get_http_session') as mock_get_session:
+            # Mock URL fetch for images
+            mock_img_session = Mock()
             mock_url_response = Mock()
             mock_url_response.status_code = 200
             mock_url_response.headers = {'content-type': 'image/jpeg'}
             mock_url_response.content = b'\xff\xd8\xff\xe0' + b'\x00' * 100
-            mock_get.return_value = mock_url_response
+            mock_img_session.get.return_value = mock_url_response
+            mock_get_session.return_value = mock_img_session
 
-            # Mock LLM response
-            mock_response = Mock()
-            mock_response.status_code = 200
-            mock_response.json.return_value = {
+            # Create client and mock its session for LLM requests
+            client = LLMClient()
+            mock_llm_response = Mock()
+            mock_llm_response.status_code = 200
+            mock_llm_response.json.return_value = {
                 "choices": [{"message": {"content": "Comparison result"}}]
             }
-            mock_post.return_value = mock_response
+            client.session.post = Mock(return_value=mock_llm_response)
 
-            client = LLMClient()
             response = client.vision_completion(
                 prompt="Compare these",
                 images=["https://example.com/1.jpg", "https://example.com/2.jpg"]
@@ -563,12 +573,14 @@ class TestEdgeCases:
 
     def test_whitespace_in_url(self):
         """Test URL with surrounding whitespace (mocked)."""
-        with patch('requests.get') as mock_get:
+        with patch('utils.image_utils._get_http_session') as mock_get_session:
+            mock_session = Mock()
             mock_response = Mock()
             mock_response.status_code = 200
             mock_response.headers = {'content-type': 'image/jpeg'}
             mock_response.content = b'\xff\xd8\xff\xe0' + b'\x00' * 100
-            mock_get.return_value = mock_response
+            mock_session.get.return_value = mock_response
+            mock_get_session.return_value = mock_session
 
             result = process_image_input("  https://example.com/image.jpg  ")
             assert result.is_valid
