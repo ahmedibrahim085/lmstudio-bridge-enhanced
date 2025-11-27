@@ -19,11 +19,15 @@ ERROR = logging.ERROR
 CRITICAL = logging.CRITICAL
 
 
-class StructuredLogger:
-    """Structured logger with context support."""
+class GenericLogger:
+    """Generic structured logger with context support for standard logging.
+
+    This logger provides standard log levels (debug, info, warning, error, critical)
+    and is suitable for general-purpose logging across the application.
+    """
 
     def __init__(self, name: str, level: int = INFO):
-        """Initialize structured logger.
+        """Initialize generic logger.
 
         Args:
             name: Logger name
@@ -108,18 +112,18 @@ class StructuredLogger:
 _loggers = {}
 
 
-def get_logger(name: str, level: int = INFO) -> StructuredLogger:
-    """Get or create a logger instance.
+def get_logger(name: str, level: int = INFO) -> GenericLogger:
+    """Get or create a generic logger instance.
 
     Args:
         name: Logger name
         level: Logging level
 
     Returns:
-        StructuredLogger instance
+        GenericLogger instance
     """
     if name not in _loggers:
-        _loggers[name] = StructuredLogger(name, level)
+        _loggers[name] = GenericLogger(name, level)
     return _loggers[name]
 
 

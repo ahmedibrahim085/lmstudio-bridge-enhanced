@@ -274,16 +274,18 @@ def track_performance(operation_name: str):
     return decorator
 
 
-class StructuredLogger:
+class ObservabilityLogger:
     """
-    Structured logging helper for consistent log format.
+    Domain-specific observability logger for LM Studio operations.
 
-    Provides methods for logging with structured context.
+    Provides specialized logging methods for model operations, autonomous tasks,
+    and error tracking with rich contextual information. This differs from the
+    generic logger by focusing on observability metrics and domain events.
     """
 
     def __init__(self, name: str):
         """
-        Initialize structured logger.
+        Initialize observability logger.
 
         Args:
             name: Logger name (usually module name)

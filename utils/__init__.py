@@ -1,7 +1,7 @@
 """Utility modules for logging, error handling, validation, and helpers."""
 
 from .custom_logging import (
-    StructuredLogger,
+    GenericLogger,
     get_logger,
     log_error,
     log_info,
@@ -34,7 +34,7 @@ from .validation import (
 
 __all__ = [
     # Logging
-    "StructuredLogger",
+    "GenericLogger",
     "get_logger",
     "log_error",
     "log_info",
