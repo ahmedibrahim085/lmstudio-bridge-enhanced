@@ -29,6 +29,9 @@ from pathlib import Path
 from typing import Dict, Any, List, Optional, Union, Tuple
 from dataclasses import dataclass, field
 from enum import Enum
+import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 from config.constants import (
     SUPPORTED_IMAGE_TYPES,
@@ -39,6 +42,23 @@ from config.constants import (
     IMAGE_URL_PATTERNS,
     BASE64_DATA_URI_PREFIX
 )
+
+# Module-level HTTP session with connection pooling for image downloads
+_http_session = None
+
+def _get_http_session():
+    """Get or create the module-level HTTP session with connection pooling."""
+    global _http_session
+    if _http_session is None:
+        _http_session = requests.Session()
+        adapter = HTTPAdapter(
+            pool_connections=5,
+            pool_maxsize=10,
+            max_retries=Retry(total=3, backoff_factor=0.3)
+        )
+        _http_session.mount('http://', adapter)
+        _http_session.mount('https://', adapter)
+    return _http_session
 
 
 class ImageInputType(Enum):
@@ -295,8 +315,6 @@ def _process_url(url: str, detail: str) -> ImageInput:
     Returns:
         ImageInput with base64 data URI (not the original URL)
     """
-    import requests
-
     warnings = []
 
     # Try to infer MIME type from URL extension
@@ -306,12 +324,13 @@ def _process_url(url: str, detail: str) -> ImageInput:
     if ext in IMAGE_EXTENSION_MAP:
         mime_type = IMAGE_EXTENSION_MAP[ext]
 
-    # Fetch the image from URL
+    # Fetch the image from URL using pooled session
     try:
+        session = _get_http_session()
         headers = {
             'User-Agent': 'Mozilla/5.0 (compatible; LMStudioBridge/3.2; +https://github.com/ahmedibrahim085/lmstudio-bridge-enhanced)'
         }
-        response = requests.get(url, timeout=30, stream=True, headers=headers)
+        response = session.get(url, timeout=30, stream=True, headers=headers)
         response.raise_for_status()
 
         # Check content length if available
