@@ -7,6 +7,8 @@ running in LM Studio, not specific to any particular model.
 """
 
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 import json
 import time
 import logging
@@ -136,6 +138,16 @@ class LLMClient:
         config = get_config()
         self.api_base = api_base or config.lmstudio.api_base
         self.model = model or config.lmstudio.default_model
+
+        # HTTP connection pooling for better performance
+        self.session = requests.Session()
+        adapter = HTTPAdapter(
+            pool_connections=10,
+            pool_maxsize=20,
+            max_retries=Retry(total=3, backoff_factor=0.3)
+        )
+        self.session.mount('http://', adapter)
+        self.session.mount('https://', adapter)
 
     def _get_endpoint(self, path: str) -> str:
         """Get full URL for an endpoint.
@@ -269,7 +281,7 @@ class LLMClient:
             payload["response_format"] = response_format
 
         try:
-            response = requests.post(
+            response = self.session.post(
                 self._get_endpoint("chat/completions"),
                 json=payload,
                 timeout=timeout
@@ -358,7 +370,7 @@ class LLMClient:
             payload["stop"] = stop_sequences
 
         try:
-            response = requests.post(
+            response = self.session.post(
                 self._get_endpoint("completions"),
                 json=payload,
                 timeout=timeout
@@ -445,7 +457,7 @@ class LLMClient:
             payload["model"] = self.model
 
         try:
-            response = requests.post(
+            response = self.session.post(
                 self._get_endpoint("embeddings"),
                 json=payload,
                 timeout=timeout
@@ -538,7 +550,7 @@ class LLMClient:
                 payload["tool_choice"] = tool_choice
 
         try:
-            response = requests.post(
+            response = self.session.post(
                 self._get_endpoint("responses"),
                 json=payload,
                 timeout=timeout
@@ -662,7 +674,7 @@ class LLMClient:
             LLMError: For other unexpected errors
         """
         try:
-            response = requests.get(self._get_endpoint("models"))
+            response = self.session.get(self._get_endpoint("models"))
             response.raise_for_status()
             models = response.json().get("data", [])
             return [model["id"] for model in models]
@@ -690,7 +702,7 @@ class LLMClient:
             ValueError: If model not found
         """
         try:
-            response = requests.get(self._get_endpoint("models"))
+            response = self.session.get(self._get_endpoint("models"))
             response.raise_for_status()
             models = response.json().get("data", [])
 
@@ -747,7 +759,7 @@ class LLMClient:
             making it safe to use for health checks without try/except blocks.
         """
         try:
-            response = requests.get(self._get_endpoint("models"), timeout=HEALTH_CHECK_TIMEOUT)
+            response = self.session.get(self._get_endpoint("models"), timeout=HEALTH_CHECK_TIMEOUT)
             return response.status_code == 200
         except Exception:
             # Catch all exceptions and return False - this is a health check

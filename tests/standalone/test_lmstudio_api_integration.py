@@ -23,21 +23,17 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from llm.llm_client import LLMClient, DEFAULT_MAX_TOKENS
 from tools.autonomous import AutonomousExecutionTools
+from test_runner_base import TestRunner
 
 
-class LMStudioAPITester:
+class LMStudioAPITester(TestRunner):
     """Comprehensive LM Studio API integration tester."""
 
     def __init__(self):
+        super().__init__("LM STUDIO API INTEGRATION TEST SUITE")
         self.llm = LLMClient()
         self.tools = AutonomousExecutionTools(self.llm)
         self.results = {}
-
-    def print_section(self, title):
-        """Print section header."""
-        print("\n" + "="*80)
-        print(f"{title}")
-        print("="*80 + "\n")
 
     def test_health_check(self):
         """Test 1: Health Check API."""
@@ -402,164 +398,39 @@ class LMStudioAPITester:
             self.results['autonomous_execution'] = {'status': 'ERROR', 'error': str(e)}
             return False
 
-    async def run_all_tests(self):
-        """Run all tests in sequence."""
-        print("\n" + "="*80)
-        print("LM STUDIO API INTEGRATION TEST SUITE")
-        print("="*80)
-        print("\nTesting all LM Studio API endpoints...")
-        print("This will validate the complete integration.")
-        print()
 
-        # Track results
-        tests_run = 0
-        tests_passed = 0
-        tests_failed = 0
-        tests_skipped = 0
-        tests_error = 0
+async def main():
+    """Main test runner."""
+    tester = LMStudioAPITester()
 
-        # Test 1: Health Check (prerequisite)
-        result = self.test_health_check()
-        tests_run += 1
-        if result is True:
-            tests_passed += 1
-        elif result is False:
-            tests_failed += 1
-            print("\n❌ Health check failed - cannot continue")
-            return self.print_final_summary(tests_run, tests_passed, tests_failed, tests_skipped, tests_error)
+    print("\nTesting all LM Studio API endpoints...")
+    print("This will validate the complete integration.")
+    print()
 
-        # Test 2: List Models
-        result = self.test_list_models()
-        tests_run += 1
-        if result is True:
-            tests_passed += 1
-        elif result is False:
-            tests_failed += 1
-        else:
-            tests_error += 1
+    # Run tests using TestRunner infrastructure
+    tester.run_test("Health Check API", tester.test_health_check)
+    tester.run_test("List Models", tester.test_list_models)
+    tester.run_test("Get Model Info", tester.test_get_model_info)
+    tester.run_test("Chat Completion", tester.test_chat_completion)
+    tester.run_test("Text Completion", tester.test_text_completion)
+    tester.run_test("Create Response (Stateful)", tester.test_create_response)
+    tester.run_test("Generate Embeddings", tester.test_generate_embeddings)
+    await tester.run_test_async("Autonomous Execution", tester.test_autonomous_execution)
 
-        # Test 3: Get Model Info
-        result = self.test_get_model_info()
-        tests_run += 1
-        if result is True:
-            tests_passed += 1
-        elif result is False:
-            tests_failed += 1
-        else:
-            tests_error += 1
+    # Print summary
+    tester.print_summary()
 
-        # Test 4: Chat Completion
-        result = self.test_chat_completion()
-        tests_run += 1
-        if result is True:
-            tests_passed += 1
-        elif result is False:
-            tests_failed += 1
-        else:
-            tests_error += 1
+    # Save results to file
+    results_file = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)),
+        'test_results_lmstudio_integration.json'
+    )
+    with open(results_file, 'w') as f:
+        json.dump(tester.results, f, indent=2)
+    print(f"\nResults saved to: {results_file}\n")
 
-        # Test 5: Text Completion
-        result = self.test_text_completion()
-        tests_run += 1
-        if result is True:
-            tests_passed += 1
-        elif result is False:
-            tests_failed += 1
-        else:
-            tests_error += 1
-
-        # Test 6: Create Response (Stateful)
-        result = self.test_create_response()
-        tests_run += 1
-        if result is True:
-            tests_passed += 1
-        elif result is False:
-            tests_failed += 1
-        else:
-            tests_error += 1
-
-        # Test 7: Generate Embeddings
-        result = self.test_generate_embeddings()
-        tests_run += 1
-        if result is True:
-            tests_passed += 1
-        elif result is False:
-            tests_failed += 1
-        elif result is None:
-            tests_skipped += 1
-        else:
-            tests_error += 1
-
-        # Test 8: Autonomous Execution
-        result = await self.test_autonomous_execution()
-        tests_run += 1
-        if result is True:
-            tests_passed += 1
-        elif result is False:
-            tests_failed += 1
-        else:
-            tests_error += 1
-
-        # Final summary
-        self.print_final_summary(tests_run, tests_passed, tests_failed, tests_skipped, tests_error)
-
-    def print_final_summary(self, total, passed, failed, skipped, errors):
-        """Print final test summary."""
-        self.print_section("FINAL TEST SUMMARY")
-
-        print(f"Tests run:    {total}")
-        print(f"✅ Passed:     {passed}")
-        print(f"❌ Failed:     {failed}")
-        print(f"⚠️  Skipped:   {skipped}")
-        print(f"💥 Errors:     {errors}")
-        print()
-
-        success_rate = (passed / total * 100) if total > 0 else 0
-        print(f"Success rate: {success_rate:.1f}%")
-        print()
-
-        # Detailed results
-        print("Detailed Results:")
-        print("-" * 80)
-        for test_name, result in self.results.items():
-            status = result.get('status', 'UNKNOWN')
-            icon = {
-                'PASS': '✅',
-                'FAIL': '❌',
-                'SKIP': '⚠️ ',
-                'ERROR': '💥'
-            }.get(status, '❓')
-
-            print(f"{icon} {test_name}: {status}")
-
-            if status == 'ERROR' and 'error' in result:
-                print(f"   Error: {result['error']}")
-
-        print()
-
-        if failed == 0 and errors == 0:
-            print("🎉 ALL TESTS PASSED (or skipped)!")
-            print()
-            print("LM Studio integration is working correctly!")
-            print("All APIs are functioning as expected.")
-        else:
-            print("⚠️  SOME TESTS FAILED")
-            print()
-            print("Please review the failures above.")
-            print("Check LM Studio is running and models are loaded.")
-
-        print()
-
-        # Save results to file
-        results_file = os.path.join(
-            os.path.dirname(os.path.abspath(__file__)),
-            'test_results_lmstudio_integration.json'
-        )
-        with open(results_file, 'w') as f:
-            json.dump(self.results, f, indent=2)
-        print(f"Results saved to: {results_file}")
-        print()
-
+    # Exit with appropriate code
+    sys.exit(tester.get_exit_code())
 
 async def main():
     """Main test runner."""

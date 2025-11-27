@@ -16,19 +16,15 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from llm.llm_client import LLMClient
 from llm.exceptions import LLMResponseError, LLMTimeoutError
+from test_runner_base import TestRunner
 
 
-class RetryLogicTester:
+class RetryLogicTester(TestRunner):
     """Test retry logic implementation."""
 
     def __init__(self):
+        super().__init__("RETRY LOGIC TEST SUITE")
         self.llm = LLMClient()
-
-    def print_section(self, title):
-        """Print section header."""
-        print("\n" + "="*80)
-        print(f"{title}")
-        print("="*80 + "\n")
 
     def test_retry_on_llm_response_error(self):
         """Test 1: Verify retry logic activates on LLMResponseError."""
@@ -273,84 +269,29 @@ class RetryLogicTester:
                 print(f"   Attempts made: {mock_post.call_count}")
                 return False
 
-    def run_all_tests(self):
-        """Run all retry logic tests."""
-        self.print_section("RETRY LOGIC TEST SUITE")
-
-        print("Testing @retry_with_backoff decorator implementation")
-        print("Decorator is applied at method level with:")
-        print("  - max_retries: 3 total attempts (1 initial + 2 retries)")
-        print("  - base_delay: 1.0 seconds")
-        print("  - Retries on: LLMResponseError, LLMTimeoutError")
-        print()
-
-        tests_run = 0
-        tests_passed = 0
-
-        # Test 1: Retry on LLMResponseError
-        result = self.test_retry_on_llm_response_error()
-        tests_run += 1
-        if result:
-            tests_passed += 1
-
-        # Test 2: Retry on ALL LLMResponseError (including HTTP 400)
-        result = self.test_retry_on_all_llm_response_errors()
-        tests_run += 1
-        if result:
-            tests_passed += 1
-
-        # Test 3: Max retries exhausted
-        result = self.test_max_retries_exhausted()
-        tests_run += 1
-        if result:
-            tests_passed += 1
-
-        # Test 4: Chat completion retry
-        result = self.test_chat_completion_retry()
-        tests_run += 1
-        if result:
-            tests_passed += 1
-
-        # Final summary
-        self.print_final_summary(tests_run, tests_passed)
-
-        # Return non-zero exit code if any tests failed
-        if tests_passed < tests_run:
-            sys.exit(1)
-
-    def print_final_summary(self, total, passed):
-        """Print test summary."""
-        self.print_section("TEST SUMMARY")
-
-        print(f"Tests run: {total}")
-        print(f"Tests passed: {passed}")
-        print(f"Tests failed: {total - passed}")
-        print()
-
-        if passed == total:
-            print("✅ ALL TESTS PASSED")
-            print()
-            print("Retry logic implementation verified:")
-            print("  ✅ Retries on HTTP 500 errors (LLMResponseError)")
-            print("  ✅ Retries on ALL LLMResponseError (including HTTP 400)")
-            print("  ✅ Exhausts retries correctly (3 attempts)")
-            print("  ✅ Works for both create_response() and chat_completion()")
-            print()
-            print("Retry configuration (set at decorator level):")
-            print("  - max_retries: 3 total attempts")
-            print("  - base_delay: 1.0 seconds")
-            print("  - Backoff multiplier: 2.0 (exponential)")
-            print("  - Retry sequence: 1s → 2s → fail")
-            print("  - Exceptions: LLMResponseError, LLMTimeoutError")
-        else:
-            print("❌ SOME TESTS FAILED")
-            print("   Review the failures above")
-
 
 def main():
     """Main test runner."""
     tester = RetryLogicTester()
-    tester.run_all_tests()
+
+    print("Testing @retry_with_backoff decorator implementation")
+    print("Decorator is applied at method level with:")
+    print("  - max_retries: 3 total attempts (1 initial + 2 retries)")
+    print("  - base_delay: 1.0 seconds")
+    print("  - Retries on: LLMResponseError, LLMTimeoutError")
+    print()
+
+    # Run tests using TestRunner infrastructure
+    tester.run_test("Retry on LLMResponseError", tester.test_retry_on_llm_response_error)
+    tester.run_test("Retry on ALL LLMResponseError (including HTTP 400)", tester.test_retry_on_all_llm_response_errors)
+    tester.run_test("Max retries exhausted", tester.test_max_retries_exhausted)
+    tester.run_test("Chat completion retry", tester.test_chat_completion_retry)
+
+    # Print summary
+    tester.print_summary()
+
+    # Exit with appropriate code
+    sys.exit(tester.get_exit_code())
 
 
 if __name__ == "__main__":

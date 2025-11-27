@@ -12,7 +12,7 @@ This module handles all configuration settings including:
 import os
 import logging
 from typing import Optional, Dict, Any, List
-from dataclasses import dataclass
+from pydantic import BaseModel, Field, field_validator
 
 # Import constants
 from config.constants import (
@@ -23,14 +23,29 @@ from config.constants import (
 logger = logging.getLogger(__name__)
 
 
-@dataclass
-class LMStudioConfig:
+class LMStudioConfig(BaseModel):
     """Configuration for LM Studio API connection."""
 
-    host: str
-    port: str
-    api_base: str
-    default_model: str
+    host: str = Field(..., min_length=1, description="LM Studio host")
+    port: int = Field(..., ge=1, le=65535, description="LM Studio port (1-65535)")
+    api_base: str = Field(..., min_length=1, description="API base URL")
+    default_model: str = Field(..., min_length=1, description="Default model name")
+
+    @field_validator('host')
+    @classmethod
+    def validate_host(cls, v: str) -> str:
+        """Validate host is non-empty."""
+        if not v or not v.strip():
+            raise ValueError("Host must be a non-empty string")
+        return v.strip()
+
+    @field_validator('port')
+    @classmethod
+    def validate_port(cls, v: int) -> int:
+        """Validate port is in valid range."""
+        if not (1 <= v <= 65535):
+            raise ValueError(f"Port must be between 1-65535, got {v}")
+        return v
 
     @classmethod
     def from_env(cls) -> "LMStudioConfig":
@@ -44,24 +59,38 @@ class LMStudioConfig:
         Returns:
             LMStudioConfig instance with loaded settings
         """
-        host = os.getenv("LMSTUDIO_HOST", DEFAULT_LMSTUDIO_HOST)
-        port = os.getenv("LMSTUDIO_PORT", str(DEFAULT_LMSTUDIO_PORT))
-        api_base = f"http://{host}:{port}/v1"
+        try:
+            host = os.getenv("LMSTUDIO_HOST", DEFAULT_LMSTUDIO_HOST)
+            port_str = os.getenv("LMSTUDIO_PORT", str(DEFAULT_LMSTUDIO_PORT))
 
-        # Get default model - either from env or auto-detect
-        default_model = os.getenv("DEFAULT_MODEL")
+            # Convert port to integer with error handling
+            try:
+                port = int(port_str)
+            except ValueError:
+                raise ValueError(f"Invalid LMSTUDIO_PORT: '{port_str}' is not a valid integer")
 
-        if not default_model:
-            # Auto-detect: fetch available models and use first non-embedding one
-            default_model = cls._get_first_available_model(api_base)
-            logger.info(f"Auto-detected default model: {default_model}")
+            api_base = f"http://{host}:{port}/v1"
 
-        return cls(
-            host=host,
-            port=port,
-            api_base=api_base,
-            default_model=default_model
-        )
+            # Get default model - either from env or auto-detect
+            default_model = os.getenv("DEFAULT_MODEL")
+
+            if not default_model:
+                # Auto-detect: fetch available models and use first non-embedding one
+                default_model = cls._get_first_available_model(api_base)
+                logger.info(f"Auto-detected default model: {default_model}")
+
+            return cls(
+                host=host,
+                port=port,
+                api_base=api_base,
+                default_model=default_model
+            )
+        except ValueError as e:
+            # Re-raise ValueError with clearer context
+            raise ValueError(f"Configuration validation error: {e}") from e
+        except Exception as e:
+            # Catch any other errors (including Pydantic validation errors)
+            raise ValueError(f"Failed to load LMStudio configuration: {e}") from e
 
     @staticmethod
     def _get_first_available_model(api_base: str) -> str:
@@ -187,11 +216,18 @@ class LMStudioConfig:
         return f"{self.api_base}/{path.lstrip('/')}"
 
 
-@dataclass
-class MCPConfig:
+class MCPConfig(BaseModel):
     """Configuration for MCP client connections."""
 
-    default_working_directory: str
+    default_working_directory: str = Field(..., min_length=1, description="Default working directory for MCP operations")
+
+    @field_validator('default_working_directory')
+    @classmethod
+    def validate_working_directory(cls, v: str) -> str:
+        """Validate working directory is non-empty."""
+        if not v or not v.strip():
+            raise ValueError("Working directory must be a non-empty string")
+        return v.strip()
 
     @classmethod
     def from_env(cls) -> "MCPConfig":

@@ -1,9 +1,10 @@
 """Utility modules for logging, error handling, validation, and helpers."""
 
 from .custom_logging import (
-    StructuredLogger,
+    GenericLogger,
     get_logger,
     log_error,
+    log_categorized_error,
     log_info,
     log_warning,
     log_debug,
@@ -12,17 +13,6 @@ from .custom_logging import (
     WARNING,
     ERROR,
     CRITICAL
-)
-from .errors import (
-    LMStudioBridgeError,
-    ConfigurationError,
-    LLMClientError,
-    MCPConnectionError,
-    MCPToolExecutionError,
-    ToolDiscoveryError,
-    AutonomousExecutionError,
-    SchemaConversionError,
-    handle_error
 )
 from .validation import (
     ValidationError,
@@ -34,9 +24,10 @@ from .validation import (
 
 __all__ = [
     # Logging
-    "StructuredLogger",
+    "GenericLogger",
     "get_logger",
     "log_error",
+    "log_categorized_error",
     "log_info",
     "log_warning",
     "log_debug",
@@ -45,16 +36,6 @@ __all__ = [
     "WARNING",
     "ERROR",
     "CRITICAL",
-    # Errors
-    "LMStudioBridgeError",
-    "ConfigurationError",
-    "LLMClientError",
-    "MCPConnectionError",
-    "MCPToolExecutionError",
-    "ToolDiscoveryError",
-    "AutonomousExecutionError",
-    "SchemaConversionError",
-    "handle_error",
     # Validation
     "ValidationError",
     "validate_task",

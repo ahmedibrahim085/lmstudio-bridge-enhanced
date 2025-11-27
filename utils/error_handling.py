@@ -195,23 +195,29 @@ def fallback_strategy(
 
 
 def log_errors(func: Callable) -> Callable:
-    """Decorator that logs exceptions before re-raising them.
+    """Decorator that logs exceptions with categorization before re-raising them.
 
-    This is useful for debugging and monitoring - it ensures that all
-    errors are logged even if they're caught and handled elsewhere.
+    This decorator provides automatic error categorization by extracting the exception
+    type and logging it with structured context. This is useful for debugging,
+    monitoring, and filtering logs by error type.
 
     Args:
         func: Function to wrap with error logging
 
     Returns:
-        Decorated function with error logging
+        Decorated function with categorized error logging
 
     Example:
         @log_errors
         async def risky_operation():
-            # Any exceptions will be logged with full traceback
+            # Any exceptions will be logged with error_type categorization
             await do_something_risky()
     """
+    # Import here to avoid circular dependency
+    from utils.custom_logging import get_logger
+
+    func_logger = get_logger(func.__module__)
+
     if asyncio.iscoroutinefunction(func):
         # Async version
         @wraps(func)
@@ -219,6 +225,13 @@ def log_errors(func: Callable) -> Callable:
             try:
                 return await func(*args, **kwargs)
             except Exception as e:
+                # Use categorized exception logging
+                func_logger.exception(
+                    e,
+                    message=f"Exception in {func.__name__}",
+                    function=func.__name__
+                )
+                # Also log full traceback to Python's logging system for debugging
                 logger.exception(
                     f"Exception in {func.__name__}: {e}",
                     exc_info=True
@@ -234,6 +247,13 @@ def log_errors(func: Callable) -> Callable:
             try:
                 return func(*args, **kwargs)
             except Exception as e:
+                # Use categorized exception logging
+                func_logger.exception(
+                    e,
+                    message=f"Exception in {func.__name__}",
+                    function=func.__name__
+                )
+                # Also log full traceback to Python's logging system for debugging
                 logger.exception(
                     f"Exception in {func.__name__}: {e}",
                     exc_info=True
