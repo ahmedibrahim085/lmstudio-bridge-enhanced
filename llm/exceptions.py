@@ -175,6 +175,28 @@ class ModelNotFoundError(LLMValidationError):
 #   └── ModelMemoryError (model too large for available memory)
 
 
+def get_error_type(exception: Exception) -> str:
+    """Extract error type name from an exception for categorized logging.
+
+    This provides a clean, categorized error type string for logging and monitoring.
+    For LLM-specific exceptions, returns the exception class name. For generic
+    exceptions, returns the class name as well.
+
+    Args:
+        exception: The exception to extract type from
+
+    Returns:
+        Error type as string (e.g., "LLMTimeoutError", "ValueError")
+
+    Example:
+        >>> try:
+        ...     raise LLMTimeoutError("Request timed out")
+        ... except Exception as e:
+        ...     error_type = get_error_type(e)  # Returns "LLMTimeoutError"
+    """
+    return exception.__class__.__name__
+
+
 __all__ = [
     "LLMError",
     "LLMTimeoutError",
@@ -184,4 +206,5 @@ __all__ = [
     "LLMResponseError",
     "ModelNotFoundError",
     "ModelMemoryError",
+    "get_error_type",
 ]
