@@ -13,17 +13,6 @@ from .custom_logging import (
     ERROR,
     CRITICAL
 )
-from .errors import (
-    LMStudioBridgeError,
-    ConfigurationError,
-    LLMClientError,
-    MCPConnectionError,
-    MCPToolExecutionError,
-    ToolDiscoveryError,
-    AutonomousExecutionError,
-    SchemaConversionError,
-    handle_error
-)
 from .validation import (
     ValidationError,
     validate_task,
@@ -45,16 +34,6 @@ __all__ = [
     "WARNING",
     "ERROR",
     "CRITICAL",
-    # Errors
-    "LMStudioBridgeError",
-    "ConfigurationError",
-    "LLMClientError",
-    "MCPConnectionError",
-    "MCPToolExecutionError",
-    "ToolDiscoveryError",
-    "AutonomousExecutionError",
-    "SchemaConversionError",
-    "handle_error",
     # Validation
     "ValidationError",
     "validate_task",
