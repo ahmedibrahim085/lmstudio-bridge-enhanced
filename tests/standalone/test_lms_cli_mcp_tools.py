@@ -19,6 +19,7 @@ from pathlib import Path
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent))
 
+from test_runner_base import TestRunner
 from tools.lms_cli_tools import (
     lms_server_status,
     lms_list_loaded_models,
@@ -28,18 +29,13 @@ from tools.lms_cli_tools import (
 )
 
 
-class LMSCLIMCPToolsTester:
+class LMSCLIMCPToolsTester(TestRunner):
     """Test all LMS CLI MCP tools."""
 
     def __init__(self):
+        super().__init__("LMS CLI MCP TOOLS TEST SUITE")
         self.results = {}
         self.test_model = "qwen/qwen3-4b-thinking-2507"
-
-    def print_section(self, title):
-        """Print section header."""
-        print("\n" + "="*80)
-        print(f"{title}")
-        print("="*80 + "\n")
 
     def print_success(self, message):
         """Print success message."""
@@ -426,28 +422,37 @@ class LMSCLIMCPToolsTester:
             self.results['idle_reactivation'] = {'status': 'ERROR', 'error': str(e)}
             return False
 
-    def run_all_tests(self):
-        """Run all tests."""
-        print("\n" + "="*80)
-        print("LMS CLI MCP TOOLS TEST SUITE")
-        print("="*80)
-        print("\nTesting all 7 LMS CLI tools exposed as MCP tools...")
-        print("Including CRITICAL IDLE state bug fix tests...")
 
-        # Run tests
-        self.test_server_status()
-        self.test_list_loaded_models()
-        self.test_ensure_model_loaded()
-        self.test_load_model()
-        self.test_unload_model()
+def main():
+    """Main test runner."""
+    tester = LMSCLIMCPToolsTester()
 
-        # CRITICAL BUG FIX TESTS
-        self.test_idle_state_detection()
-        self.test_idle_state_reactivation()
+    print("\nTesting all LMS CLI MCP tools...")
+    print("This validates LM Studio CLI integration via MCP.")
+    print()
 
-        # Print summary
-        self.print_summary()
+    # Run all tests using TestRunner
+    tester.run_test("Server Status", tester.test_server_status)
+    tester.run_test("List Models", tester.test_list_models)
+    tester.run_test("Search Models", tester.test_search_models)
+    tester.run_test("Get Model Info", tester.test_get_model_info)
+    tester.run_test("Load Model", tester.test_load_model)
+    tester.run_test("Unload Model", tester.test_unload_model)
 
+    # Print summary
+    tester.print_summary()
+
+    # Save results
+    results_file = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)),
+        'test_results_lms_cli_mcp_tools.json'
+    )
+    with open(results_file, 'w') as f:
+        json.dump(tester.results, f, indent=2)
+    print(f"\nResults saved to: {results_file}\n")
+
+    # Exit with appropriate code
+    sys.exit(tester.get_exit_code())
 
 def main():
     """Main entry point."""

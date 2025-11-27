@@ -27,23 +27,19 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from llm.llm_client import LLMClient, DEFAULT_MAX_TOKENS
 from tools.autonomous import AutonomousExecutionTools
+from test_runner_base import TestRunner
 from utils.lms_helper import LMSHelper, check_lms_availability
 
 
-class LMStudioAPITesterV2:
+class LMStudioAPITesterV2(TestRunner):
     """Comprehensive LM Studio API integration tester V2 - Best of both worlds."""
 
     def __init__(self):
+        super().__init__("LM STUDIO API INTEGRATION TEST SUITE V2")
         self.llm = LLMClient()
         self.tools = AutonomousExecutionTools(self.llm)
         self.results = {}
         self.lms_available = LMSHelper.is_installed()
-
-    def print_section(self, title):
-        """Print section header."""
-        print("\n" + "="*80)
-        print(f"{title}")
-        print("="*80 + "\n")
 
     def print_test(self, test_name):
         """Print test name."""
@@ -551,198 +547,39 @@ class LMStudioAPITesterV2:
             self.results['autonomous_execution'] = {'status': 'ERROR', 'error': str(e)}
             return False
 
-    async def run_all_tests(self):
-        """Run all tests in sequence."""
-        print("\n" + "="*80)
-        print("LM STUDIO API INTEGRATION TEST SUITE V2")
-        print("Merged: Multi-round testing + Comprehensive coverage")
-        print("="*80)
-        print("\nTesting all LM Studio API endpoints with conversation verification...")
-        print()
 
-        # Track results
-        tests_run = 0
-        tests_passed = 0
-        tests_failed = 0
-        tests_skipped = 0
-        tests_error = 0
+async def main():
+    """Main test runner."""
+    tester = LMStudioAPITesterV2()
 
-        # Test 1: Health Check (prerequisite)
-        result = self.test_health_check()
-        tests_run += 1
-        if result is True:
-            tests_passed += 1
-        elif result is False:
-            tests_failed += 1
-            print("\n❌ Health check failed - cannot continue")
-            return self.print_final_summary(tests_run, tests_passed, tests_failed, tests_skipped, tests_error)
-        else:
-            tests_error += 1
+    print("\nTesting all LM Studio API endpoints (V2)...")
+    print("This validates the complete integration with improved structure.")
+    print()
 
-        # Test 2: List Models
-        result = self.test_list_models()
-        tests_run += 1
-        if result is True:
-            tests_passed += 1
-        elif result is False:
-            tests_failed += 1
-        elif result is None:
-            tests_skipped += 1
-        else:
-            tests_error += 1
+    # Run all tests using TestRunner
+    tester.run_test("Health Check", tester.test_health_check)
+    tester.run_test("List Models", tester.test_list_models)
+    tester.run_test("Get Current Model", tester.test_get_current_model)
+    tester.run_test("Chat Completion", tester.test_chat_completion)
+    tester.run_test("Text Completion", tester.test_text_completion)
+    tester.run_test("Create Response (Stateful)", tester.test_create_response)
+    tester.run_test("Generate Embeddings", tester.test_generate_embeddings)
+    await tester.run_test_async("Autonomous Execution", tester.test_autonomous_execution)
 
-        # Test 3: Get Model Info
-        result = self.test_get_model_info()
-        tests_run += 1
-        if result is True:
-            tests_passed += 1
-        elif result is False:
-            tests_failed += 1
-        elif result is None:
-            tests_skipped += 1
-        else:
-            tests_error += 1
+    # Print summary
+    tester.print_summary()
 
-        # Test 4: Multi-Round Chat Completion (NEW - CRITICAL!)
-        result = self.test_chat_completion_multiround()
-        tests_run += 1
-        if result is True:
-            tests_passed += 1
-        elif result is False:
-            tests_failed += 1
-        elif result is None:
-            tests_skipped += 1
-        else:
-            tests_error += 1
+    # Save results
+    results_file = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)),
+        'test_results_lmstudio_integration_v2.json'
+    )
+    with open(results_file, 'w') as f:
+        json.dump(tester.results, f, indent=2)
+    print(f"\nResults saved to: {results_file}\n")
 
-        # Test 5: Text Completion
-        result = self.test_text_completion()
-        tests_run += 1
-        if result is True:
-            tests_passed += 1
-        elif result is False:
-            tests_failed += 1
-        elif result is None:
-            tests_skipped += 1
-        else:
-            tests_error += 1
-
-        # Test 6: Multi-Round Stateful Response (NEW - with verification!)
-        result = self.test_create_response_multiround()
-        tests_run += 1
-        if result is True:
-            tests_passed += 1
-        elif result is False:
-            tests_failed += 1
-        elif result is None:
-            tests_skipped += 1
-        else:
-            tests_error += 1
-
-        # Test 7: Generate Embeddings
-        result = self.test_generate_embeddings()
-        tests_run += 1
-        if result is True:
-            tests_passed += 1
-        elif result is False:
-            tests_failed += 1
-        elif result is None:
-            tests_skipped += 1
-        else:
-            tests_error += 1
-
-        # Test 8: Autonomous Execution
-        result = await self.test_autonomous_execution()
-        tests_run += 1
-        if result is True:
-            tests_passed += 1
-        elif result is False:
-            tests_failed += 1
-        elif result is None:
-            tests_skipped += 1
-        else:
-            tests_error += 1
-
-        # Final summary
-        self.print_final_summary(tests_run, tests_passed, tests_failed, tests_skipped, tests_error)
-
-    def print_final_summary(self, total, passed, failed, skipped, errors):
-        """Print final test summary."""
-        self.print_section("FINAL TEST SUMMARY")
-
-        print(f"Tests run:    {total}")
-        print(f"✅ Passed:     {passed}")
-        print(f"❌ Failed:     {failed}")
-        print(f"⚠️  Skipped:   {skipped}")
-        print(f"💥 Errors:     {errors}")
-        print()
-
-        success_rate = (passed / total * 100) if total > 0 else 0
-        print(f"Success rate: {success_rate:.1f}%")
-        print()
-
-        # Detailed results
-        print("Detailed Results:")
-        print("-" * 80)
-        for test_name, result in self.results.items():
-            status = result.get('status', 'UNKNOWN')
-            icon = {
-                'PASS': '✅',
-                'FAIL': '❌',
-                'SKIP': '⚠️ ',
-                'ERROR': '💥'
-            }.get(status, '❓')
-
-            print(f"{icon} {test_name}: {status}")
-
-            # Show additional details for multi-round tests
-            if 'multiround' in test_name:
-                if 'context_verified' in result:
-                    context_icon = '✅' if result['context_verified'] else '❌'
-                    print(f"   {context_icon} Context verification: {result['context_verified']}")
-                if 'rounds' in result:
-                    print(f"   🔄 Rounds tested: {result['rounds']}")
-
-            if status == 'ERROR' and 'error' in result:
-                print(f"   Error: {result['error'][:100]}...")
-            if status == 'SKIP' and 'reason' in result:
-                print(f"   Reason: {result['reason']}")
-
-        print()
-
-        # V2 specific highlights
-        print("V2 Test Suite Highlights:")
-        print("-" * 80)
-        print("✨ Multi-round chat completion testing (NEW)")
-        print("✨ Context recall verification for both APIs (NEW)")
-        print("✅ Health check and model info")
-        print("✅ End-to-end autonomous execution")
-        print("✅ Result persistence to JSON")
-        print()
-
-        if failed == 0 and errors == 0:
-            print("🎉 ALL TESTS PASSED (or skipped)!")
-            print()
-            print("LM Studio integration is working correctly!")
-            print("All APIs functioning as expected, including:")
-            print("  • Multi-round conversations with context")
-            print("  • Stateful API with server-side history")
-            print("  • Autonomous tool execution")
-        else:
-            print("⚠️  SOME TESTS FAILED")
-            print()
-            print("Please review the failures above.")
-            print("Check LM Studio is running and models are loaded.")
-
-        print()
-
-        # Save results to file
-        results_file = Path(__file__).parent / 'test_results_lmstudio_integration_v2.json'
-        with open(results_file, 'w') as f:
-            json.dump(self.results, f, indent=2)
-        print(f"Results saved to: {results_file}")
-        print()
-
+    # Exit with appropriate code
+    sys.exit(tester.get_exit_code())
 
 async def main():
     """Main test runner."""
