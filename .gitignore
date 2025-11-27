@@ -45,6 +45,14 @@ env/
 test_results_*.json
 investigation_*.json
 
+# MCP Local State
+.mcp/
+*.index
+
+# Code Search Index (keep directory structure, ignore index files)
+.code-search-index/*
+!.code-search-index/.gitkeep
+
 # Development notes (if keeping locally)
 SCRATCH*.md
 TODO*.md
