@@ -98,7 +98,7 @@ async def test_persistent_session():
     try:
         os.remove(f"{dir1}/session_test.txt")
         os.remove(f"{dir2}/session_test2.txt")
-    except:
+    except Exception:
         pass
 
     # Validate all tasks completed
@@ -195,7 +195,7 @@ async def test_filesystem_multi_tool():
     # Cleanup
     try:
         os.remove(f"{test_dir}/{test_filename}")
-    except:
+    except Exception:
         pass
 
     if success:

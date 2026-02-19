@@ -90,7 +90,7 @@ class TestSuiteRunner:
                 if 'passed' in line:
                     try:
                         results["passed"] = int(line.split()[0])
-                    except:
+                    except Exception:
                         pass
                 if 'failed' in line:
                     parts = line.split()
@@ -98,7 +98,7 @@ class TestSuiteRunner:
                         if part == 'failed' and i > 0:
                             try:
                                 results["failed"] = int(parts[i-1])
-                            except:
+                            except Exception:
                                 pass
                 if 'skipped' in line:
                     parts = line.split()
@@ -106,7 +106,7 @@ class TestSuiteRunner:
                         if part == 'skipped' and i > 0:
                             try:
                                 results["skipped"] = int(parts[i-1])
-                            except:
+                            except Exception:
                                 pass
 
         return results
@@ -282,17 +282,17 @@ class TestSuiteRunner:
                 if 'Passed:' in line or '✅ Passed:' in line:
                     try:
                         script_passed = int(line.split(':')[1].strip().split()[0])
-                    except:
+                    except Exception:
                         pass
                 if 'Failed:' in line or '❌ Failed:' in line:
                     try:
                         script_failed = int(line.split(':')[1].strip().split()[0])
-                    except:
+                    except Exception:
                         pass
                 if 'Skipped:' in line or '⏭️  Skipped:' in line or '⏭️ Skipped:' in line:
                     try:
                         script_skipped = int(line.split(':')[1].strip().split()[0])
-                    except:
+                    except Exception:
                         pass
 
             phase_results["scripts"][script] = {
