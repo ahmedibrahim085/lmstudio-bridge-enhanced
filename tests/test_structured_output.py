@@ -252,7 +252,7 @@ class TestBuildResponseFormat:
         assert "json_schema" in result
         assert result["json_schema"]["name"] == "response"
         assert result["json_schema"]["schema"] == schema
-        assert result["json_schema"]["strict"] == "true"
+        assert result["json_schema"]["strict"] is True
 
     def test_custom_name(self):
         """Test response format with custom name."""
@@ -266,7 +266,7 @@ class TestBuildResponseFormat:
         schema = {"type": "string"}
         result = build_response_format(schema, strict=False)
 
-        assert result["json_schema"]["strict"] == "false"
+        assert result["json_schema"]["strict"] is False
 
     def test_preserves_schema_exactly(self):
         """Test that original schema is preserved exactly."""
