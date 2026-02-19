@@ -33,6 +33,7 @@ logger = logging.getLogger(__name__)
 
 # Known model benchmarks (from BFCL leaderboard and other sources)
 # This serves as a fallback when web search fails
+# Last updated: 2025-01 — refresh periodically from https://gorilla.cs.berkeley.edu/leaderboard
 KNOWN_BENCHMARKS: Dict[str, Dict[str, Any]] = {
     # GLM-4 models - Best for tool calling
     "glm-4": {
@@ -400,8 +401,9 @@ class ModelResearcher:
         """
         Search the web for model benchmark data.
 
-        This is a placeholder for actual web search implementation.
-        In production, this would use a search API or web scraping.
+        Currently a placeholder that returns None, causing the caller to
+        fall back to KNOWN_BENCHMARKS. A real implementation would query
+        a search API (e.g., SerpAPI) or scrape benchmark leaderboards.
 
         Args:
             model_id: Model identifier
