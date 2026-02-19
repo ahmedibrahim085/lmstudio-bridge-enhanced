@@ -19,7 +19,6 @@ from utils import get_logger, log_info
 from tools.health import register_health_tools
 from tools.completions import register_completion_tools
 from tools.embeddings import register_embeddings_tools
-from tools.autonomous import register_autonomous_tools
 from tools.dynamic_autonomous_register import register_dynamic_autonomous_tools
 from tools.lms_cli_tools import register_lms_cli_tools
 from tools.vision import register_vision_tools
@@ -61,10 +60,6 @@ def initialize_server():
     # Embeddings tools
     register_embeddings_tools(mcp, llm_client)
     logger.info("Registered embeddings tools")
-
-    # Autonomous execution tools (connects to other MCPs)
-    register_autonomous_tools(mcp, llm_client)
-    logger.info("Registered autonomous execution tools")
 
     # Dynamic autonomous tools (truly dynamic MCP discovery from .mcp.json!)
     register_dynamic_autonomous_tools(mcp, llm_client)
