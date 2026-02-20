@@ -38,35 +38,47 @@ class TestConcurrentModelLoading:
         assert len(errors) == 0, f"Errors during concurrent access: {errors}"
         assert all(r is True for r in results), "All checks should report model as loaded"
 
+    @pytest.fixture(autouse=True)
+    def reset_installed_cache(self):
+        """Reset LMSHelper._is_installed cache between tests to prevent state leakage."""
+        from utils.lms_helper import LMSHelper
+        original = LMSHelper._is_installed
+        yield
+        LMSHelper._is_installed = original
+
+    @patch('utils.retry.subprocess.run')
     @patch('utils.lms_helper.subprocess.run')
-    def test_concurrent_load_prevents_duplicate_instances(self, mock_run):
+    @patch('utils.lms_helper.LMSHelper.is_installed', return_value=True)
+    def test_concurrent_load_prevents_duplicate_instances(self, mock_installed, mock_lms_run, mock_retry_run):
         """Multiple concurrent load_model calls should not create :2, :3 instances."""
         from utils.lms_helper import LMSHelper
 
         call_count = 0
 
-        def side_effect(cmd, **kwargs):
+        def retry_side_effect(cmd, **kwargs):
+            """Handle lms ps --json calls via run_with_retry path."""
+            result = MagicMock()
+            result.returncode = 0
+            result.stderr = ''
+            # Return loaded model after the first lms load call has been made
+            if call_count > 0:
+                result.stdout = '[{"path": "test-model", "identifier": "test-model", "modelKey": "test-model", "status": "loaded"}]'
+            else:
+                result.stdout = '[]'
+            return result
+
+        def lms_side_effect(cmd, **kwargs):
+            """Handle lms load calls via utils.lms_helper.subprocess path."""
             nonlocal call_count
             result = MagicMock()
             result.returncode = 0
             result.stderr = ''
+            result.stdout = 'Model loaded'
+            call_count += 1
+            return result
 
-            if cmd[1] == 'ps':
-                # First calls: model not loaded. After load: model loaded.
-                if call_count > 0:
-                    result.stdout = '[{"path": "test-model", "identifier": "test-model"}]'
-                else:
-                    result.stdout = '[]'
-                return result
-            elif cmd[1] == 'load':
-                call_count += 1
-                result.stdout = 'Model loaded'
-                return result
-            else:
-                result.stdout = 'ok'
-                return result
-
-        mock_run.side_effect = side_effect
+        mock_retry_run.side_effect = retry_side_effect
+        mock_lms_run.side_effect = lms_side_effect
 
         results = []
 
