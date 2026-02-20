@@ -1,0 +1,48 @@
+name: "Tests"
+
+on:
+  push:
+    branches: ["main", "develop"]
+  pull_request:
+    branches: ["main", "develop"]
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Tests (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.13"]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest-mock
+
+      - name: Run tests
+        run: |
+          python -m pytest tests/ \
+            --ignore=tests/standalone \
+            --ignore=tests/test_code_quality.py \
+            --ignore=tests/test_e2e_multi_model.py \
+            --ignore=tests/test_model_autoload_fix.py \
+            --ignore=tests/test_performance_benchmarks.py \
+            --ignore=tests/test_memory_pressure.py \
+            -m "not e2e and not integration" \
+            -q --tb=short \
+            --reruns 2 --reruns-delay 5
