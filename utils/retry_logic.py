@@ -7,6 +7,7 @@ and circuit breaker pattern to prevent cascading failures.
 """
 
 import time
+import random
 import logging
 from typing import Callable, Any, Optional
 from functools import wraps
@@ -47,11 +48,12 @@ def retry_with_exponential_backoff(
                         )
                         raise
 
-                    # Calculate exponential backoff delay
-                    delay = min(base_delay * (2 ** attempt), max_delay)
+                    # Calculate exponential backoff delay with jitter
+                    jitter = 0.5 + random.random() * 0.5
+                    delay = min(base_delay * (2 ** attempt) * jitter, max_delay)
                     logger.warning(
                         f"Attempt {attempt + 1}/{max_retries} failed for {func.__name__}, "
-                        f"retrying in {delay}s: {e}"
+                        f"retrying in {delay:.2f}s: {e}"
                     )
                     time.sleep(delay)
 

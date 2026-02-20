@@ -27,6 +27,7 @@ from typing import Optional, Dict, List, Any
 from pathlib import Path
 
 from utils.retry import run_with_retry
+from utils.validation import validate_model_name, ValidationError
 
 logger = logging.getLogger(__name__)
 
@@ -204,6 +205,13 @@ ALTERNATIVE:
             logger.error("model_name cannot be empty or whitespace")
             return False
 
+        # Defense-in-depth: validate model name against safe character pattern
+        try:
+            validate_model_name(model_name)
+        except ValidationError as e:
+            logger.error(f"Invalid model name rejected: {e}")
+            return False
+
         if not cls.is_installed():
             logger.warning("LMS CLI not available - cannot load model")
             return False
@@ -273,6 +281,13 @@ ALTERNATIVE:
             True if successful, False otherwise
         """
         if not cls.is_installed():
+            return False
+
+        # Defense-in-depth: validate model name against safe character pattern
+        try:
+            validate_model_name(model_name)
+        except ValidationError as e:
+            logger.error(f"Invalid model name rejected: {e}")
             return False
 
         try:
@@ -643,6 +658,13 @@ ALTERNATIVE:
         """
         if not cls.is_installed():
             return False, "LMS CLI not installed"
+
+        # Defense-in-depth: validate model name against safe character pattern
+        try:
+            validate_model_name(model_key)
+        except ValidationError as e:
+            logger.error(f"Invalid model name rejected: {e}")
+            return False, f"Invalid model name: {e}"
 
         try:
             cmd = ["lms", "get", model_key, "--yes"]  # --yes to auto-confirm

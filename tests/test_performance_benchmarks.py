@@ -350,7 +350,7 @@ class TestProductionSLAs:
                     try:
                         LMSHelper.list_loaded_models()
                         successes += 1
-                    except:
+                    except Exception:
                         failures += 1
 
         error_rate = (failures / (successes + failures)) * 100

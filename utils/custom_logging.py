@@ -169,13 +169,16 @@ def get_logger(name: str, level: int = INFO) -> GenericLogger:
 
 
 # Convenience functions for backward compatibility
+_compat_logger = get_logger("lmstudio-bridge")
+
+
 def log_error(message: str) -> None:
-    """Log error message to stderr (backward compatible).
+    """Log error message (backward compatible).
 
     Args:
         message: Error message
     """
-    print(f"ERROR: {message}", file=sys.stderr)
+    _compat_logger.error(message)
 
 
 def log_categorized_error(exception: Exception, context_message: str = None, **context) -> None:
@@ -207,30 +210,30 @@ def log_categorized_error(exception: Exception, context_message: str = None, **c
 
 
 def log_info(message: str) -> None:
-    """Log info message to stderr (backward compatible).
+    """Log info message (backward compatible).
 
     Args:
         message: Info message
     """
-    print(f"INFO: {message}", file=sys.stderr)
+    _compat_logger.info(message)
 
 
 def log_warning(message: str) -> None:
-    """Log warning message to stderr.
+    """Log warning message (backward compatible).
 
     Args:
         message: Warning message
     """
-    print(f"WARNING: {message}", file=sys.stderr)
+    _compat_logger.warning(message)
 
 
 def log_debug(message: str) -> None:
-    """Log debug message to stderr.
+    """Log debug message (backward compatible).
 
     Args:
         message: Debug message
     """
-    print(f"DEBUG: {message}", file=sys.stderr)
+    _compat_logger.debug(message)
 
 
 __all__ = [

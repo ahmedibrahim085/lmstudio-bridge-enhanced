@@ -531,6 +531,9 @@ class LLMClient:
         payload = {
             "input": input_text,
             "model": model_to_use,
+            # Note: stream=True passes through to LM Studio but response parsing
+            # currently expects a complete JSON response, not SSE chunks.
+            # Full streaming support would require an async iterator with SSE parsing.
             "stream": stream
         }
 

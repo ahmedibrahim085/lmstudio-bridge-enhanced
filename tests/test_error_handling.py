@@ -84,13 +84,13 @@ async def test_retry_exponential_backoff():
     # Check that delays increase exponentially
     assert len(timestamps) == 3
 
-    # Delay between 1st and 2nd attempt should be ~0.1s
+    # Delay between 1st and 2nd attempt: base_delay * 2^0 * jitter(0.5..1.0) = 0.05..0.10
     delay1 = timestamps[1] - timestamps[0]
-    assert 0.08 < delay1 < 0.15
+    assert 0.04 < delay1 < 0.15
 
-    # Delay between 2nd and 3rd attempt should be ~0.2s
+    # Delay between 2nd and 3rd attempt: base_delay * 2^1 * jitter(0.5..1.0) = 0.10..0.20
     delay2 = timestamps[2] - timestamps[1]
-    assert 0.18 < delay2 < 0.25
+    assert 0.08 < delay2 < 0.25
 
 
 @pytest.mark.asyncio

@@ -11,6 +11,7 @@ These utilities help make the system more resilient to transient failures.
 
 import time
 import asyncio
+import random
 from functools import wraps
 from typing import Callable, Any, Optional, Tuple
 import logging
@@ -68,8 +69,9 @@ def retry_with_backoff(
                             )
                             raise
 
-                        # Calculate delay with exponential backoff
-                        delay = min(base_delay * (2 ** attempt), max_delay)
+                        # Calculate delay with exponential backoff + jitter
+                        jitter = 0.5 + random.random() * 0.5
+                        delay = min(base_delay * (2 ** attempt) * jitter, max_delay)
 
                         logger.warning(
                             f"Attempt {attempt + 1}/{max_retries} failed for {func.__name__}: {e}. "
@@ -101,8 +103,9 @@ def retry_with_backoff(
                             )
                             raise
 
-                        # Calculate delay with exponential backoff
-                        delay = min(base_delay * (2 ** attempt), max_delay)
+                        # Calculate delay with exponential backoff + jitter
+                        jitter = 0.5 + random.random() * 0.5
+                        delay = min(base_delay * (2 ** attempt) * jitter, max_delay)
 
                         logger.warning(
                             f"Attempt {attempt + 1}/{max_retries} failed for {func.__name__}: {e}. "

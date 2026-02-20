@@ -19,12 +19,7 @@ import asyncio
 import json
 from typing import List, Dict, Any, Optional, Union
 from contextlib import AsyncExitStack
-import sys
-import os
 from pathlib import Path
-
-# Add parent directory to path for imports
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from mcp.client.stdio import stdio_client, StdioServerParameters
 from mcp import ClientSession
@@ -39,6 +34,7 @@ from config.constants import DEFAULT_MAX_ROUNDS, DEFAULT_MAX_TOKENS
 # Import centralized safe_call_tool wrapper from mcp_client
 # This ensures ALL code paths use the same coercion logic via single entry point
 from mcp_client.type_coercion import safe_call_tool
+from mcp_client.executor import ToolExecutor
 
 
 class DynamicAutonomousAgent:
@@ -596,19 +592,18 @@ Continue with the task based on these results."""
                         import json
                         try:
                             tool_args = json.loads(tool_args)
-                        except json.JSONDecodeError:
-                            log_error(f"Failed to parse tool arguments: {tool_args}")
-                            tool_args = {}
+                        except json.JSONDecodeError as e:
+                            error_msg = f"Failed to parse tool arguments for '{tool_name}': {str(tool_args)[:200]}"
+                            log_error(error_msg)
+                            pending_tool_results.append((tool_name, f"Error: {error_msg}"))
+                            continue
 
                     log_info(f"Executing {tool_name}")
 
                     try:
                         # Use safe_call_tool wrapper - handles type coercion automatically
                         result = await safe_call_tool(session, tool_name, tool_args)
-                        tool_result = (
-                            result.content[0].text if result.content
-                            else "Tool executed successfully"
-                        )
+                        tool_result = ToolExecutor.extract_text_content(result)
                         log_info(f"Tool result: {str(tool_result)[:200]}...")
                     except Exception as e:
                         tool_result = f"Error: {e}"
@@ -733,9 +728,11 @@ Continue with the task based on these results."""
                         import json
                         try:
                             tool_args = json.loads(tool_args)
-                        except json.JSONDecodeError:
-                            log_error(f"Failed to parse tool arguments: {tool_args}")
-                            tool_args = {}
+                        except json.JSONDecodeError as e:
+                            error_msg = f"Failed to parse tool arguments for '{namespaced_tool_name}': {str(tool_args)[:200]}"
+                            log_error(error_msg)
+                            pending_tool_results.append((namespaced_tool_name, f"Error: {error_msg}"))
+                            continue
 
                     # Get original tool name and session
                     if namespaced_tool_name not in tool_to_session:
@@ -748,10 +745,7 @@ Continue with the task based on these results."""
                         try:
                             # Use safe_call_tool wrapper - handles type coercion automatically
                             result = await safe_call_tool(session, original_tool_name, tool_args)
-                            tool_result = (
-                                result.content[0].text if result.content
-                                else "Tool executed successfully"
-                            )
+                            tool_result = ToolExecutor.extract_text_content(result)
                             log_info(f"Tool result: {str(tool_result)[:200]}...")
                         except Exception as e:
                             tool_result = f"Error: {e}"

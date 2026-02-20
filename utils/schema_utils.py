@@ -180,7 +180,7 @@ def build_response_format(
         "type": "json_schema",
         "json_schema": {
             "name": name,
-            "strict": str(strict).lower(),
+            "strict": bool(strict),
             "schema": schema
         }
     }
