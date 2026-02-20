@@ -92,8 +92,12 @@ class ConversationHistory:
         if self.max_messages and len(self.messages) > self.max_messages:
             # Keep system message if present, trim from the middle
             if self.messages[0].role == "system":
-                # Keep first (system) and last N-1 messages
-                self.messages = [self.messages[0]] + self.messages[-(self.max_messages - 1):]
+                if self.max_messages <= 1:
+                    # Can only keep system message when limit is 1
+                    self.messages = [self.messages[0]]
+                else:
+                    # Keep first (system) and last N-1 messages
+                    self.messages = [self.messages[0]] + self.messages[-(self.max_messages - 1):]
             else:
                 # Keep last N messages
                 self.messages = self.messages[-self.max_messages:]
@@ -285,6 +289,5 @@ class MessageFormatter:
 __all__ = [
     "Message",
     "ConversationHistory",
-    "ToolCallTracker",
     "MessageFormatter"
 ]

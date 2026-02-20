@@ -23,6 +23,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 # Add project root so all imports resolve
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
+from tools.dynamic_autonomous import _SingleSessionDispatcher
+
 
 # ---------------------------------------------------------------------------
 # Helpers: canonical response builders (mirrors test_opp02 pattern)
@@ -386,7 +388,7 @@ class TestAutonomousPreload(unittest.TestCase):
 
         with patch("utils.lms_helper.LMSHelper.is_installed", return_value=True), \
              patch("utils.lms_helper.LMSHelper.ensure_model_loaded", return_value=True) as mock_preload, \
-             patch.object(agent, "_autonomous_loop_multi_mcp", new_callable=AsyncMock,
+             patch.object(agent, "_autonomous_loop", new_callable=AsyncMock,
                           return_value="done"), \
              patch("tools.dynamic_autonomous.MCPDiscovery") as mock_discovery_cls:
 
@@ -443,7 +445,7 @@ class TestAutonomousLoopTemperature(unittest.TestCase):
 
         asyncio.get_event_loop().run_until_complete(
             agent._autonomous_loop(
-                session=mock_session,
+                dispatcher=_SingleSessionDispatcher(mock_session),
                 openai_tools=[],
                 task="test task",
                 max_rounds=5,

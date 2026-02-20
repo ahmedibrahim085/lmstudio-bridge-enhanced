@@ -23,6 +23,7 @@ from llm.exceptions import (
 )
 from utils.error_handling import retry_with_backoff
 from utils.lms_helper import LMSHelper
+from config.constants import JIT_TTL_DEFAULT, JIT_TTL_EMBEDDING
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -160,6 +161,46 @@ class LLMClient:
         """
         return f"{self.api_base}/{path.lstrip('/')}"
 
+    def _ensure_model_loaded(
+        self,
+        target_model: Optional[str],
+        ttl: int,
+        label: str = "Model"
+    ) -> None:
+        """JIT model loading guard. Ensures model is loaded before API call.
+
+        Args:
+            target_model: Model identifier to load
+            ttl: TTL in seconds for JIT loading
+            label: Label for log messages (e.g., "Model", "Embedding model")
+
+        Raises:
+            LLMConnectionError: If model not loaded and loading fails
+        """
+        if not target_model or target_model == "default" or not LMSHelper.is_installed():
+            return
+
+        try:
+            is_loaded = LMSHelper.is_model_loaded(target_model)
+
+            if is_loaded is False:
+                logger.warning(f"{label} '{target_model}' not loaded, attempting to load...")
+                load_success = LMSHelper.ensure_model_loaded_with_verification(target_model, ttl=ttl)
+
+                if not load_success:
+                    raise LLMConnectionError(
+                        f"{label} '{target_model}' is not loaded and failed to load automatically."
+                    )
+
+                logger.info(f"{label} '{target_model}' loaded successfully")
+            elif is_loaded is True:
+                logger.debug(f"{label} '{target_model}' already loaded")
+
+        except LLMConnectionError:
+            raise
+        except Exception as e:
+            logger.warning(f"Could not verify {label.lower()} load state: {e}. Proceeding anyway...")
+
     @retry_with_backoff(
         max_retries=DEFAULT_MAX_RETRIES + 1,  # +1 for initial attempt = 3 total
         base_delay=DEFAULT_RETRY_DELAY,
@@ -230,36 +271,7 @@ class LLMClient:
         # Determine which model to use (per-request model overrides default)
         target_model = model if model is not None else self.model
 
-        # CRITICAL BUG FIX: Ensure model is loaded before making request
-        # This prevents confusing 404 errors when models are auto-unloaded or ejected
-        # Only attempt if LMS CLI is available (gracefully degrades without it)
-        if target_model and target_model != "default" and LMSHelper.is_installed():
-            try:
-                # Check if model is loaded
-                is_loaded = LMSHelper.is_model_loaded(target_model)
-
-                if is_loaded is False:
-                    # Model not loaded - try to load it
-                    logger.warning(f"Model '{target_model}' not loaded, attempting to load...")
-                    load_success = LMSHelper.ensure_model_loaded_with_verification(target_model, ttl=600)
-
-                    if not load_success:
-                        raise LLMConnectionError(
-                            f"Model '{target_model}' is not loaded and failed to load automatically. "
-                            f"Please load the model in LM Studio manually or check available models."
-                        )
-
-                    logger.info(f"✅ Model '{target_model}' loaded successfully")
-                elif is_loaded is True:
-                    logger.debug(f"Model '{target_model}' already loaded")
-                # is_loaded is None means LMS CLI couldn't determine state - proceed anyway
-
-            except LLMConnectionError:
-                # Re-raise LLMConnectionError as-is
-                raise
-            except Exception as e:
-                # Log other errors but don't fail - model might still work
-                logger.warning(f"Could not verify model load state: {e}. Proceeding anyway...")
+        self._ensure_model_loaded(target_model, ttl=JIT_TTL_DEFAULT)
 
         payload = {
             "messages": messages,
@@ -332,29 +344,7 @@ class LLMClient:
         # Determine which model to use
         target_model = model or self.model
 
-        # CRITICAL BUG FIX: Ensure model is loaded before making request
-        if target_model and target_model != "default" and LMSHelper.is_installed():
-            try:
-                is_loaded = LMSHelper.is_model_loaded(target_model)
-
-                if is_loaded is False:
-                    logger.warning(f"Model '{target_model}' not loaded, attempting to load...")
-                    load_success = LMSHelper.ensure_model_loaded_with_verification(target_model, ttl=600)
-
-                    if not load_success:
-                        raise LLMConnectionError(
-                            f"Model '{target_model}' is not loaded and failed to load automatically. "
-                            f"Please load the model in LM Studio manually."
-                        )
-
-                    logger.info(f"✅ Model '{target_model}' loaded successfully")
-                elif is_loaded is True:
-                    logger.debug(f"Model '{target_model}' already loaded")
-
-            except LLMConnectionError:
-                raise
-            except Exception as e:
-                logger.warning(f"Could not verify model load state: {e}. Proceeding anyway...")
+        self._ensure_model_loaded(target_model, ttl=JIT_TTL_DEFAULT)
 
         payload = {
             "prompt": prompt,
@@ -451,31 +441,13 @@ class LLMClient:
             LLMResponseError: If LM Studio returns an error
             LLMError: For other unexpected errors
         """
-        from config.constants import JIT_TTL_EMBEDDING
-
         # Resolve target model
         target_model = model if model and model != "default" else self.model
 
         # Resolve TTL once for both the load guard and the payload
         resolved_ttl = ttl if ttl is not None else JIT_TTL_EMBEDDING
 
-        # JIT model loading guard
-        if target_model and target_model != "default" and LMSHelper.is_installed():
-            try:
-                is_loaded = LMSHelper.is_model_loaded(target_model)
-                if is_loaded is False:
-                    logger.warning(f"Embedding model '{target_model}' not loaded, attempting to load...")
-                    load_success = LMSHelper.ensure_model_loaded_with_verification(target_model, ttl=resolved_ttl)
-                    if not load_success:
-                        raise LLMConnectionError(
-                            f"Embedding model '{target_model}' not loaded and failed to load."
-                        )
-                elif is_loaded is True:
-                    logger.debug(f"Embedding model '{target_model}' already loaded")
-            except LLMConnectionError:
-                raise
-            except Exception as e:
-                logger.warning(f"Could not verify embedding model state: {e}. Proceeding anyway...")
+        self._ensure_model_loaded(target_model, ttl=resolved_ttl, label="Embedding model")
 
         payload = {"input": text}
 
@@ -559,32 +531,13 @@ class LLMClient:
             ...     previous_response_id=response1["id"]
             ... )
         """
-        from config.constants import JIT_TTL_DEFAULT
-
         # Resolve "default" to actual model name
         model_to_use = self.model if model == "default" or model is None else model
 
         # Resolve TTL once for both the load guard and the payload
         resolved_ttl = ttl if ttl is not None else JIT_TTL_DEFAULT
 
-        # JIT model loading guard
-        if model_to_use and model_to_use != "default" and LMSHelper.is_installed():
-            try:
-                is_loaded = LMSHelper.is_model_loaded(model_to_use)
-                if is_loaded is False:
-                    logger.warning(f"Model '{model_to_use}' not loaded, attempting to load...")
-                    load_success = LMSHelper.ensure_model_loaded_with_verification(model_to_use, ttl=resolved_ttl)
-                    if not load_success:
-                        raise LLMConnectionError(
-                            f"Model '{model_to_use}' is not loaded and failed to load automatically."
-                        )
-                    logger.info(f"Model '{model_to_use}' loaded successfully")
-                elif is_loaded is True:
-                    logger.debug(f"Model '{model_to_use}' already loaded")
-            except LLMConnectionError:
-                raise
-            except Exception as e:
-                logger.warning(f"Could not verify model load state: {e}. Proceeding anyway...")
+        self._ensure_model_loaded(model_to_use, ttl=resolved_ttl)
 
         payload = {
             "input": input_text,

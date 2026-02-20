@@ -18,6 +18,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 # Add project root so all imports resolve
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
+from tools.dynamic_autonomous import _SingleSessionDispatcher
+
 
 # ---------------------------------------------------------------------------
 # Helpers: canonical response builders
@@ -216,7 +218,7 @@ class TestConsecutiveErrorCounter(unittest.TestCase):
         ):
             result = _run_loop(
                 agent._autonomous_loop(
-                    session=session,
+                    dispatcher=_SingleSessionDispatcher(session),
                     openai_tools=[],
                     task="test task",
                     max_rounds=10,
@@ -254,7 +256,7 @@ class TestConsecutiveErrorCounter(unittest.TestCase):
         ):
             result = _run_loop(
                 agent._autonomous_loop(
-                    session=session,
+                    dispatcher=_SingleSessionDispatcher(session),
                     openai_tools=[],
                     task="test task",
                     max_rounds=20,
@@ -279,7 +281,7 @@ class TestConsecutiveErrorCounter(unittest.TestCase):
 
         result = _run_loop(
             agent._autonomous_loop(
-                session=session,
+                dispatcher=_SingleSessionDispatcher(session),
                 openai_tools=[],
                 task="test task",
                 max_rounds=20,
@@ -317,7 +319,7 @@ class TestConsecutiveErrorCounter(unittest.TestCase):
 
         result = _run_loop(
             agent._autonomous_loop(
-                session=session,
+                dispatcher=_SingleSessionDispatcher(session),
                 openai_tools=[],
                 task="test task",
                 max_rounds=20,
@@ -347,7 +349,7 @@ class TestConsecutiveErrorCounter(unittest.TestCase):
 
         result = _run_loop(
             agent._autonomous_loop(
-                session=session,
+                dispatcher=_SingleSessionDispatcher(session),
                 openai_tools=[],
                 task="test task",
                 max_rounds=20,
@@ -381,7 +383,7 @@ class TestConsecutiveErrorCounter(unittest.TestCase):
 
         result = _run_loop(
             agent._autonomous_loop(
-                session=session,
+                dispatcher=_SingleSessionDispatcher(session),
                 openai_tools=[],
                 task="test task",
                 max_rounds=20,
@@ -435,7 +437,7 @@ class TestConsecutiveErrorCounter(unittest.TestCase):
         ):
             result = _run_loop(
                 agent._autonomous_loop(
-                    session=session,
+                    dispatcher=_SingleSessionDispatcher(session),
                     openai_tools=[],
                     task="test task",
                     max_rounds=20,
@@ -535,7 +537,7 @@ class TestExceptionHandling(unittest.TestCase):
 
         result = _run_loop(
             agent._autonomous_loop(
-                session=session,
+                dispatcher=_SingleSessionDispatcher(session),
                 openai_tools=[],
                 task="test task",
                 max_rounds=20,
@@ -557,7 +559,7 @@ class TestExceptionHandling(unittest.TestCase):
 
         result = _run_loop(
             agent._autonomous_loop(
-                session=session,
+                dispatcher=_SingleSessionDispatcher(session),
                 openai_tools=[],
                 task="test task",
                 max_rounds=20,
@@ -588,7 +590,7 @@ class TestExceptionHandling(unittest.TestCase):
         ):
             result = _run_loop(
                 agent._autonomous_loop(
-                    session=session,
+                    dispatcher=_SingleSessionDispatcher(session),
                     openai_tools=[],
                     task="test task",
                     max_rounds=20,
@@ -642,7 +644,7 @@ class TestFinishReasonChecking(unittest.TestCase):
         ):
             _run_loop(
                 agent._autonomous_loop(
-                    session=session,
+                    dispatcher=_SingleSessionDispatcher(session),
                     openai_tools=[],
                     task="test task",
                     max_rounds=10,
@@ -684,7 +686,7 @@ class TestFinishReasonChecking(unittest.TestCase):
         ):
             _run_loop(
                 agent._autonomous_loop(
-                    session=session,
+                    dispatcher=_SingleSessionDispatcher(session),
                     openai_tools=[],
                     task="test task",
                     max_rounds=10,
@@ -756,7 +758,7 @@ class TestReasoningOutputLogged(unittest.TestCase):
             ):
                 _run_loop(
                     agent._autonomous_loop(
-                        session=session,
+                        dispatcher=_SingleSessionDispatcher(session),
                         openai_tools=[],
                         task="test task",
                         max_rounds=10,

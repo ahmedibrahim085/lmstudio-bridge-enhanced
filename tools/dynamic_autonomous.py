@@ -37,6 +37,38 @@ from mcp_client.type_coercion import safe_call_tool
 from mcp_client.executor import ToolExecutor
 
 
+class _SingleSessionDispatcher:
+    """Dispatches tools to a single MCP session."""
+
+    def __init__(self, session: ClientSession):
+        self._session = session
+
+    async def dispatch(self, fc_name: str, tool_args: dict) -> tuple:
+        """Execute tool on the single session. Returns (display_name, result_text)."""
+        result = await safe_call_tool(self._session, fc_name, tool_args)
+        return fc_name, ToolExecutor.extract_text_content(result)
+
+
+class _MultiSessionDispatcher:
+    """Dispatches tools across multiple MCP sessions using namespace resolution."""
+
+    def __init__(self, tool_to_session: Dict[str, tuple]):
+        self._tool_to_session = tool_to_session
+
+    async def dispatch(self, fc_name: str, tool_args: dict) -> tuple:
+        """Resolve namespaced tool and execute. Returns (display_name, result_text).
+
+        Raises:
+            KeyError: If tool name not found in any session.
+        """
+        if fc_name not in self._tool_to_session:
+            raise KeyError(f"Unknown tool {fc_name}")
+        original_name, session = self._tool_to_session[fc_name]
+        log_info(f"Executing {fc_name} (original: {original_name})")
+        result = await safe_call_tool(session, original_name, tool_args)
+        return fc_name, ToolExecutor.extract_text_content(result)
+
+
 class DynamicAutonomousAgent:
     """
     Dynamic autonomous agent that can connect to ANY MCP discovered from .mcp.json.
@@ -74,6 +106,56 @@ class DynamicAutonomousAgent:
             # Find mcp.json path once (this doesn't read the file)
             temp_discovery = MCPDiscovery()
             self.mcp_json_path = temp_discovery.mcp_json_path
+
+    async def _preload_and_validate_model(self, model: Optional[str], verbose: bool = False) -> Optional[str]:
+        """Preload model via LMS CLI and validate if specified.
+
+        Args:
+            model: Model override (None = use self.llm.model)
+            verbose: If True, use emoji-enhanced logging with CLI install warning
+
+        Returns:
+            Error message string if validation fails, None on success
+        """
+        model_to_use = model or self.llm.model
+        if LMSHelper.is_installed():
+            log_info(f"LMS CLI detected - ensuring model loaded: {model_to_use}")
+            try:
+                if LMSHelper.ensure_model_loaded(model_to_use):
+                    if verbose:
+                        log_info(f"✅ Model '{model_to_use}' preloaded and kept loaded (prevents 404)")
+                    else:
+                        log_info(f"Model '{model_to_use}' preloaded")
+                else:
+                    if verbose:
+                        log_info(f"⚠️  Could not preload model '{model_to_use}' with LMS CLI")
+                    else:
+                        log_info(f"Could not preload model '{model_to_use}'")
+            except Exception as e:
+                if verbose:
+                    log_info(f"⚠️  Error during model preload: {e}")
+                else:
+                    log_info(f"Error during model preload: {e}")
+        elif verbose:
+            log_info(
+                "⚠️  LMS CLI not installed - model may auto-unload causing intermittent 404 errors. "
+                "Install for better reliability: brew install lmstudio-ai/lms/lms"
+            )
+
+        # Validate model if specified
+        if model is not None:
+            log_info(f"Model: {model}")
+            try:
+                await self.model_validator.validate_model(model)
+                log_info(f"✓ Model validated: {model}")
+            except ModelNotFoundError as e:
+                log_error(f"Model validation failed: {e}")
+                return f"Error: Model '{model}' not found. {e}"
+            except Exception as e:
+                log_error(f"Model validation error: {e}")
+                return f"Error: Model validation failed: {e}"
+
+        return None
 
     async def autonomous_with_mcp(
         self,
@@ -127,30 +209,9 @@ class DynamicAutonomousAgent:
         log_info(f"MCP: {mcp_name}")
         log_info(f"Task: {task}")
 
-        # PROACTIVE MODEL PRELOADING
-        model_to_use = model or self.llm.model
-        if LMSHelper.is_installed():
-            log_info(f"LMS CLI detected - ensuring model loaded: {model_to_use}")
-            try:
-                if LMSHelper.ensure_model_loaded(model_to_use):
-                    log_info(f"Model '{model_to_use}' preloaded")
-                else:
-                    log_info(f"Could not preload model '{model_to_use}'")
-            except Exception as e:
-                log_info(f"Error during model preload: {e}")
-
-        # Validate model if specified
-        if model is not None:
-            log_info(f"Model: {model}")
-            try:
-                await self.model_validator.validate_model(model)
-                log_info(f"✓ Model validated: {model}")
-            except ModelNotFoundError as e:
-                log_error(f"Model validation failed: {e}")
-                return f"Error: Model '{model}' not found. {e}"
-            except Exception as e:
-                log_error(f"Model validation error: {e}")
-                return f"Error: Model validation failed: {e}"
+        error = await self._preload_and_validate_model(model)
+        if error:
+            return error
 
         try:
             # HOT RELOAD: Create fresh MCPDiscovery (reads .mcp.json fresh)
@@ -205,7 +266,7 @@ class DynamicAutonomousAgent:
 
                     # Execute autonomous loop
                     return await self._autonomous_loop(
-                        session=session,
+                        dispatcher=_SingleSessionDispatcher(session),
                         openai_tools=openai_tools,
                         task=task,
                         max_rounds=max_rounds,
@@ -274,30 +335,9 @@ class DynamicAutonomousAgent:
         log_info(f"MCPs: {', '.join(mcp_names)}")
         log_info(f"Task: {task}")
 
-        # PROACTIVE MODEL PRELOADING
-        model_to_use = model or self.llm.model
-        if LMSHelper.is_installed():
-            log_info(f"LMS CLI detected - ensuring model loaded: {model_to_use}")
-            try:
-                if LMSHelper.ensure_model_loaded(model_to_use):
-                    log_info(f"Model '{model_to_use}' preloaded")
-                else:
-                    log_info(f"Could not preload model '{model_to_use}'")
-            except Exception as e:
-                log_info(f"Error during model preload: {e}")
-
-        # Validate model if specified
-        if model is not None:
-            log_info(f"Model: {model}")
-            try:
-                await self.model_validator.validate_model(model)
-                log_info(f"✓ Model validated: {model}")
-            except ModelNotFoundError as e:
-                log_error(f"Model validation failed: {e}")
-                return f"Error: Model '{model}' not found. {e}"
-            except Exception as e:
-                log_error(f"Model validation error: {e}")
-                return f"Error: Model validation failed: {e}"
+        error = await self._preload_and_validate_model(model)
+        if error:
+            return error
 
         try:
             # HOT RELOAD: Create fresh MCPDiscovery (reads .mcp.json fresh)
@@ -393,8 +433,8 @@ class DynamicAutonomousAgent:
                 )
 
                 # Execute autonomous loop with ALL tools
-                return await self._autonomous_loop_multi_mcp(
-                    tool_to_session=tool_to_session,
+                return await self._autonomous_loop(
+                    dispatcher=_MultiSessionDispatcher(tool_to_session),
                     openai_tools=all_openai_tools,
                     task=task,
                     max_rounds=max_rounds,
@@ -462,35 +502,9 @@ class DynamicAutonomousAgent:
 
         # PROACTIVE MODEL PRELOADING (Fallback mechanism)
         # Ensure model is loaded before starting autonomous execution
-        model_to_use = model or self.llm.model
-
-        if LMSHelper.is_installed():
-            log_info(f"LMS CLI detected - ensuring model loaded: {model_to_use}")
-            try:
-                if LMSHelper.ensure_model_loaded(model_to_use):
-                    log_info(f"✅ Model '{model_to_use}' preloaded and kept loaded (prevents 404)")
-                else:
-                    log_info(f"⚠️  Could not preload model '{model_to_use}' with LMS CLI")
-            except Exception as e:
-                log_info(f"⚠️  Error during model preload: {e}")
-        else:
-            log_info(
-                "⚠️  LMS CLI not installed - model may auto-unload causing intermittent 404 errors. "
-                "Install for better reliability: brew install lmstudio-ai/lms/lms"
-            )
-
-        # Validate model if specified
-        if model is not None:
-            log_info(f"Model: {model}")
-            try:
-                await self.model_validator.validate_model(model)
-                log_info(f"✓ Model validated: {model}")
-            except ModelNotFoundError as e:
-                log_error(f"Model validation failed: {e}")
-                return f"Error: Model '{model}' not found. {e}"
-            except Exception as e:
-                log_error(f"Model validation error: {e}")
-                return f"Error: Model validation failed: {e}"
+        error = await self._preload_and_validate_model(model, verbose=True)
+        if error:
+            return error
 
         # HOT RELOAD: Create fresh MCPDiscovery (reads .mcp.json fresh)
         discovery = MCPDiscovery(self.mcp_json_path)
@@ -548,7 +562,7 @@ Continue with the task based on these results."""
 
     async def _autonomous_loop(
         self,
-        session: ClientSession,
+        dispatcher,
         openai_tools: List[Dict],
         task: str,
         max_rounds: int,
@@ -566,6 +580,14 @@ Continue with the task based on these results."""
         "run a tool → provide the result to the LLM → wait for the LLM to generate a response"
 
         See: https://lmstudio.ai/docs/typescript/agent/act
+
+        Args:
+            dispatcher: _SingleSessionDispatcher or _MultiSessionDispatcher instance
+            openai_tools: List of tools in OpenAI function-calling format
+            task: Task description for the LLM
+            max_rounds: Maximum number of autonomous loop iterations
+            max_tokens: Maximum tokens per LLM response
+            model: Optional model name override
         """
         previous_response_id = None
         pending_tool_results = []  # Track tool results to inject into next round
@@ -650,202 +672,44 @@ Continue with the task based on these results."""
 
                 # Execute tools and collect results for next round
                 for fc in function_calls:
-                    tool_name = fc["name"]
+                    fc_name = fc["name"]
                     tool_args = fc.get("arguments", {})
 
                     # Parse arguments if they're a JSON string
                     if isinstance(tool_args, str):
-                        import json
                         try:
                             tool_args = json.loads(tool_args)
-                        except json.JSONDecodeError as e:
-                            error_msg = f"Failed to parse tool arguments for '{tool_name}': {str(tool_args)[:200]}"
+                        except json.JSONDecodeError:
+                            error_msg = f"Failed to parse tool arguments for '{fc_name}': {str(tool_args)[:200]}"
                             log_error(error_msg)
-                            pending_tool_results.append((tool_name, f"Error: {error_msg}"))
+                            pending_tool_results.append((fc_name, f"Error: {error_msg}"))
                             consecutive_error_count += 1
                             if consecutive_error_count >= MAX_CONSECUTIVE_ERRORS:
                                 return f"Task aborted: {consecutive_error_count} consecutive errors. Last: JSON parse error"
                             continue
 
-                    log_info(f"Executing {tool_name}")
+                    log_info(f"Executing {fc_name}")
 
                     try:
-                        # Use safe_call_tool wrapper - handles type coercion automatically
-                        result = await safe_call_tool(session, tool_name, tool_args)
-                        tool_result = ToolExecutor.extract_text_content(result)
+                        display_name, tool_result = await dispatcher.dispatch(fc_name, tool_args)
                         consecutive_error_count = 0  # Reset on success
                         log_info(f"Tool result: {str(tool_result)[:200]}...")
+                    except KeyError as e:
+                        tool_result = f"Error: {e}"
+                        log_error(str(e))
+                        consecutive_error_count += 1
+                        if consecutive_error_count >= MAX_CONSECUTIVE_ERRORS:
+                            pending_tool_results.append((fc_name, tool_result))
+                            return f"Task aborted: {consecutive_error_count} consecutive errors. Last: {e}"
                     except Exception as e:
                         tool_result = f"Error: {e}"
                         log_error(f"Tool execution failed: {e}")
                         consecutive_error_count += 1
                         if consecutive_error_count >= MAX_CONSECUTIVE_ERRORS:
-                            pending_tool_results.append((tool_name, tool_result))
+                            pending_tool_results.append((fc_name, tool_result))
                             return f"Task aborted: {consecutive_error_count} consecutive errors. Last tool error: {e}"
 
-                    # Collect tool result for injection in next round
-                    pending_tool_results.append((tool_name, tool_result))
-
-                # Continue loop - tool results will be injected in next iteration
-            else:
-                # Final answer - no function calls
-                log_info("LLM provided final answer")
-                if text_content:
-                    return text_content
-                else:
-                    return "No content in response"
-
-        return "Task incomplete: Maximum rounds reached"
-
-    async def _autonomous_loop_multi_mcp(
-        self,
-        tool_to_session: Dict[str, tuple],
-        openai_tools: List[Dict],
-        task: str,
-        max_rounds: int,
-        max_tokens: int,
-        model: Optional[str] = None
-    ) -> str:
-        """Core autonomous loop for multiple MCPs using stateful /v1/responses API with explicit tool result injection.
-
-        HYBRID APPROACH that provides:
-        - Stateful conversation management (97% token savings via previous_response_id)
-        - Explicit tool result passing (injected into input_text)
-        - No context overflow (server handles history)
-
-        Based on LM Studio SDK's .act() internal behavior:
-        "run a tool → provide the result to the LLM → wait for the LLM to generate a response"
-
-        See: https://lmstudio.ai/docs/typescript/agent/act
-        """
-        previous_response_id = None
-        pending_tool_results = []  # Track tool results to inject into next round
-        consecutive_error_count = 0
-
-        for round_num in range(max_rounds):
-            log_info(f"\n--- Round {round_num + 1}/{max_rounds} ---")
-
-            # Build input text with tool results injection and self-correction hints
-            input_text = self._build_input_text(
-                round_num, task, pending_tool_results, consecutive_error_count
-            )
-            if round_num > 0:
-                pending_tool_results = []
-
-            # Call /v1/responses with tools (stateful API!)
-            # Use tool_choice="required" on first round to FORCE tool usage
-            # This prevents LLMs from hallucinating instead of calling tools
-            # On subsequent rounds, use "auto" to allow final answers
-            current_tool_choice = "required" if round_num == 0 else "auto"
-
-            # CRITICAL: Run sync HTTP call in thread pool to avoid blocking event loop
-            # This prevents MCP connection TaskGroup failures during long LLM calls
-            try:
-                response = await asyncio.to_thread(
-                    self.llm.create_response,
-                    input_text=input_text,
-                    tools=openai_tools,
-                    previous_response_id=previous_response_id,
-                    max_tokens=max_tokens,
-                    model=model,
-                    tool_choice=current_tool_choice,
-                    temperature=DEFAULT_TEMPERATURE
-                )
-            except Exception as e:
-                consecutive_error_count += 1
-                log_error(f"LLM call failed (consecutive: {consecutive_error_count}): {e}")
-                if consecutive_error_count >= MAX_CONSECUTIVE_ERRORS:
-                    return f"Task aborted: {consecutive_error_count} consecutive errors. Last: {e}"
-                pending_tool_results.append(("_llm_error", f"LLM call failed: {e}"))
-                continue
-
-            # Save response ID for next round (CRITICAL!)
-            previous_response_id = response["id"]
-            log_info(f"Response ID: {previous_response_id}")
-
-            # Check for incomplete response (truncation)
-            status = response.get("status")
-            if status == "incomplete":
-                incomplete_reason = response.get("incomplete_details", {}).get("reason", "unknown")
-                log_error(f"Response incomplete: {incomplete_reason}")
-
-            # Process output array (not choices - different format!)
-            output = response.get("output", [])
-
-            # Find text output (final answer) - it's nested inside "message" type items
-            text_content = None
-            for item in output:
-                if item.get("type") == "message":
-                    content = item.get("content", [])
-                    for content_item in content:
-                        if content_item.get("type") == "output_text":
-                            text_content = content_item.get("text", "")
-                            log_info(f"LLM text: {text_content[:100]}...")
-                            break
-                    if text_content:
-                        break
-                elif item.get("type") == "reasoning":
-                    reasoning_content = item.get("content", [])
-                    for rc in reasoning_content:
-                        if rc.get("type") == "reasoning_text":
-                            log_info(f"LLM reasoning: {rc.get('text', '')[:200]}...")
-
-            # Check for function calls
-            function_calls = [
-                item for item in output
-                if item.get("type") == "function_call"
-            ]
-
-            if function_calls:
-                log_info(f"LLM requested {len(function_calls)} tool call(s)")
-
-                # Execute tools
-                for fc in function_calls:
-                    namespaced_tool_name = fc["name"]
-                    tool_args = fc.get("arguments", {})
-
-                    # Parse arguments if they're a JSON string
-                    if isinstance(tool_args, str):
-                        import json
-                        try:
-                            tool_args = json.loads(tool_args)
-                        except json.JSONDecodeError as e:
-                            error_msg = f"Failed to parse tool arguments for '{namespaced_tool_name}': {str(tool_args)[:200]}"
-                            log_error(error_msg)
-                            pending_tool_results.append((namespaced_tool_name, f"Error: {error_msg}"))
-                            consecutive_error_count += 1
-                            if consecutive_error_count >= MAX_CONSECUTIVE_ERRORS:
-                                return f"Task aborted: {consecutive_error_count} consecutive errors. Last: JSON parse error"
-                            continue
-
-                    # Get original tool name and session
-                    if namespaced_tool_name not in tool_to_session:
-                        tool_result = f"Error: Unknown tool {namespaced_tool_name}"
-                        log_error(f"Unknown tool: {namespaced_tool_name}")
-                        consecutive_error_count += 1
-                        if consecutive_error_count >= MAX_CONSECUTIVE_ERRORS:
-                            pending_tool_results.append((namespaced_tool_name, tool_result))
-                            return f"Task aborted: {consecutive_error_count} consecutive errors. Last tool error: Unknown tool {namespaced_tool_name}"
-                    else:
-                        original_tool_name, session = tool_to_session[namespaced_tool_name]
-                        log_info(f"Executing {namespaced_tool_name} (original: {original_tool_name})")
-
-                        try:
-                            # Use safe_call_tool wrapper - handles type coercion automatically
-                            result = await safe_call_tool(session, original_tool_name, tool_args)
-                            tool_result = ToolExecutor.extract_text_content(result)
-                            consecutive_error_count = 0  # Reset on success
-                            log_info(f"Tool result: {str(tool_result)[:200]}...")
-                        except Exception as e:
-                            tool_result = f"Error: {e}"
-                            log_error(f"Tool execution failed: {e}")
-                            consecutive_error_count += 1
-                            if consecutive_error_count >= MAX_CONSECUTIVE_ERRORS:
-                                pending_tool_results.append((namespaced_tool_name, tool_result))
-                                return f"Task aborted: {consecutive_error_count} consecutive errors. Last tool error: {e}"
-
-                    # Collect tool result for injection in next round
-                    pending_tool_results.append((namespaced_tool_name, tool_result))
+                    pending_tool_results.append((fc_name, tool_result))
 
                 # Continue loop - tool results will be injected in next iteration
             else:
@@ -860,5 +724,7 @@ Continue with the task based on these results."""
 
 
 __all__ = [
-    "DynamicAutonomousAgent"
+    "DynamicAutonomousAgent",
+    "_SingleSessionDispatcher",
+    "_MultiSessionDispatcher",
 ]
