@@ -29,7 +29,7 @@ from llm.model_validator import ModelValidator
 from llm.exceptions import ModelNotFoundError
 from utils.lms_helper import LMSHelper
 from utils.custom_logging import log_info, log_error
-from config.constants import DEFAULT_MAX_ROUNDS, DEFAULT_MAX_TOKENS, MAX_CONSECUTIVE_ERRORS, DEFAULT_TEMPERATURE
+from config.constants import DEFAULT_MAX_ROUNDS, MAX_CONSECUTIVE_ERRORS, DEFAULT_TEMPERATURE
 
 # Import centralized safe_call_tool wrapper from mcp_client
 # This ensures ALL code paths use the same coercion logic via single entry point

@@ -53,12 +53,10 @@ class TestLMSRestClientListStatus:
 
         mock_response = MagicMock()
         mock_response.status_code = 200
-        mock_response.json.return_value = {
-            "models": [
-                {"key": "qwen/qwen3-coder-30b", "loaded_instances": [{"instance_id": "inst-1"}]},
-                {"key": "mistral/mistral-7b", "loaded_instances": []},
-            ]
-        }
+        mock_response.json.return_value = [
+            {"key": "qwen/qwen3-coder-30b", "loaded_instances": [{"instance_id": "inst-1"}]},
+            {"key": "mistral/mistral-7b", "loaded_instances": []},
+        ]
 
         with patch("httpx.get", return_value=mock_response) as mock_get:
             result = client.list_all_models()

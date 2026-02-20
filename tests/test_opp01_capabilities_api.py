@@ -96,6 +96,7 @@ class TestFromApiDataParsing(unittest.TestCase):
             meta = ModelMetadata.from_api_data(sparse)
         except Exception as exc:
             self.fail(f"from_api_data raised {exc} on sparse payload")
+            return  # unreachable; satisfies static analysis
         self.assertEqual(meta.model_id, "vendor/some-model")
 
     def test_from_api_data_embedding_type(self):
@@ -336,6 +337,49 @@ class TestRegistryRestFirst(unittest.TestCase):
 
         mock_cli_ids.assert_called_once()
         self.assertIn("qwen/qwen3-coder-30b", result["available"])
+
+
+    @patch("model_registry.lms_integration.LMSIntegration.get_all_models_via_rest")
+    @patch("model_registry.lms_integration.LMSIntegration.get_loaded_model_ids")
+    def test_registry_rest_path_filters_embeddings(self, mock_loaded, mock_rest):
+        """REST path must exclude embedding models when include_embeddings=False."""
+        from model_registry.schemas import ModelMetadata, ModelType
+        llm_meta = ModelMetadata(
+            model_id="qwen/qwen3-coder-30b",
+            model_type=ModelType.LLM,
+            display_name="Qwen3 Coder 30B",
+            publisher="qwen",
+            model_family="qwen3",
+            architecture="qwen3",
+        )
+        embed_meta = ModelMetadata(
+            model_id="nomic/nomic-embed-text",
+            model_type=ModelType.EMBEDDING,
+            display_name="Nomic Embed Text",
+            publisher="nomic",
+            model_family="nomic",
+            architecture="nomic",
+        )
+        mock_rest.return_value = [llm_meta, embed_meta]
+        mock_loaded.return_value = []
+
+        from model_registry.cache import CacheManager
+        from model_registry.registry import ModelRegistry
+        registry = ModelRegistry.__new__(ModelRegistry)
+        registry.cache = MagicMock(spec=CacheManager)
+        registry.cache.get_cached_model_ids.return_value = []
+        registry.cache.get_stats.return_value = MagicMock(to_dict=lambda: {})
+        registry._lms_checked = False
+
+        # Default include_embeddings=False should exclude embedding models
+        result = registry.list_available_models(include_embeddings=False)
+        self.assertIn("qwen/qwen3-coder-30b", result["available"])
+        self.assertNotIn("nomic/nomic-embed-text", result["available"])
+
+        # include_embeddings=True should include both
+        result_all = registry.list_available_models(include_embeddings=True)
+        self.assertIn("qwen/qwen3-coder-30b", result_all["available"])
+        self.assertIn("nomic/nomic-embed-text", result_all["available"])
 
 
 if __name__ == "__main__":

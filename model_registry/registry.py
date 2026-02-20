@@ -106,7 +106,10 @@ class ModelRegistry:
         # Try REST API first (no CLI dependency)
         rest_models = LMSIntegration.get_all_models_via_rest()
         if rest_models is not None:
-            available_ids = [m.model_id for m in rest_models]
+            available_ids = [
+                m.model_id for m in rest_models
+                if include_embeddings or m.model_type != ModelType.EMBEDDING
+            ]
             loaded_ids = LMSIntegration.get_loaded_model_ids()
         else:
             # Fall back to CLI

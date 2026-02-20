@@ -10,7 +10,6 @@ unittest.mock is used to mock self.llm.create_response and safe_call_tool.
 """
 
 import asyncio
-import logging
 import sys
 import os
 import unittest
@@ -624,10 +623,6 @@ class TestFinishReasonChecking(unittest.TestCase):
         """
         from mcp.types import CallToolResult, TextContent
 
-        success_result = CallToolResult(
-            content=[TextContent(type="text", text="ok")]
-        )
-
         responses = iter([
             _make_incomplete_response("max_output_tokens", response_id="r_inc"),
             _make_message_response("done after incomplete", response_id="r_done"),
@@ -645,7 +640,7 @@ class TestFinishReasonChecking(unittest.TestCase):
             "tools.dynamic_autonomous.log_error",
             side_effect=lambda msg: logged_messages.append(msg),
         ):
-            result = _run_loop(
+            _run_loop(
                 agent._autonomous_loop(
                     session=session,
                     openai_tools=[],
@@ -687,7 +682,7 @@ class TestFinishReasonChecking(unittest.TestCase):
             "tools.dynamic_autonomous.log_error",
             side_effect=lambda msg: logged_messages.append(msg),
         ):
-            result = _run_loop(
+            _run_loop(
                 agent._autonomous_loop(
                     session=session,
                     openai_tools=[],
@@ -759,7 +754,7 @@ class TestReasoningOutputLogged(unittest.TestCase):
                 "tools.dynamic_autonomous.log_info",
                 side_effect=lambda msg: logged_info_messages.append(msg),
             ):
-                result = _run_loop(
+                _run_loop(
                     agent._autonomous_loop(
                         session=session,
                         openai_tools=[],

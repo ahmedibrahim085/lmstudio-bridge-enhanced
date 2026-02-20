@@ -64,7 +64,10 @@ class LMSRestClient:
                 timeout=self._default_timeout
             )
             if response.status_code == 200:
-                return response.json().get("models", [])
+                data = response.json()
+                if isinstance(data, list):
+                    return data
+                return []
             logger.warning(f"Native models API returned {response.status_code}")
             return None
         except Exception as e:

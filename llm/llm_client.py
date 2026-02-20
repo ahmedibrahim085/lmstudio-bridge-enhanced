@@ -456,13 +456,16 @@ class LLMClient:
         # Resolve target model
         target_model = model if model and model != "default" else self.model
 
+        # Resolve TTL once for both the load guard and the payload
+        resolved_ttl = ttl if ttl is not None else JIT_TTL_EMBEDDING
+
         # JIT model loading guard
         if target_model and target_model != "default" and LMSHelper.is_installed():
             try:
                 is_loaded = LMSHelper.is_model_loaded(target_model)
                 if is_loaded is False:
                     logger.warning(f"Embedding model '{target_model}' not loaded, attempting to load...")
-                    load_success = LMSHelper.ensure_model_loaded_with_verification(target_model, ttl=600)
+                    load_success = LMSHelper.ensure_model_loaded_with_verification(target_model, ttl=resolved_ttl)
                     if not load_success:
                         raise LLMConnectionError(
                             f"Embedding model '{target_model}' not loaded and failed to load."
@@ -483,7 +486,7 @@ class LLMClient:
             payload["model"] = self.model
 
         # Always include TTL for JIT model loading
-        payload["ttl"] = ttl if ttl is not None else JIT_TTL_EMBEDDING
+        payload["ttl"] = resolved_ttl
 
         try:
             response = self.session.post(
@@ -561,13 +564,16 @@ class LLMClient:
         # Resolve "default" to actual model name
         model_to_use = self.model if model == "default" or model is None else model
 
+        # Resolve TTL once for both the load guard and the payload
+        resolved_ttl = ttl if ttl is not None else JIT_TTL_DEFAULT
+
         # JIT model loading guard
         if model_to_use and model_to_use != "default" and LMSHelper.is_installed():
             try:
                 is_loaded = LMSHelper.is_model_loaded(model_to_use)
                 if is_loaded is False:
                     logger.warning(f"Model '{model_to_use}' not loaded, attempting to load...")
-                    load_success = LMSHelper.ensure_model_loaded_with_verification(model_to_use, ttl=600)
+                    load_success = LMSHelper.ensure_model_loaded_with_verification(model_to_use, ttl=resolved_ttl)
                     if not load_success:
                         raise LLMConnectionError(
                             f"Model '{model_to_use}' is not loaded and failed to load automatically."
@@ -609,7 +615,7 @@ class LLMClient:
             payload["temperature"] = temperature
 
         # Always include TTL for JIT model loading
-        payload["ttl"] = ttl if ttl is not None else JIT_TTL_DEFAULT
+        payload["ttl"] = resolved_ttl
 
         try:
             response = self.session.post(

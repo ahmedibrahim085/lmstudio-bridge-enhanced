@@ -248,7 +248,8 @@ class TestCreateResponseJITGuard(unittest.TestCase):
         return client
 
     def test_create_response_triggers_load_when_not_loaded(self):
-        """When is_model_loaded returns False, ensure_model_loaded_with_verification must be called."""
+        """When is_model_loaded returns False, ensure_model_loaded_with_verification must be called with correct TTL."""
+        from config.constants import JIT_TTL_DEFAULT
         client = self._make_client()
 
         with patch("utils.lms_helper.LMSHelper.is_installed", return_value=True), \
@@ -258,7 +259,7 @@ class TestCreateResponseJITGuard(unittest.TestCase):
             client.create_response(input_text="hello", model="test-model")
 
             mock_check.assert_called_once_with("test-model")
-            mock_load.assert_called_once()
+            mock_load.assert_called_once_with("test-model", ttl=JIT_TTL_DEFAULT)
 
     def test_create_response_skips_load_when_loaded(self):
         """When is_model_loaded returns True, ensure_model_loaded_with_verification must NOT be called."""
@@ -312,7 +313,8 @@ class TestGenerateEmbeddingsJIT(unittest.TestCase):
         )
 
     def test_generate_embeddings_triggers_load(self):
-        """JIT guard: when model not loaded, ensure_model_loaded_with_verification is called."""
+        """JIT guard: when model not loaded, ensure_model_loaded_with_verification is called with correct TTL."""
+        from config.constants import JIT_TTL_EMBEDDING
         client, mock_session = self._make_client()
 
         with patch("utils.lms_helper.LMSHelper.is_installed", return_value=True), \
@@ -322,7 +324,7 @@ class TestGenerateEmbeddingsJIT(unittest.TestCase):
             client.generate_embeddings(text="hello", model="embed-model")
 
             mock_check.assert_called_once_with("embed-model")
-            mock_load.assert_called_once()
+            mock_load.assert_called_once_with("embed-model", ttl=JIT_TTL_EMBEDDING)
 
 
 # ===========================================================================
