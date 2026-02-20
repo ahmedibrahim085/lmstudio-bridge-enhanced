@@ -1,67 +1,34 @@
 #!/usr/bin/env python3
 """
-Retry Logic and Circuit Breaker for LM Studio Operations.
+DEPRECATION SHIM -- Retry Logic and Circuit Breaker.
 
-Provides production-hardened error handling with exponential backoff
-and circuit breaker pattern to prevent cascading failures.
+This module is deprecated. The retry decorator has been consolidated:
+
+  - For async/sync retry decorator: use ``utils.error_handling.retry_with_backoff``
+  - For subprocess retry: use ``utils.retry.run_with_retry``
+
+The ``retry_with_exponential_backoff`` name is kept here as a backward-compatible
+alias that delegates to ``utils.error_handling.retry_with_backoff``.
+
+The ``LMSCircuitBreaker`` class remains here because it is self-contained
+and tested independently.
 """
 
-import time
-import random
 import logging
-from typing import Callable, Any, Optional
-from functools import wraps
+import time
+from typing import Any, Callable
+
+from utils.error_handling import retry_with_backoff
 
 logger = logging.getLogger(__name__)
 
+# Backward-compatible alias -- delegates to the canonical implementation
+retry_with_exponential_backoff = retry_with_backoff
 
-def retry_with_exponential_backoff(
-    max_retries: int = 3,
-    base_delay: float = 1.0,
-    max_delay: float = 60.0
-):
-    """
-    Decorator that retries a function with exponential backoff.
 
-    Args:
-        max_retries: Maximum number of retry attempts
-        base_delay: Initial delay in seconds
-        max_delay: Maximum delay in seconds
-
-    Returns:
-        Decorated function with retry logic
-    """
-    def decorator(func: Callable) -> Callable:
-        @wraps(func)
-        def wrapper(*args, **kwargs) -> Any:
-            last_exception = None
-
-            for attempt in range(max_retries):
-                try:
-                    return func(*args, **kwargs)
-                except Exception as e:
-                    last_exception = e
-
-                    if attempt == max_retries - 1:
-                        logger.error(
-                            f"Max retries ({max_retries}) reached for {func.__name__}: {e}"
-                        )
-                        raise
-
-                    # Calculate exponential backoff delay with jitter
-                    jitter = 0.5 + random.random() * 0.5
-                    delay = min(base_delay * (2 ** attempt) * jitter, max_delay)
-                    logger.warning(
-                        f"Attempt {attempt + 1}/{max_retries} failed for {func.__name__}, "
-                        f"retrying in {delay:.2f}s: {e}"
-                    )
-                    time.sleep(delay)
-
-            # This should never be reached, but just in case
-            raise last_exception
-
-        return wrapper
-    return decorator
+class CircuitBreakerOpenError(Exception):
+    """Raised when circuit breaker is open."""
+    pass
 
 
 class LMSCircuitBreaker:
@@ -77,33 +44,23 @@ class LMSCircuitBreaker:
     - HALF_OPEN: Testing if service recovered
     """
 
-    def __init__(self, failure_threshold: int = 5, recovery_timeout: int = 60):
-        """
-        Initialize circuit breaker.
-
-        Args:
-            failure_threshold: Number of failures before opening circuit
-            recovery_timeout: Seconds to wait before attempting recovery
-        """
+    def __init__(self, failure_threshold: int = 5, recovery_timeout: float = 60):
         self.failure_count = 0
         self.failure_threshold = failure_threshold
         self.recovery_timeout = recovery_timeout
-        self.circuit_open_time: Optional[float] = None
-        self.state = "CLOSED"  # CLOSED, OPEN, HALF_OPEN
+        self.circuit_open_time: float = 0.0
+        self.state = "CLOSED"
 
     def is_open(self) -> bool:
-        """Check if circuit is open."""
         return self.state == "OPEN"
 
     def reset(self):
-        """Reset circuit breaker to closed state."""
         self.failure_count = 0
-        self.circuit_open_time = None
+        self.circuit_open_time = 0.0
         self.state = "CLOSED"
         logger.info("Circuit breaker: Reset to CLOSED state")
 
     def on_success(self):
-        """Record successful operation."""
         if self.state == "HALF_OPEN":
             logger.info("Circuit breaker: Recovery successful, closing circuit")
             self.reset()
@@ -112,12 +69,10 @@ class LMSCircuitBreaker:
             logger.debug("Circuit breaker: Failure count reset after success")
 
     def on_failure(self):
-        """Record failed operation."""
         self.failure_count += 1
         logger.warning(
             f"Circuit breaker: Failure {self.failure_count}/{self.failure_threshold}"
         )
-
         if self.failure_count >= self.failure_threshold and self.state == "CLOSED":
             self.state = "OPEN"
             self.circuit_open_time = time.time()
@@ -127,24 +82,7 @@ class LMSCircuitBreaker:
             )
 
     def call(self, func: Callable, *args, **kwargs) -> Any:
-        """
-        Execute function with circuit breaker protection.
-
-        Args:
-            func: Function to execute
-            *args: Positional arguments for func
-            **kwargs: Keyword arguments for func
-
-        Returns:
-            Result from func
-
-        Raises:
-            CircuitBreakerOpen: If circuit is open
-            Exception: Original exception from func if circuit allows
-        """
-        # Check if circuit is open
         if self.is_open():
-            # Check if recovery timeout has passed
             if time.time() - self.circuit_open_time > self.recovery_timeout:
                 logger.info("Circuit breaker: Attempting recovery (HALF_OPEN)")
                 self.state = "HALF_OPEN"
@@ -153,27 +91,20 @@ class LMSCircuitBreaker:
                     self.recovery_timeout - (time.time() - self.circuit_open_time)
                 )
                 raise CircuitBreakerOpenError(
-                    f"LMS CLI circuit breaker is open. "
-                    f"Retry after {time_remaining}s"
+                    f"LMS CLI circuit breaker is open. Retry after {time_remaining}s"
                 )
 
-        # Try to execute function
         try:
             result = func(*args, **kwargs)
             self.on_success()
             return result
-        except Exception as e:
+        except Exception:
             self.on_failure()
             raise
 
 
-class CircuitBreakerOpenError(Exception):
-    """Raised when circuit breaker is open."""
-    pass
-
-
-# Global circuit breaker instance for LMS operations
-lms_circuit_breaker = LMSCircuitBreaker(
-    failure_threshold=5,
-    recovery_timeout=60
-)
+__all__ = [
+    "retry_with_exponential_backoff",
+    "LMSCircuitBreaker",
+    "CircuitBreakerOpenError",
+]
