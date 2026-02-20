@@ -659,6 +659,13 @@ ALTERNATIVE:
         if not cls.is_installed():
             return False, "LMS CLI not installed"
 
+        # Defense-in-depth: validate model name against safe character pattern
+        try:
+            validate_model_name(model_key)
+        except ValidationError as e:
+            logger.error(f"Invalid model name rejected: {e}")
+            return False, f"Invalid model name: {e}"
+
         try:
             cmd = ["lms", "get", model_key, "--yes"]  # --yes to auto-confirm
 
