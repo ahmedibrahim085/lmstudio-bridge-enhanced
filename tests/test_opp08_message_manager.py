@@ -235,13 +235,10 @@ class TestMessageFormatter:
 class TestExports:
     """Documents the public API surface of llm.message_manager."""
 
-    def test_all_contains_stale_toolcalltracker(self):
-        """__all__ contains 'ToolCallTracker' which is not yet defined (stale export).
-
-        This test documents the stale export for OPP-09 to address.
-        """
+    def test_all_does_not_contain_stale_toolcalltracker(self):
+        """ToolCallTracker was removed from __all__ in OPP-09."""
         import llm.message_manager  # noqa: PLC0415
 
-        assert "ToolCallTracker" in llm.message_manager.__all__, (
-            "Expected ToolCallTracker in __all__ (stale export documented for OPP-09)"
+        assert "ToolCallTracker" not in llm.message_manager.__all__, (
+            "ToolCallTracker should be removed from __all__ (fixed in OPP-09)"
         )
