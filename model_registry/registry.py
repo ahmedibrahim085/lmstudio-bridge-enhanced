@@ -103,13 +103,21 @@ class ModelRegistry:
         Raises:
             LMSNotInstalledError: If LMS CLI not installed
         """
-        self._ensure_lms()
-
-        # Get current model lists from LMS
-        available_ids = LMSIntegration.get_all_model_ids(
-            include_embeddings=include_embeddings
-        )
-        loaded_ids = LMSIntegration.get_loaded_model_ids()
+        # Try REST API first (no CLI dependency)
+        rest_models = LMSIntegration.get_all_models_via_rest()
+        if rest_models is not None:
+            available_ids = [
+                m.model_id for m in rest_models
+                if include_embeddings or m.model_type != ModelType.EMBEDDING
+            ]
+            loaded_ids = LMSIntegration.get_loaded_model_ids()
+        else:
+            # Fall back to CLI
+            self._ensure_lms()
+            available_ids = LMSIntegration.get_all_model_ids(
+                include_embeddings=include_embeddings
+            )
+            loaded_ids = LMSIntegration.get_loaded_model_ids()
 
         # Get cached model IDs
         cached_ids = set(self.cache.get_cached_model_ids())

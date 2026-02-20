@@ -317,6 +317,44 @@ class LMSIntegration:
         return result
 
     @classmethod
+    def get_all_models_via_rest(
+        cls,
+        base_url: Optional[str] = None,
+    ) -> Optional[list[ModelMetadata]]:
+        """
+        Get all models from LM Studio native REST API (GET /api/v1/models).
+
+        Returns None on any error so callers can fall back to the CLI path.
+        """
+        import httpx
+        from config.constants import DEFAULT_LMSTUDIO_BASE_URL, NATIVE_MODELS_ENDPOINT
+
+        url = (base_url or DEFAULT_LMSTUDIO_BASE_URL).rstrip("/")
+        endpoint = f"{url}{NATIVE_MODELS_ENDPOINT}"
+
+        try:
+            response = httpx.get(endpoint, timeout=10.0)
+            response.raise_for_status()
+            raw_list = response.json()
+
+            result: list[ModelMetadata] = []
+            for entry in raw_list:
+                try:
+                    result.append(ModelMetadata.from_api_data(entry))
+                except Exception as e:
+                    logger.warning(
+                        f"Failed to parse native API entry "
+                        f"'{entry.get('key', 'unknown')}': {e}"
+                    )
+
+            logger.info(f"Fetched {len(result)} models via native REST API")
+            return result
+
+        except Exception as e:
+            logger.debug(f"Native REST API unavailable at {endpoint}: {e}")
+            return None
+
+    @classmethod
     def compare_model_lists(
         cls,
         current_ids: List[str],

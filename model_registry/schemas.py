@@ -24,6 +24,7 @@ class CapabilitySource(str, Enum):
     WEB_RESEARCH = "web_research"       # From web search/BFCL lookup
     INFERRED = "inferred"               # Inferred from model name/family
     USER_PROVIDED = "user_provided"     # User-specified override
+    LMSTUDIO_API = "lmstudio_api"       # From LM Studio native REST API
 
 
 class ResearchStatus(str, Enum):
@@ -396,6 +397,101 @@ class ModelMetadata:
             recommended_for=recommended_for,
             research_status=ResearchStatus.NOT_RESEARCHED,
             lms_raw_data=lms_data
+        )
+
+    @classmethod
+    def from_api_data(cls, data: dict[str, Any]) -> "ModelMetadata":
+        """
+        Create ModelMetadata from LM Studio native REST API response (GET /api/v1/models).
+
+        The native API uses snake_case keys and a richer schema than the CLI.
+        """
+        model_id = data.get("key", "")
+        model_type_str = data.get("type", "llm")
+        try:
+            model_type = ModelType(model_type_str)
+        except ValueError:
+            model_type = ModelType.LLM
+
+        model_family = cls._extract_model_family(model_id, data.get("arch", ""))
+        size_billions = cls._parse_params_string(data.get("params_string", ""))
+        quantization = data.get("quantization")
+        size_bytes = data.get("size_bytes")
+        max_context = data.get("max_context_length", 0) or 0
+
+        native_caps = data.get("capabilities", {}) or {}
+
+        capabilities = ModelCapabilities()
+
+        tool_use = native_caps.get("trained_for_tool_use")
+        if tool_use is not None:
+            capabilities.tool_calling = CapabilityScore(
+                supported=tool_use,
+                confidence=1.0,
+                source=CapabilitySource.LMSTUDIO_API,
+            )
+
+        vision = native_caps.get("vision")
+        if vision is not None:
+            capabilities.vision = CapabilityScore(
+                supported=vision,
+                confidence=1.0,
+                source=CapabilitySource.LMSTUDIO_API,
+            )
+
+        if max_context > 0:
+            capabilities.long_context = CapabilityScore(
+                supported=max_context > 32768,
+                confidence=1.0,
+                source=CapabilitySource.LMSTUDIO_API,
+                details=f"Context length: {max_context}",
+            )
+
+        is_reasoning = cls._infer_reasoning_capability(model_id, model_family)
+        if is_reasoning is not None:
+            capabilities.reasoning = CapabilityScore(
+                supported=is_reasoning,
+                confidence=0.7,
+                source=CapabilitySource.INFERRED,
+                details="Inferred from model name",
+            )
+
+        is_coding = cls._infer_coding_capability(model_id, model_family)
+        if is_coding is not None:
+            capabilities.coding = CapabilityScore(
+                supported=is_coding,
+                confidence=0.7,
+                source=CapabilitySource.INFERRED,
+                details="Inferred from model name",
+            )
+
+        recommended_for = cls._generate_recommendations(capabilities, model_family)
+        estimated_vram_gb = cls._estimate_vram_gb(
+            size_bytes,
+            quantization,
+            max_context_length=max_context if max_context > 0 else None,
+            size_billions=size_billions,
+        )
+        is_thinking_model = cls._is_thinking_model(model_id)
+
+        return cls(
+            model_id=model_id,
+            model_type=model_type,
+            display_name=data.get("key", model_id),
+            publisher=data.get("publisher", ""),
+            model_family=model_family,
+            architecture=data.get("arch", ""),
+            size_billions=size_billions,
+            size_bytes=size_bytes,
+            estimated_vram_gb=estimated_vram_gb,
+            quantization=quantization,
+            max_context_length=max_context if max_context > 0 else None,
+            is_thinking_model=is_thinking_model,
+            capabilities=capabilities,
+            benchmarks=BenchmarkData(),
+            recommended_for=recommended_for,
+            research_status=ResearchStatus.NOT_RESEARCHED,
+            lms_raw_data=data,
         )
 
     @staticmethod

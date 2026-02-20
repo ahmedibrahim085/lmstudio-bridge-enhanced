@@ -29,7 +29,7 @@ from llm.model_validator import ModelValidator
 from llm.exceptions import ModelNotFoundError
 from utils.lms_helper import LMSHelper
 from utils.custom_logging import log_info, log_error
-from config.constants import DEFAULT_MAX_ROUNDS, DEFAULT_MAX_TOKENS
+from config.constants import DEFAULT_MAX_ROUNDS, MAX_CONSECUTIVE_ERRORS, DEFAULT_TEMPERATURE
 
 # Import centralized safe_call_tool wrapper from mcp_client
 # This ensures ALL code paths use the same coercion logic via single entry point
@@ -126,6 +126,18 @@ class DynamicAutonomousAgent:
         log_info(f"=== Dynamic Autonomous Execution ===")
         log_info(f"MCP: {mcp_name}")
         log_info(f"Task: {task}")
+
+        # PROACTIVE MODEL PRELOADING
+        model_to_use = model or self.llm.model
+        if LMSHelper.is_installed():
+            log_info(f"LMS CLI detected - ensuring model loaded: {model_to_use}")
+            try:
+                if LMSHelper.ensure_model_loaded(model_to_use):
+                    log_info(f"Model '{model_to_use}' preloaded")
+                else:
+                    log_info(f"Could not preload model '{model_to_use}'")
+            except Exception as e:
+                log_info(f"Error during model preload: {e}")
 
         # Validate model if specified
         if model is not None:
@@ -261,6 +273,18 @@ class DynamicAutonomousAgent:
         log_info(f"=== Dynamic Multi-MCP Autonomous Execution ===")
         log_info(f"MCPs: {', '.join(mcp_names)}")
         log_info(f"Task: {task}")
+
+        # PROACTIVE MODEL PRELOADING
+        model_to_use = model or self.llm.model
+        if LMSHelper.is_installed():
+            log_info(f"LMS CLI detected - ensuring model loaded: {model_to_use}")
+            try:
+                if LMSHelper.ensure_model_loaded(model_to_use):
+                    log_info(f"Model '{model_to_use}' preloaded")
+                else:
+                    log_info(f"Could not preload model '{model_to_use}'")
+            except Exception as e:
+                log_info(f"Error during model preload: {e}")
 
         # Validate model if specified
         if model is not None:
@@ -487,6 +511,41 @@ class DynamicAutonomousAgent:
             model=model
         )
 
+    @staticmethod
+    def _build_input_text(
+        round_num: int,
+        task: str,
+        pending_tool_results: list,
+        consecutive_error_count: int = 0
+    ) -> str:
+        """Build input text for the LLM with tool results and self-correction hints."""
+        if round_num == 0:
+            input_text = task
+        else:
+            if pending_tool_results:
+                results_text = "\n\n".join([
+                    f"Tool '{name}' returned:\n{result}"
+                    for name, result in pending_tool_results
+                ])
+                input_text = f"""Tool execution completed. Here are the ACTUAL results:
+
+{results_text}
+
+IMPORTANT: Use ONLY the actual results above. Do NOT make up or hallucinate information.
+Continue with the task based on these results."""
+            else:
+                input_text = "Continue with the task."
+
+        # Self-correction hint when errors are accumulating (not on first round)
+        if round_num > 0 and consecutive_error_count >= 2:
+            input_text += (
+                f"\n\nNOTE: {consecutive_error_count} consecutive errors occurred. "
+                "Reconsider your approach: check tool argument formats, try simpler "
+                "alternatives, or explain what is going wrong."
+            )
+
+        return input_text
+
     async def _autonomous_loop(
         self,
         session: ClientSession,
@@ -510,30 +569,17 @@ class DynamicAutonomousAgent:
         """
         previous_response_id = None
         pending_tool_results = []  # Track tool results to inject into next round
+        consecutive_error_count = 0
 
         for round_num in range(max_rounds):
             log_info(f"\n--- Round {round_num + 1}/{max_rounds} ---")
 
-            # Build input text with tool results injection
-            if round_num == 0:
-                input_text = task
-            else:
-                # CRITICAL: Inject tool results into input_text
-                # Server maintains conversation state, but LOCAL tool results must be passed explicitly
-                if pending_tool_results:
-                    results_text = "\n\n".join([
-                        f"Tool '{name}' returned:\n{result}"
-                        for name, result in pending_tool_results
-                    ])
-                    input_text = f"""Tool execution completed. Here are the ACTUAL results:
-
-{results_text}
-
-IMPORTANT: Use ONLY the actual results above. Do NOT make up or hallucinate information.
-Continue with the task based on these results."""
-                    pending_tool_results = []  # Clear for next round
-                else:
-                    input_text = "Continue with the task."
+            # Build input text with tool results injection and self-correction hints
+            input_text = self._build_input_text(
+                round_num, task, pending_tool_results, consecutive_error_count
+            )
+            if round_num > 0:
+                pending_tool_results = []
 
             # Call /v1/responses with tools (stateful API!)
             # Use tool_choice="required" on first round to FORCE tool usage
@@ -543,19 +589,34 @@ Continue with the task based on these results."""
 
             # CRITICAL: Run sync HTTP call in thread pool to avoid blocking event loop
             # This prevents MCP connection TaskGroup failures during long LLM calls
-            response = await asyncio.to_thread(
-                self.llm.create_response,
-                input_text=input_text,
-                tools=openai_tools,
-                previous_response_id=previous_response_id,
-                max_tokens=max_tokens,
-                model=model,
-                tool_choice=current_tool_choice
-            )
+            try:
+                response = await asyncio.to_thread(
+                    self.llm.create_response,
+                    input_text=input_text,
+                    tools=openai_tools,
+                    previous_response_id=previous_response_id,
+                    max_tokens=max_tokens,
+                    model=model,
+                    tool_choice=current_tool_choice,
+                    temperature=DEFAULT_TEMPERATURE
+                )
+            except Exception as e:
+                consecutive_error_count += 1
+                log_error(f"LLM call failed (consecutive: {consecutive_error_count}): {e}")
+                if consecutive_error_count >= MAX_CONSECUTIVE_ERRORS:
+                    return f"Task aborted: {consecutive_error_count} consecutive errors. Last: {e}"
+                pending_tool_results.append(("_llm_error", f"LLM call failed: {e}"))
+                continue
 
             # Save response ID for next round (maintains conversation state)
             previous_response_id = response["id"]
             log_info(f"Response ID: {previous_response_id}")
+
+            # Check for incomplete response (truncation)
+            status = response.get("status")
+            if status == "incomplete":
+                incomplete_reason = response.get("incomplete_details", {}).get("reason", "unknown")
+                log_error(f"Response incomplete: {incomplete_reason}")
 
             # Process output array (not choices - different format!)
             output = response.get("output", [])
@@ -572,6 +633,11 @@ Continue with the task based on these results."""
                             break
                     if text_content:
                         break
+                elif item.get("type") == "reasoning":
+                    reasoning_content = item.get("content", [])
+                    for rc in reasoning_content:
+                        if rc.get("type") == "reasoning_text":
+                            log_info(f"LLM reasoning: {rc.get('text', '')[:200]}...")
 
             # Check for function calls
             function_calls = [
@@ -596,6 +662,9 @@ Continue with the task based on these results."""
                             error_msg = f"Failed to parse tool arguments for '{tool_name}': {str(tool_args)[:200]}"
                             log_error(error_msg)
                             pending_tool_results.append((tool_name, f"Error: {error_msg}"))
+                            consecutive_error_count += 1
+                            if consecutive_error_count >= MAX_CONSECUTIVE_ERRORS:
+                                return f"Task aborted: {consecutive_error_count} consecutive errors. Last: JSON parse error"
                             continue
 
                     log_info(f"Executing {tool_name}")
@@ -604,10 +673,15 @@ Continue with the task based on these results."""
                         # Use safe_call_tool wrapper - handles type coercion automatically
                         result = await safe_call_tool(session, tool_name, tool_args)
                         tool_result = ToolExecutor.extract_text_content(result)
+                        consecutive_error_count = 0  # Reset on success
                         log_info(f"Tool result: {str(tool_result)[:200]}...")
                     except Exception as e:
                         tool_result = f"Error: {e}"
                         log_error(f"Tool execution failed: {e}")
+                        consecutive_error_count += 1
+                        if consecutive_error_count >= MAX_CONSECUTIVE_ERRORS:
+                            pending_tool_results.append((tool_name, tool_result))
+                            return f"Task aborted: {consecutive_error_count} consecutive errors. Last tool error: {e}"
 
                     # Collect tool result for injection in next round
                     pending_tool_results.append((tool_name, tool_result))
@@ -646,30 +720,17 @@ Continue with the task based on these results."""
         """
         previous_response_id = None
         pending_tool_results = []  # Track tool results to inject into next round
+        consecutive_error_count = 0
 
         for round_num in range(max_rounds):
             log_info(f"\n--- Round {round_num + 1}/{max_rounds} ---")
 
-            # Build input text with tool results injection
-            if round_num == 0:
-                input_text = task
-            else:
-                # CRITICAL: Inject tool results into input_text
-                # Server maintains conversation state, but LOCAL tool results must be passed explicitly
-                if pending_tool_results:
-                    results_text = "\n\n".join([
-                        f"Tool '{name}' returned:\n{result}"
-                        for name, result in pending_tool_results
-                    ])
-                    input_text = f"""Tool execution completed. Here are the ACTUAL results:
-
-{results_text}
-
-IMPORTANT: Use ONLY the actual results above. Do NOT make up or hallucinate information.
-Continue with the task based on these results."""
-                    pending_tool_results = []  # Clear for next round
-                else:
-                    input_text = "Continue with the task."
+            # Build input text with tool results injection and self-correction hints
+            input_text = self._build_input_text(
+                round_num, task, pending_tool_results, consecutive_error_count
+            )
+            if round_num > 0:
+                pending_tool_results = []
 
             # Call /v1/responses with tools (stateful API!)
             # Use tool_choice="required" on first round to FORCE tool usage
@@ -679,19 +740,34 @@ Continue with the task based on these results."""
 
             # CRITICAL: Run sync HTTP call in thread pool to avoid blocking event loop
             # This prevents MCP connection TaskGroup failures during long LLM calls
-            response = await asyncio.to_thread(
-                self.llm.create_response,
-                input_text=input_text,
-                tools=openai_tools,
-                previous_response_id=previous_response_id,
-                max_tokens=max_tokens,
-                model=model,
-                tool_choice=current_tool_choice
-            )
+            try:
+                response = await asyncio.to_thread(
+                    self.llm.create_response,
+                    input_text=input_text,
+                    tools=openai_tools,
+                    previous_response_id=previous_response_id,
+                    max_tokens=max_tokens,
+                    model=model,
+                    tool_choice=current_tool_choice,
+                    temperature=DEFAULT_TEMPERATURE
+                )
+            except Exception as e:
+                consecutive_error_count += 1
+                log_error(f"LLM call failed (consecutive: {consecutive_error_count}): {e}")
+                if consecutive_error_count >= MAX_CONSECUTIVE_ERRORS:
+                    return f"Task aborted: {consecutive_error_count} consecutive errors. Last: {e}"
+                pending_tool_results.append(("_llm_error", f"LLM call failed: {e}"))
+                continue
 
             # Save response ID for next round (CRITICAL!)
             previous_response_id = response["id"]
             log_info(f"Response ID: {previous_response_id}")
+
+            # Check for incomplete response (truncation)
+            status = response.get("status")
+            if status == "incomplete":
+                incomplete_reason = response.get("incomplete_details", {}).get("reason", "unknown")
+                log_error(f"Response incomplete: {incomplete_reason}")
 
             # Process output array (not choices - different format!)
             output = response.get("output", [])
@@ -708,6 +784,11 @@ Continue with the task based on these results."""
                             break
                     if text_content:
                         break
+                elif item.get("type") == "reasoning":
+                    reasoning_content = item.get("content", [])
+                    for rc in reasoning_content:
+                        if rc.get("type") == "reasoning_text":
+                            log_info(f"LLM reasoning: {rc.get('text', '')[:200]}...")
 
             # Check for function calls
             function_calls = [
@@ -732,12 +813,19 @@ Continue with the task based on these results."""
                             error_msg = f"Failed to parse tool arguments for '{namespaced_tool_name}': {str(tool_args)[:200]}"
                             log_error(error_msg)
                             pending_tool_results.append((namespaced_tool_name, f"Error: {error_msg}"))
+                            consecutive_error_count += 1
+                            if consecutive_error_count >= MAX_CONSECUTIVE_ERRORS:
+                                return f"Task aborted: {consecutive_error_count} consecutive errors. Last: JSON parse error"
                             continue
 
                     # Get original tool name and session
                     if namespaced_tool_name not in tool_to_session:
                         tool_result = f"Error: Unknown tool {namespaced_tool_name}"
                         log_error(f"Unknown tool: {namespaced_tool_name}")
+                        consecutive_error_count += 1
+                        if consecutive_error_count >= MAX_CONSECUTIVE_ERRORS:
+                            pending_tool_results.append((namespaced_tool_name, tool_result))
+                            return f"Task aborted: {consecutive_error_count} consecutive errors. Last tool error: Unknown tool {namespaced_tool_name}"
                     else:
                         original_tool_name, session = tool_to_session[namespaced_tool_name]
                         log_info(f"Executing {namespaced_tool_name} (original: {original_tool_name})")
@@ -746,10 +834,15 @@ Continue with the task based on these results."""
                             # Use safe_call_tool wrapper - handles type coercion automatically
                             result = await safe_call_tool(session, original_tool_name, tool_args)
                             tool_result = ToolExecutor.extract_text_content(result)
+                            consecutive_error_count = 0  # Reset on success
                             log_info(f"Tool result: {str(tool_result)[:200]}...")
                         except Exception as e:
                             tool_result = f"Error: {e}"
                             log_error(f"Tool execution failed: {e}")
+                            consecutive_error_count += 1
+                            if consecutive_error_count >= MAX_CONSECUTIVE_ERRORS:
+                                pending_tool_results.append((namespaced_tool_name, tool_result))
+                                return f"Task aborted: {consecutive_error_count} consecutive errors. Last tool error: {e}"
 
                     # Collect tool result for injection in next round
                     pending_tool_results.append((namespaced_tool_name, tool_result))
