@@ -89,18 +89,19 @@ class TestConcurrentOperations:
 
     def test_concurrent_list_operations(self):
         """Test concurrent list_loaded_models calls."""
-        with patch.object(LMSHelper, 'is_installed', return_value=True):
-            mock_result = MagicMock()
-            mock_result.returncode = 0
-            mock_result.stdout = '[]'
-            with patch('subprocess.run', return_value=mock_result):
-                results = []
-                for _ in range(20):
-                    result = LMSHelper.list_loaded_models()
-                    results.append(result)
+        with patch.object(LMSHelper, '_get_rest_client', return_value=None):
+            with patch.object(LMSHelper, 'is_installed', return_value=True):
+                mock_result = MagicMock()
+                mock_result.returncode = 0
+                mock_result.stdout = '[]'
+                with patch('subprocess.run', return_value=mock_result):
+                    results = []
+                    for _ in range(20):
+                        result = LMSHelper.list_loaded_models()
+                        results.append(result)
 
-                assert len(results) == 20
-                assert all(r == [] for r in results)
+                    assert len(results) == 20
+                    assert all(r == [] for r in results)
 
     def test_race_condition_load_unload(self):
         """Test race condition between load and unload."""
@@ -216,13 +217,14 @@ class TestEdgeCases:
 
     def test_empty_list_loaded_models_response(self):
         """Test when list_loaded_models returns empty list."""
-        with patch.object(LMSHelper, 'is_installed', return_value=True):
-            mock_result = MagicMock()
-            mock_result.returncode = 0
-            mock_result.stdout = '[]'
-            with patch('subprocess.run', return_value=mock_result):
-                result = LMSHelper.list_loaded_models()
-                assert result == []
+        with patch.object(LMSHelper, '_get_rest_client', return_value=None):
+            with patch.object(LMSHelper, 'is_installed', return_value=True):
+                mock_result = MagicMock()
+                mock_result.returncode = 0
+                mock_result.stdout = '[]'
+                with patch('subprocess.run', return_value=mock_result):
+                    result = LMSHelper.list_loaded_models()
+                    assert result == []
 
 
 class TestNetworkAndTimeoutFailures:

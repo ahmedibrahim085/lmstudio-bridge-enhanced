@@ -113,6 +113,9 @@ Thumbs.db
 # Claude Code
 CLAUDE.md
 
+# Local nano-agent clone
+nano-agent/
+
 # Temporary output files
 output.txt
 count_python_files.txt

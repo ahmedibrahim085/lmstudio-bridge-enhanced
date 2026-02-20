@@ -427,15 +427,18 @@ class LLMClient:
         self,
         text: Union[str, List[str]],
         model: Optional[str] = None,
+        ttl: Optional[int] = None,
         timeout: int = DEFAULT_LLM_TIMEOUT
     ) -> Dict[str, Any]:
         """Generate vector embeddings for text.
 
         Automatically retries on transient errors with exponential backoff.
+        Automatically ensures the model is loaded before making the request (if LMS CLI available).
 
         Args:
             text: Single text or list of texts to embed
             model: Optional specific model for embeddings
+            ttl: Optional TTL in seconds for JIT model loading. Defaults to JIT_TTL_EMBEDDING.
             timeout: Request timeout in seconds (default 58s, safely under Claude Code's 60s MCP timeout)
 
         Returns:
@@ -448,6 +451,29 @@ class LLMClient:
             LLMResponseError: If LM Studio returns an error
             LLMError: For other unexpected errors
         """
+        from config.constants import JIT_TTL_EMBEDDING
+
+        # Resolve target model
+        target_model = model if model and model != "default" else self.model
+
+        # JIT model loading guard
+        if target_model and target_model != "default" and LMSHelper.is_installed():
+            try:
+                is_loaded = LMSHelper.is_model_loaded(target_model)
+                if is_loaded is False:
+                    logger.warning(f"Embedding model '{target_model}' not loaded, attempting to load...")
+                    load_success = LMSHelper.ensure_model_loaded_with_verification(target_model, ttl=600)
+                    if not load_success:
+                        raise LLMConnectionError(
+                            f"Embedding model '{target_model}' not loaded and failed to load."
+                        )
+                elif is_loaded is True:
+                    logger.debug(f"Embedding model '{target_model}' already loaded")
+            except LLMConnectionError:
+                raise
+            except Exception as e:
+                logger.warning(f"Could not verify embedding model state: {e}. Proceeding anyway...")
+
         payload = {"input": text}
 
         # Use specified model or default
@@ -455,6 +481,9 @@ class LLMClient:
             payload["model"] = model
         elif self.model and self.model != "default":
             payload["model"] = self.model
+
+        # Always include TTL for JIT model loading
+        payload["ttl"] = ttl if ttl is not None else JIT_TTL_EMBEDDING
 
         try:
             response = self.session.post(
@@ -482,6 +511,8 @@ class LLMClient:
         model: Optional[str] = None,
         max_tokens: Optional[int] = None,
         tool_choice: Optional[str] = None,
+        temperature: Optional[float] = None,
+        ttl: Optional[int] = None,
         timeout: int = DEFAULT_LLM_TIMEOUT
     ) -> Dict[str, Any]:
         """Create a stateful response with optional function calling.
@@ -525,8 +556,29 @@ class LLMClient:
             ...     previous_response_id=response1["id"]
             ... )
         """
+        from config.constants import JIT_TTL_DEFAULT
+
         # Resolve "default" to actual model name
         model_to_use = self.model if model == "default" or model is None else model
+
+        # JIT model loading guard
+        if model_to_use and model_to_use != "default" and LMSHelper.is_installed():
+            try:
+                is_loaded = LMSHelper.is_model_loaded(model_to_use)
+                if is_loaded is False:
+                    logger.warning(f"Model '{model_to_use}' not loaded, attempting to load...")
+                    load_success = LMSHelper.ensure_model_loaded_with_verification(model_to_use, ttl=600)
+                    if not load_success:
+                        raise LLMConnectionError(
+                            f"Model '{model_to_use}' is not loaded and failed to load automatically."
+                        )
+                    logger.info(f"Model '{model_to_use}' loaded successfully")
+                elif is_loaded is True:
+                    logger.debug(f"Model '{model_to_use}' already loaded")
+            except LLMConnectionError:
+                raise
+            except Exception as e:
+                logger.warning(f"Could not verify model load state: {e}. Proceeding anyway...")
 
         payload = {
             "input": input_text,
@@ -551,6 +603,13 @@ class LLMClient:
             # Add tool_choice if specified (default is 'auto')
             if tool_choice:
                 payload["tool_choice"] = tool_choice
+
+        # Add temperature if explicitly set (optional — not auto-added when None)
+        if temperature is not None:
+            payload["temperature"] = temperature
+
+        # Always include TTL for JIT model loading
+        payload["ttl"] = ttl if ttl is not None else JIT_TTL_DEFAULT
 
         try:
             response = self.session.post(
@@ -684,6 +743,45 @@ class LLMClient:
 
         except Exception as e:
             _handle_request_exception(e, "List models")
+
+    def list_models_enriched(self) -> List[Dict[str, Any]]:
+        """List all available models with enriched metadata from the native REST API.
+
+        Tries the native /api/v1/models endpoint first (richer data), then falls back
+        to the OpenAI-compatible /v1/models endpoint.
+
+        Returns:
+            List of dicts with model metadata (model_id, capabilities, context length, etc.)
+        """
+        base_url = self.api_base.rstrip("/")
+        if base_url.endswith("/v1"):
+            base_url = base_url[:-3]
+
+        try:
+            response = self.session.get(f"{base_url}/api/v1/models")
+            response.raise_for_status()
+            raw_list = response.json()
+            if isinstance(raw_list, list) and raw_list:
+                return [
+                    {
+                        "model_id": entry.get("key", ""),
+                        "key": entry.get("key", ""),
+                        "type": entry.get("type", "llm"),
+                        "publisher": entry.get("publisher", ""),
+                        "arch": entry.get("arch", ""),
+                        "max_context_length": entry.get("max_context_length"),
+                        "capabilities": entry.get("capabilities", {}),
+                        "loaded_instances": entry.get("loaded_instances", []),
+                        "size_bytes": entry.get("size_bytes"),
+                        "quantization": entry.get("quantization"),
+                    }
+                    for entry in raw_list
+                ]
+        except Exception:
+            logger.debug("Native /api/v1/models unavailable, falling back to /v1/models")
+
+        # Fallback
+        return [{"model_id": m} for m in self.list_models()]
 
     def get_model_info(self, model_id: Optional[str] = None) -> Dict[str, Any]:
         """Get basic model information from LM Studio.

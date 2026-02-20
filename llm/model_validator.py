@@ -69,6 +69,23 @@ class ModelValidator:
         """
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
+                # Try native /api/v1/models first (richer data)
+                try:
+                    native_base = self.api_base.rstrip("/")
+                    if native_base.endswith("/v1"):
+                        native_base = native_base[:-3]
+                    native_response = await client.get(f"{native_base}/api/v1/models")
+                    native_response.raise_for_status()
+                    native_data = native_response.json()
+                    if isinstance(native_data, list) and native_data:
+                        models = [m["key"] for m in native_data if "key" in m]
+                        if models:
+                            logger.info(f"Fetched {len(models)} models via native API")
+                            return models
+                except Exception:
+                    logger.debug("Native API unavailable, falling back to /v1/models")
+
+                # Fallback: existing /v1/models logic
                 logger.debug(f"Fetching models from {self.api_base}/models")
                 response = await client.get(f"{self.api_base}/models")
                 response.raise_for_status()

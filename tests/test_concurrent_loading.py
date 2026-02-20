@@ -8,9 +8,10 @@ from concurrent.futures import ThreadPoolExecutor
 class TestConcurrentModelLoading:
     """Verify no duplicate model instances under concurrent access."""
 
+    @patch('utils.lms_helper.LMSHelper._get_rest_client', return_value=None)
     @patch('utils.lms_helper.LMSHelper.list_loaded_models')
     @patch('utils.lms_helper.LMSHelper.is_installed', return_value=True)
-    def test_concurrent_is_model_loaded_no_duplicates(self, mock_installed, mock_list):
+    def test_concurrent_is_model_loaded_no_duplicates(self, mock_installed, mock_list, mock_rest):
         """Concurrent is_model_loaded calls should not create duplicate instances."""
         from utils.lms_helper import LMSHelper
 
@@ -40,16 +41,19 @@ class TestConcurrentModelLoading:
 
     @pytest.fixture(autouse=True)
     def reset_installed_cache(self):
-        """Reset LMSHelper._is_installed cache between tests to prevent state leakage."""
+        """Reset LMSHelper caches between tests to prevent state leakage."""
         from utils.lms_helper import LMSHelper
-        original = LMSHelper._is_installed
+        original_installed = LMSHelper._is_installed
+        original_rest = LMSHelper._rest_client
         yield
-        LMSHelper._is_installed = original
+        LMSHelper._is_installed = original_installed
+        LMSHelper._rest_client = original_rest
 
+    @patch('utils.lms_helper.LMSHelper._get_rest_client', return_value=None)
     @patch('utils.retry.subprocess.run')
     @patch('utils.lms_helper.subprocess.run')
     @patch('utils.lms_helper.LMSHelper.is_installed', return_value=True)
-    def test_concurrent_load_prevents_duplicate_instances(self, mock_installed, mock_lms_run, mock_retry_run):
+    def test_concurrent_load_prevents_duplicate_instances(self, mock_installed, mock_lms_run, mock_retry_run, mock_rest):
         """Multiple concurrent load_model calls should not create :2, :3 instances."""
         from utils.lms_helper import LMSHelper
 

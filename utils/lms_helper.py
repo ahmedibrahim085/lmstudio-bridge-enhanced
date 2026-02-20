@@ -36,11 +36,156 @@ DEFAULT_MODEL_TTL = 600  # 10 minutes (configurable)
 TEMP_MODEL_TTL = 300     # 5 minutes for temporary models
 
 
+class LMSRestClient:
+    """REST client for LM Studio native API (v0.4.x+)."""
+
+    def __init__(self, base_url=None):
+        from config.constants import (  # noqa: PLC0415
+            DEFAULT_LMSTUDIO_BASE_URL,
+            LMS_LOAD_MODEL_ENDPOINT,
+            LMS_REST_DEFAULT_TIMEOUT,
+            LMS_REST_LOAD_TIMEOUT,
+            LMS_UNLOAD_MODEL_ENDPOINT,
+            NATIVE_MODELS_ENDPOINT,
+        )
+        self.base_url = base_url or DEFAULT_LMSTUDIO_BASE_URL
+        self._models_endpoint = NATIVE_MODELS_ENDPOINT
+        self._load_endpoint = LMS_LOAD_MODEL_ENDPOINT
+        self._unload_endpoint = LMS_UNLOAD_MODEL_ENDPOINT
+        self._load_timeout = LMS_REST_LOAD_TIMEOUT
+        self._default_timeout = LMS_REST_DEFAULT_TIMEOUT
+
+    def list_all_models(self) -> Optional[List[Dict[str, Any]]]:
+        """GET /api/v1/models — returns models[] or None on error."""
+        try:
+            import httpx
+            response = httpx.get(
+                f"{self.base_url}{self._models_endpoint}",
+                timeout=self._default_timeout
+            )
+            if response.status_code == 200:
+                return response.json().get("models", [])
+            logger.warning(f"Native models API returned {response.status_code}")
+            return None
+        except Exception as e:
+            logger.debug(f"Native models API unavailable: {e}")
+            return None
+
+    def is_model_loaded(self, model_key: str) -> Optional[bool]:
+        """Check if model is loaded via loaded_instances. Returns True/False/None."""
+        models = self.list_all_models()
+        if models is None:
+            return None
+        for m in models:
+            if m.get("key") == model_key:
+                loaded = m.get("loaded_instances", [])
+                return len(loaded) > 0
+        return False
+
+    def is_server_available(self) -> bool:
+        """Check if LM Studio REST API is reachable."""
+        try:
+            import httpx
+            response = httpx.get(
+                f"{self.base_url}{self._models_endpoint}",
+                timeout=self._default_timeout
+            )
+            return response.status_code == 200
+        except Exception:
+            return False
+
+    def load_model(self, model_key: str, context_length=None, flash_attention=None):
+        """
+        Load model via REST. Check-before-load to prevent duplicates.
+
+        Returns dict: {success, instance_id, already_loaded, memory_error, message}
+        """
+        # CRITICAL: Check if already loaded to prevent duplicate instances
+        is_loaded = self.is_model_loaded(model_key)
+        if is_loaded is True:
+            return {
+                "success": True,
+                "instance_id": None,
+                "already_loaded": True,
+                "memory_error": False,
+                "message": f"Model '{model_key}' already loaded"
+            }
+
+        try:
+            import httpx
+            body = {"model": model_key}
+            if context_length is not None:
+                body["context_length"] = context_length
+            if flash_attention is not None:
+                body["flash_attention"] = flash_attention
+
+            response = httpx.post(
+                f"{self.base_url}{self._load_endpoint}",
+                json=body,
+                timeout=self._load_timeout
+            )
+
+            if response.status_code == 200:
+                data = response.json()
+                return {
+                    "success": True,
+                    "instance_id": data.get("instance_id"),
+                    "already_loaded": False,
+                    "memory_error": False,
+                    "message": f"Model '{model_key}' loaded successfully"
+                }
+            else:
+                body_text = response.text
+                is_memory = any(kw in body_text.lower() for kw in ("memory", "insufficient", "vram"))
+                return {
+                    "success": False,
+                    "instance_id": None,
+                    "already_loaded": False,
+                    "memory_error": is_memory,
+                    "message": body_text
+                }
+        except Exception as e:
+            return {
+                "success": False,
+                "instance_id": None,
+                "already_loaded": False,
+                "memory_error": False,
+                "message": str(e)
+            }
+
+    def unload_model(self, instance_id: str) -> bool:
+        """Unload model by instance_id. POST /api/v1/models/unload."""
+        try:
+            import httpx
+            response = httpx.post(
+                f"{self.base_url}{self._unload_endpoint}",
+                json={"instance_id": instance_id},
+                timeout=self._default_timeout
+            )
+            return response.status_code == 200
+        except Exception as e:
+            logger.error(f"Failed to unload model: {e}")
+            return False
+
+
 class LMSHelper:
     """Helper for LM Studio CLI operations (optional)."""
 
     _is_installed = None  # Cache the installation check
-    LM_STUDIO_BASE_URL = "http://localhost:1234/v1"  # Default LM Studio API endpoint
+    _rest_client: Optional['LMSRestClient'] = None  # Cache the REST client
+    from config.constants import DEFAULT_LMSTUDIO_BASE_URL as _BASE_URL
+    LM_STUDIO_BASE_URL = _BASE_URL + "/v1"  # Default LM Studio API endpoint (OpenAI-compatible)
+
+    @classmethod
+    def _get_rest_client(cls) -> Optional[LMSRestClient]:
+        """Get or create the REST client if LM Studio server is available."""
+        if cls._rest_client is None:
+            client = LMSRestClient()
+            if client.is_server_available():
+                cls._rest_client = client
+            else:
+                return None
+        return cls._rest_client
 
     @staticmethod
     def _get_base_model_name(model_identifier: str) -> str:
@@ -223,6 +368,18 @@ ALTERNATIVE:
             logger.info(f"✅ Model '{model_name}' already loaded - skipping load to prevent duplicate")
             return True
 
+        # Try REST API first
+        rest_client = cls._get_rest_client()
+        if rest_client is not None:
+            rest_result = rest_client.load_model(model_name)
+            if rest_result["memory_error"]:
+                from llm.exceptions import ModelMemoryError
+                raise ModelMemoryError(model_name)
+            if rest_result["success"]:
+                logger.info(f"Model '{model_name}' loaded via REST API")
+                return True
+            logger.debug(f"REST load failed, falling back to subprocess: {rest_result['message']}")
+
         try:
             cmd = ["lms", "load", model_name, "--yes"]  # --yes suppresses confirmations
 
@@ -359,6 +516,25 @@ ALTERNATIVE:
         Returns:
             List of loaded models with details, or None if LMS not available
         """
+        # Try REST API first
+        rest_client = cls._get_rest_client()
+        if rest_client is not None:
+            models = rest_client.list_all_models()
+            if models is not None:
+                # Normalize to legacy format expected by existing callers
+                loaded = []
+                for m in models:
+                    if m.get("loaded_instances"):
+                        for inst in m["loaded_instances"]:
+                            loaded.append({
+                                "identifier": m.get("key", ""),
+                                "modelKey": m.get("key", ""),
+                                "status": "loaded",
+                                "instance_id": inst.get("instance_id", ""),
+                            })
+                return loaded
+        # Fall back to subprocess
+
         if not cls.is_installed():
             return None
 
@@ -405,6 +581,13 @@ ALTERNATIVE:
         Returns:
             True if model is available (loaded or idle), False otherwise, None if LMS not available
         """
+        # Try REST API first (faster, no subprocess)
+        rest_client = cls._get_rest_client()
+        if rest_client is not None:
+            result = rest_client.is_model_loaded(model_name)
+            if result is not None:
+                return result
+        # Fall back to subprocess
         models = cls.list_loaded_models()
         if models is None:
             return None

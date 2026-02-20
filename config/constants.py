@@ -26,6 +26,20 @@ CHAT_COMPLETIONS_ENDPOINT = "/v1/chat/completions"
 COMPLETIONS_ENDPOINT = "/v1/completions"
 EMBEDDINGS_ENDPOINT = "/v1/embeddings"
 RESPONSES_ENDPOINT = "/v1/responses"
+NATIVE_MODELS_ENDPOINT = "/api/v1/models"  # LM Studio native REST API (richer than /v1/models)
+
+# LM Studio Native REST API Endpoints (Model Lifecycle)
+LMS_LOAD_MODEL_ENDPOINT = "/api/v1/models/load"
+LMS_UNLOAD_MODEL_ENDPOINT = "/api/v1/models/unload"
+LMS_DOWNLOAD_MODEL_ENDPOINT = "/api/v1/download"
+LMS_REST_LOAD_TIMEOUT = 120.0  # 2 minutes for model loading
+LMS_REST_DEFAULT_TIMEOUT = 10.0  # 10 seconds for quick checks
+
+# JIT (Just-In-Time) Model Loading TTL (seconds)
+# Per-inference-request TTL: model auto-unloads after idle for this duration
+JIT_TTL_DEFAULT = 1800       # 30 minutes for general requests
+JIT_TTL_EMBEDDING = 900      # 15 minutes for embedding requests (shorter-lived)
+JIT_TTL_AUTONOMOUS = 10800   # 3 hours for autonomous tasks (long-running)
 
 # Timeout Configuration (seconds)
 DEFAULT_REQUEST_TIMEOUT = 120.0
@@ -51,6 +65,7 @@ DEFAULT_PRESENCE_PENALTY = 0.0
 # Autonomous Execution
 DEFAULT_MAX_ROUNDS = 10000  # High limit - let LLM work until task complete
 DEFAULT_AUTONOMOUS_TIMEOUT = 600  # 10 minutes per autonomous task
+MAX_CONSECUTIVE_ERRORS = 3  # Abort autonomous loop after this many consecutive errors
 
 # Logging
 LOG_LEVEL = "INFO"
