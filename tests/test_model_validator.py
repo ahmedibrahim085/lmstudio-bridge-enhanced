@@ -161,7 +161,7 @@ async def test_connection_error_on_invalid_api_base():
 async def test_fetch_models_retries_on_failure():
     """Should retry on transient failures (tested via invalid port)."""
     # This test verifies the retry decorator is applied
-    validator = ModelValidator(api_base="http://localhost:99999")
+    validator = ModelValidator(api_base="http://localhost:1")
 
     with pytest.raises(LLMConnectionError):
         # Should attempt 3 times before failing

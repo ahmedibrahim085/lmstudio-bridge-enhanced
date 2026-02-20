@@ -237,8 +237,7 @@ class TestExports:
 
     def test_all_does_not_contain_stale_toolcalltracker(self):
         """ToolCallTracker was removed from __all__ in OPP-09."""
-        import llm.message_manager  # noqa: PLC0415
-
-        assert "ToolCallTracker" not in llm.message_manager.__all__, (
+        mm = sys.modules["llm.message_manager"]
+        assert "ToolCallTracker" not in mm.__all__, (
             "ToolCallTracker should be removed from __all__ (fixed in OPP-09)"
         )
