@@ -23,7 +23,13 @@ from llm.exceptions import (
 )
 from utils.error_handling import retry_with_backoff
 from utils.lms_helper import LMSHelper
-from config.constants import JIT_TTL_DEFAULT, JIT_TTL_EMBEDDING
+from config.constants import (
+    JIT_TTL_DEFAULT,
+    JIT_TTL_EMBEDDING,
+    ANTHROPIC_MESSAGES_ENDPOINT,
+    DEFAULT_ANTHROPIC_MAX_TOKENS,
+    DEFAULT_ANTHROPIC_API_VERSION,
+)
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -681,6 +687,85 @@ class LLMClient:
             timeout=timeout,
             model=model
         )
+
+    @retry_with_backoff(
+        max_retries=DEFAULT_MAX_RETRIES + 1,
+        base_delay=DEFAULT_RETRY_DELAY,
+        exceptions=(LLMResponseError, LLMTimeoutError)
+    )
+    def anthropic_messages(
+        self,
+        messages: List[Dict[str, Any]],
+        system: str = "",
+        max_tokens: int = DEFAULT_ANTHROPIC_MAX_TOKENS,
+        temperature: float = 0.7,
+        tools: Optional[List[Dict[str, Any]]] = None,
+        tool_choice: Optional[Dict[str, Any]] = None,
+        model: Optional[str] = None,
+        timeout: int = DEFAULT_LLM_TIMEOUT,
+    ) -> Dict[str, Any]:
+        """Send a request to LM Studio's Anthropic-compatible /v1/messages endpoint.
+
+        Args:
+            messages: List of message dicts with 'role' and 'content' (NO system role).
+            system: Top-level system prompt (Anthropic format: not in messages).
+            max_tokens: Maximum tokens to generate (required by Anthropic protocol).
+            temperature: Controls randomness (0.0 to 1.0).
+            tools: Optional list of tools in Anthropic format.
+            tool_choice: Optional tool selection strategy.
+            model: Model override for this request.
+            timeout: Request timeout in seconds.
+
+        Returns:
+            Response dictionary in Anthropic format.
+
+        Raises:
+            LLMTimeoutError: If request times out.
+            LLMConnectionError: If cannot connect to LM Studio.
+            LLMRateLimitError: If rate limit exceeded.
+            LLMResponseError: If LM Studio returns an error.
+            LLMError: For other unexpected errors.
+        """
+        target_model = model if model is not None else self.model
+
+        self._ensure_model_loaded(target_model, ttl=JIT_TTL_DEFAULT)
+
+        # Filter system messages from the messages array (Anthropic uses top-level system)
+        filtered_messages = [m for m in messages if m.get("role") != "system"]
+
+        payload = {
+            "messages": filtered_messages,
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+        }
+
+        if target_model and target_model != "default":
+            payload["model"] = target_model
+
+        if system:
+            payload["system"] = system
+
+        if tools:
+            payload["tools"] = tools
+        if tool_choice is not None:
+            payload["tool_choice"] = tool_choice
+
+        headers = {
+            "anthropic-version": DEFAULT_ANTHROPIC_API_VERSION,
+        }
+
+        try:
+            response = self.session.post(
+                self._get_endpoint(ANTHROPIC_MESSAGES_ENDPOINT),
+                json=payload,
+                headers=headers,
+                timeout=timeout,
+            )
+            response.raise_for_status()
+            return response.json()
+
+        except Exception as e:
+            _handle_request_exception(e, "Anthropic messages")
 
     def list_models(self) -> List[str]:
         """List all available models in LM Studio.
