@@ -27,6 +27,11 @@ COMPLETIONS_ENDPOINT = "/v1/completions"
 EMBEDDINGS_ENDPOINT = "/v1/embeddings"
 RESPONSES_ENDPOINT = "/v1/responses"
 NATIVE_MODELS_ENDPOINT = "/api/v1/models"  # LM Studio native REST API (richer than /v1/models)
+ANTHROPIC_MESSAGES_ENDPOINT = "/v1/messages"  # LM Studio Anthropic-compat endpoint (0.4.x+)
+
+# Anthropic API Defaults
+DEFAULT_ANTHROPIC_MAX_TOKENS = 4096  # Anthropic requires max_tokens (no default in protocol)
+DEFAULT_ANTHROPIC_API_VERSION = "2023-06-01"  # anthropic-version header value
 
 # LM Studio Native REST API Endpoints (Model Lifecycle)
 LMS_LOAD_MODEL_ENDPOINT = "/api/v1/models/load"
