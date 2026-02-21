@@ -1,7 +1,6 @@
 """Tests for OPP-16: Native MCP pass-through via API."""
 
 import pytest
-import time
 from unittest.mock import patch, MagicMock
 import requests
 

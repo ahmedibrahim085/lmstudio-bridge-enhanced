@@ -767,7 +767,7 @@ Continue with the task based on these results."""
                             else:
                                 round_metrics_list.pop(0)
                                 round_metrics_list.append(rm)
-                        except Exception:
+                        except Exception:  # noqa: S110 — metrics must never break the autonomous loop
                             pass
                         return f"Task aborted: {self.consecutive_error_count} consecutive errors. Last: {e}"
                     pending_tool_results.append(("_llm_error", f"LLM call failed: {e}"))
@@ -786,7 +786,7 @@ Continue with the task based on these results."""
                         else:
                             round_metrics_list.pop(0)
                             round_metrics_list.append(rm)
-                    except Exception:
+                    except Exception:  # noqa: S110 — metrics must never break the autonomous loop
                         pass
                     continue
 
@@ -863,7 +863,7 @@ Continue with the task based on these results."""
                         else:
                             round_metrics_list.pop(0)
                             round_metrics_list.append(rm)
-                    except Exception:
+                    except Exception:  # noqa: S110 — metrics must never break the autonomous loop
                         pass
 
                     # Check abort threshold after tool execution
@@ -890,7 +890,7 @@ Continue with the task based on these results."""
                         else:
                             round_metrics_list.pop(0)
                             round_metrics_list.append(rm)
-                    except Exception:
+                    except Exception:  # noqa: S110 — metrics must never break the autonomous loop
                         pass
 
                     final_status = "completed"

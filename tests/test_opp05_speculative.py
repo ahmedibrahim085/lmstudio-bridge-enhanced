@@ -2,9 +2,8 @@
 
 import pytest
 from unittest.mock import patch, MagicMock
-import requests
 
-from model_registry.schemas import ModelMetadata, ModelType, ModelCapabilities
+from model_registry.schemas import ModelMetadata, ModelType
 from llm.llm_client import LLMClient
 
 
