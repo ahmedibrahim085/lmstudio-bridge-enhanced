@@ -488,7 +488,8 @@ class LLMClient:
         tool_choice: Optional[str] = None,
         temperature: Optional[float] = None,
         ttl: Optional[int] = None,
-        timeout: int = DEFAULT_LLM_TIMEOUT
+        timeout: int = DEFAULT_LLM_TIMEOUT,
+        draft_model: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Create a stateful response with optional function calling.
 
@@ -566,6 +567,10 @@ class LLMClient:
         # Add temperature if explicitly set (optional — not auto-added when None)
         if temperature is not None:
             payload["temperature"] = temperature
+
+        # Add draft model for speculative decoding (GGUF only, LM Studio validates)
+        if draft_model is not None:
+            payload["draft_model"] = draft_model
 
         # Always include TTL for JIT model loading
         payload["ttl"] = resolved_ttl
@@ -733,6 +738,7 @@ class LLMClient:
                         "loaded_instances": entry.get("loaded_instances", []),
                         "size_bytes": entry.get("size_bytes"),
                         "quantization": entry.get("quantization"),
+                        "compatibility_type": entry.get("compatibility_type"),
                     }
                     for entry in raw_list
                 ]

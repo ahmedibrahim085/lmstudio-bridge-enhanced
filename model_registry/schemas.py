@@ -207,12 +207,18 @@ class ModelMetadata:
     quantization: Optional[str] = None
     max_context_length: Optional[int] = None
     is_thinking_model: bool = False  # Informational: uses chain-of-thought (QwQ, DeepSeek-R1, o1-style)
+    compatibility_type: Optional[str] = None  # "gguf", "mlx", etc. — backend compatibility
     capabilities: ModelCapabilities = field(default_factory=ModelCapabilities)
     benchmarks: BenchmarkData = field(default_factory=BenchmarkData)
     recommended_for: List[str] = field(default_factory=list)
     research_status: ResearchStatus = ResearchStatus.NOT_RESEARCHED
     researched_at: Optional[datetime] = None
     lms_raw_data: Optional[Dict[str, Any]] = None
+
+    @property
+    def supports_speculative_decoding(self) -> bool:
+        """Speculative decoding requires llama.cpp backend (GGUF format)."""
+        return (self.compatibility_type or "").lower() == "gguf"
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
@@ -234,6 +240,8 @@ class ModelMetadata:
             result["estimated_vram_gb"] = self.estimated_vram_gb
         if self.is_thinking_model:
             result["is_thinking_model"] = self.is_thinking_model
+        if self.compatibility_type is not None:
+            result["compatibility_type"] = self.compatibility_type
         if self.quantization:
             result["quantization"] = self.quantization
         if self.max_context_length is not None:
@@ -283,6 +291,7 @@ class ModelMetadata:
             estimated_vram_gb=data.get("estimated_vram_gb"),
             quantization=data.get("quantization"),
             is_thinking_model=data.get("is_thinking_model", False),
+            compatibility_type=data.get("compatibility_type"),
             max_context_length=data.get("max_context_length"),
             capabilities=capabilities,
             benchmarks=benchmarks,
@@ -378,6 +387,7 @@ class ModelMetadata:
 
         # Detect thinking models (use chain-of-thought reasoning)
         is_thinking_model = cls._is_thinking_model(model_id)
+        compatibility_type = lms_data.get("compatibility_type")
 
         return cls(
             model_id=model_id,
@@ -392,6 +402,7 @@ class ModelMetadata:
             quantization=quantization,
             max_context_length=max_context if max_context > 0 else None,
             is_thinking_model=is_thinking_model,
+            compatibility_type=compatibility_type,
             capabilities=capabilities,
             benchmarks=BenchmarkData(),
             recommended_for=recommended_for,
@@ -473,6 +484,7 @@ class ModelMetadata:
             size_billions=size_billions,
         )
         is_thinking_model = cls._is_thinking_model(model_id)
+        compatibility_type = data.get("compatibility_type")
 
         return cls(
             model_id=model_id,
@@ -487,6 +499,7 @@ class ModelMetadata:
             quantization=quantization,
             max_context_length=max_context if max_context > 0 else None,
             is_thinking_model=is_thinking_model,
+            compatibility_type=compatibility_type,
             capabilities=capabilities,
             benchmarks=BenchmarkData(),
             recommended_for=recommended_for,
