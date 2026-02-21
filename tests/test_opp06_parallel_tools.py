@@ -506,7 +506,6 @@ class TestParallelLoopIntegration(unittest.TestCase):
         session = self._mock_session()
 
         parallel_called = {"called": False}
-        original_parallel = getattr(agent, "_execute_tools_parallel", None)
 
         async def spy_parallel(dispatcher, fc_list):
             parallel_called["called"] = True
@@ -772,9 +771,6 @@ class TestParallelErrorCounting(unittest.TestCase):
             return next(responses)
 
         agent = _make_agent(MagicMock(side_effect=create_response_side_effect))
-        session = self._mock_session()
-
-        call_idx = {"n": 0}
 
         async def partial_dispatch(fc_name, tool_args):
             if fc_name == "bad_tool":

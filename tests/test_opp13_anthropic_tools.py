@@ -1,6 +1,5 @@
 """Tests for OPP-13: Anthropic tool format adapters."""
 
-import pytest
 import json
 
 from llm.llm_client import LLMClient

@@ -12,8 +12,6 @@ from llm.exceptions import (
     LLMResponseError,
 )
 from config.constants import (
-    ANTHROPIC_MESSAGES_ENDPOINT,
-    DEFAULT_ANTHROPIC_MAX_TOKENS,
     DEFAULT_ANTHROPIC_API_VERSION,
 )
 
@@ -266,7 +264,7 @@ class TestAnthropicMessagesEdgeCases:
         """Multi-turn user/assistant/user conversation."""
         mock_session.post.return_value = _make_anthropic_response("World")
 
-        result = client.anthropic_messages(
+        client.anthropic_messages(
             messages=[
                 {"role": "user", "content": "Hello"},
                 {"role": "assistant", "content": [{"type": "text", "text": "Hi"}]},

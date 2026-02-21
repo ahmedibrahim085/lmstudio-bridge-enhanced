@@ -226,7 +226,7 @@ class TestRoundAInvariants:
 
     def test_retry_constants_not_colliding(self):
         """llm_client.DEFAULT_MAX_RETRIES (2) != constants.DEFAULT_MAX_RETRIES (3)."""
-        import llm.llm_client as llm_mod
+        from llm.llm_client import DEFAULT_MAX_RETRIES as llm_retries
         from config.constants import DEFAULT_MAX_RETRIES as const_retries
-        assert llm_mod.DEFAULT_MAX_RETRIES != const_retries, \
+        assert llm_retries != const_retries, \
             "Name collision: llm_client and constants both define DEFAULT_MAX_RETRIES with same value"
