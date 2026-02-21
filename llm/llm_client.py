@@ -414,6 +414,89 @@ class LLMClient:
                 flattened.append(tool)
         return flattened
 
+    @staticmethod
+    def convert_tools_to_anthropic_format(tools: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Convert OpenAI tool format to Anthropic tool format.
+
+        OpenAI: {"type": "function", "function": {"name": "...", "parameters": {...}}}
+        Anthropic: {"name": "...", "description": "...", "input_schema": {...}}
+
+        Args:
+            tools: List of tools in OpenAI format
+
+        Returns:
+            List of tools in Anthropic format
+        """
+        converted = []
+        for tool in tools:
+            if tool.get("type") == "function" and "function" in tool:
+                func = tool["function"]
+                anthropic_tool = {
+                    "name": func["name"],
+                    "description": func.get("description", ""),
+                }
+                if "parameters" in func:
+                    anthropic_tool["input_schema"] = func["parameters"]
+                converted.append(anthropic_tool)
+            else:
+                converted.append(tool)
+        return converted
+
+    @staticmethod
+    def extract_anthropic_tool_calls(response: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Extract tool_use blocks from an Anthropic response.
+
+        Args:
+            response: Anthropic API response dict
+
+        Returns:
+            List of dicts with id, name, input for each tool call
+        """
+        calls = []
+        for block in response.get("content", []):
+            if block.get("type") == "tool_use":
+                calls.append({
+                    "id": block.get("id"),
+                    "name": block.get("name"),
+                    "input": block.get("input", {}),
+                })
+        return calls
+
+    @staticmethod
+    def build_anthropic_tool_result(
+        tool_use_id: str,
+        content: Union[str, dict, None],
+        is_error: bool = False,
+    ) -> Dict[str, Any]:
+        """Build an Anthropic tool_result message.
+
+        Args:
+            tool_use_id: The id from the tool_use block
+            content: Result content (str, dict auto-serialized, None -> "")
+            is_error: Whether this is an error result
+
+        Returns:
+            Message dict with role=user and tool_result content block
+        """
+        if content is None:
+            content_str = ""
+        elif isinstance(content, dict):
+            content_str = json.dumps(content)
+        else:
+            content_str = str(content)
+
+        block: Dict[str, Any] = {
+            "type": "tool_result",
+            "tool_use_id": tool_use_id,
+            "content": content_str,
+        }
+        if is_error:
+            block["is_error"] = True
+
+        return {"role": "user", "content": [block]}
+
+    # TODO(OPP-10): Extract to anthropic_adapter.py
+
     @retry_with_backoff(
         max_retries=DEFAULT_MAX_RETRIES + 1,
         base_delay=DEFAULT_RETRY_DELAY,
