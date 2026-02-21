@@ -156,6 +156,10 @@ class LLMClient:
         self.session.mount('http://', adapter)
         self.session.mount('https://', adapter)
 
+        # Native MCP support cache (OPP-16)
+        self._native_mcp_supported: Optional[bool] = None
+        self._native_mcp_checked_at: float = 0.0
+
     def _get_endpoint(self, path: str) -> str:
         """Get full URL for an endpoint.
 
@@ -854,6 +858,90 @@ class LLMClient:
 
         except Exception as e:
             _handle_request_exception(e, "Anthropic messages")
+
+    def supports_native_mcp(self) -> bool:
+        """Check if LM Studio supports native MCP in API requests.
+
+        Probes GET /api/v1/server/info, checks for 'mcp' in capabilities.
+        Result cached with TTL=300s.
+        Returns False on any error (safe default).
+        """
+        now = time.monotonic()
+        if self._native_mcp_supported is not None and (now - self._native_mcp_checked_at) < 300:
+            return self._native_mcp_supported
+
+        try:
+            resp = self.session.get(
+                self._get_endpoint("api/v1/server/info"),
+                timeout=HEALTH_CHECK_TIMEOUT,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            supported = bool(data.get("capabilities", {}).get("mcp", False))
+        except Exception:
+            supported = False
+
+        self._native_mcp_supported = supported
+        self._native_mcp_checked_at = now
+        return supported
+
+    def chat_completion_with_native_mcp(
+        self,
+        messages: List[Dict[str, Any]],
+        mcp_servers: List[Dict[str, Any]],
+        model: Optional[str] = None,
+        temperature: float = 0.7,
+        max_tokens: int = DEFAULT_MAX_TOKENS,
+        timeout: int = DEFAULT_LLM_TIMEOUT,
+        require_native: bool = False,
+    ) -> Dict[str, Any]:
+        """Send chat completion with native MCP server configuration.
+
+        Args:
+            messages: Chat messages
+            mcp_servers: List of MCP server configs [{name, transport, command, args, env}]
+            model: Optional model override
+            temperature: Sampling temperature
+            max_tokens: Maximum tokens in response
+            timeout: Request timeout in seconds
+            require_native: If True, raises LLMResponseError when native MCP unsupported
+
+        Returns:
+            Chat completion response dict
+
+        Raises:
+            ValueError: If mcp_servers is empty
+            LLMResponseError: If native MCP not supported (when require_native=True)
+            LLMTimeoutError: On timeout
+        """
+        if not mcp_servers:
+            raise ValueError("mcp_servers must not be empty")
+
+        if require_native and not self.supports_native_mcp():
+            raise LLMResponseError("Native MCP not supported by this LM Studio version")
+
+        target_model = model if model is not None else self.model
+
+        payload = {
+            "messages": messages,
+            "mcp_servers": mcp_servers,
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+        }
+
+        if target_model and target_model != "default":
+            payload["model"] = target_model
+
+        try:
+            response = self.session.post(
+                self._get_endpoint("v1/chat/completions"),
+                json=payload,
+                timeout=timeout,
+            )
+            response.raise_for_status()
+            return response.json()
+        except Exception as e:
+            _handle_request_exception(e, "Native MCP chat completion")
 
     def list_models(self) -> List[str]:
         """List all available models in LM Studio.
