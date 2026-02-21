@@ -128,3 +128,105 @@ class TestPhase2Invariants:
                         "Found hardcoded ttl=600 in llm_client.py "
                         "(must use JIT_TTL_DEFAULT or JIT_TTL_EMBEDDING, OPP-09)"
                     )
+
+
+class TestRoundAInvariants:
+    """Guards for Round A features (OPP-11 through OPP-07)."""
+
+    def test_anthropic_messages_method_exists(self):
+        """OPP-11: LLMClient.anthropic_messages exists."""
+        from llm.llm_client import LLMClient
+        assert hasattr(LLMClient, 'anthropic_messages')
+
+    def test_anthropic_constants_defined(self):
+        """OPP-11: ANTHROPIC_MESSAGES_ENDPOINT in constants."""
+        from config.constants import ANTHROPIC_MESSAGES_ENDPOINT
+        assert ANTHROPIC_MESSAGES_ENDPOINT == "/v1/messages"
+
+    def test_anthropic_tool_converters_exist(self):
+        """OPP-13: 3 Anthropic tool static methods on LLMClient."""
+        from llm.llm_client import LLMClient
+        assert hasattr(LLMClient, 'convert_tools_to_anthropic_format')
+        assert hasattr(LLMClient, 'extract_anthropic_tool_calls')
+        assert hasattr(LLMClient, 'build_anthropic_tool_result')
+
+    def test_native_mcp_detection_exists(self):
+        """OPP-16: supports_native_mcp() method exists."""
+        from llm.llm_client import LLMClient
+        assert hasattr(LLMClient, 'supports_native_mcp')
+
+    def test_compatibility_type_field(self):
+        """OPP-05: ModelMetadata.compatibility_type field exists."""
+        from model_registry.schemas import ModelMetadata
+        import dataclasses
+        field_names = [f.name for f in dataclasses.fields(ModelMetadata)]
+        assert 'compatibility_type' in field_names
+
+    def test_parallel_tools_parameter(self):
+        """OPP-06: _autonomous_loop accepts parallel_tools."""
+        import inspect
+        from tools.dynamic_autonomous import DynamicAutonomousAgent
+        sig = inspect.signature(DynamicAutonomousAgent._autonomous_loop)
+        assert 'parallel_tools' in sig.parameters
+
+    def test_loop_metrics_module(self):
+        """OPP-07: tools/loop_metrics.py importable."""
+        from tools.loop_metrics import LoopMetrics, RoundMetrics
+        assert LoopMetrics is not None
+        assert RoundMetrics is not None
+
+    def test_no_hardcoded_anthropic_endpoint(self):
+        """Scan ENTIRE codebase for raw '/v1/messages' not in constants/tests/docs."""
+        import os
+        for dirpath in ['llm/', 'tools/']:
+            for root, dirs, files in os.walk(dirpath):
+                for fname in files:
+                    if fname.endswith('.py') and 'test_' not in fname:
+                        filepath = os.path.join(root, fname)
+                        with open(filepath) as f:
+                            in_docstring = False
+                            docstring_marker = None
+                            for i, line in enumerate(f, 1):
+                                stripped = line.lstrip()
+                                # Track docstring state
+                                if not in_docstring:
+                                    for marker in ('"""', "'''"):
+                                        if marker in stripped:
+                                            # Count occurrences: odd number means we entered
+                                            if stripped.count(marker) % 2 == 1:
+                                                in_docstring = True
+                                                docstring_marker = marker
+                                            break
+                                    if in_docstring:
+                                        continue  # Opening docstring line — skip
+                                else:
+                                    # Inside a docstring — check for closing marker
+                                    if docstring_marker in line:
+                                        in_docstring = False
+                                        docstring_marker = None
+                                    continue  # Still inside docstring — skip entire line
+
+                                if '/v1/messages' not in line:
+                                    continue
+                                if 'ANTHROPIC_MESSAGES_ENDPOINT' in line:
+                                    continue
+                                # Skip comment lines
+                                if stripped.startswith('#'):
+                                    continue
+                                assert False, f"Hardcoded /v1/messages at {filepath}:{i}"
+
+    def test_loop_returns_str_not_tuple(self):
+        """OPP-07 uses instance attribute, NOT tuple return."""
+        import inspect
+        from tools.dynamic_autonomous import DynamicAutonomousAgent
+        sig = inspect.signature(DynamicAutonomousAgent._autonomous_loop)
+        ret = sig.return_annotation
+        assert ret is inspect.Parameter.empty or ret == str or ret == 'str', \
+            f"_autonomous_loop return type should be str, got {ret}"
+
+    def test_retry_constants_not_colliding(self):
+        """llm_client.DEFAULT_MAX_RETRIES (2) != constants.DEFAULT_MAX_RETRIES (3)."""
+        import llm.llm_client as llm_mod
+        from config.constants import DEFAULT_MAX_RETRIES as const_retries
+        assert llm_mod.DEFAULT_MAX_RETRIES != const_retries, \
+            "Name collision: llm_client and constants both define DEFAULT_MAX_RETRIES with same value"

@@ -154,6 +154,36 @@ class CompletionTools:
             }
             return json.dumps(error_response)
 
+    async def anthropic_messages(
+        self,
+        messages: str,
+        system: str = "",
+        max_tokens: int = 4096,
+        temperature: float = 0.7,
+        model: Optional[str] = None,
+    ) -> str:
+        """Send a message using Anthropic format via LM Studio.
+
+        Args:
+            messages: JSON string of message array
+            system: Top-level system prompt
+            max_tokens: Maximum tokens (required by Anthropic protocol)
+            temperature: Controls randomness
+            model: Optional model override
+
+        Returns:
+            JSON string with Anthropic-format response
+        """
+        parsed_messages = json.loads(messages) if isinstance(messages, str) else messages
+        result = self.llm.anthropic_messages(
+            messages=parsed_messages,
+            system=system,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            model=model,
+        )
+        return json.dumps(result, indent=2)
+
 
 # Register tools with FastMCP
 def register_completion_tools(mcp, llm_client: Optional[LLMClient] = None):
@@ -514,6 +544,40 @@ def register_completion_tools(mcp, llm_client: Optional[LLMClient] = None):
             "errors": result.errors,
             "warnings": result.warnings
         }, indent=2)
+
+    @mcp.tool()
+    async def anthropic_messages(
+        messages: str,
+        system: str = "",
+        max_tokens: int = 4096,
+        temperature: float = 0.7,
+        model: Optional[str] = None,
+    ) -> str:
+        """
+        Send a message using Anthropic's /v1/messages format via LM Studio.
+
+        This uses LM Studio's Anthropic-compatible endpoint (0.4.x+).
+        Unlike chat_completion (OpenAI format), this uses Anthropic's message format
+        where system prompts are top-level and responses use content blocks.
+
+        Args:
+            messages: JSON string of message array. Each message has 'role' and 'content'.
+                     Roles: 'user', 'assistant' (NOT 'system' - use system param instead).
+            system: System prompt (top-level, not in messages array).
+            max_tokens: Maximum tokens to generate (required by Anthropic protocol).
+            temperature: Controls randomness (0.0 to 1.0).
+            model: Optional model override.
+
+        Returns:
+            JSON string with Anthropic-format response containing content blocks.
+        """
+        return await tools.anthropic_messages(
+            messages=messages,
+            system=system,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            model=model,
+        )
 
 
 __all__ = [

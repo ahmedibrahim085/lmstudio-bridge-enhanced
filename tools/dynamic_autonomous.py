@@ -17,6 +17,7 @@ Key Features:
 
 import asyncio
 import json
+import time
 from typing import List, Dict, Any, Optional, Union
 from contextlib import AsyncExitStack
 from pathlib import Path
@@ -35,6 +36,7 @@ from config.constants import DEFAULT_MAX_ROUNDS, MAX_CONSECUTIVE_ERRORS, DEFAULT
 # This ensures ALL code paths use the same coercion logic via single entry point
 from mcp_client.type_coercion import safe_call_tool
 from mcp_client.executor import ToolExecutor
+from tools.loop_metrics import LoopMetrics, RoundMetrics
 
 
 class _SingleSessionDispatcher:
@@ -560,6 +562,111 @@ Continue with the task based on these results."""
 
         return input_text
 
+    async def _execute_tools_sequential(self, dispatcher, fc_list):
+        """Execute tools sequentially. Returns list of (name, result_text) tuples.
+
+        Updates self.consecutive_error_count:
+        - Success: resets to 0
+        - Failure: increments by 1 per failing tool
+        """
+        results = []
+        for fc in fc_list:
+            fc_name = fc["name"]
+            tool_args = fc.get("arguments", {})
+
+            # Parse JSON string args
+            if isinstance(tool_args, str):
+                try:
+                    tool_args = json.loads(tool_args)
+                except json.JSONDecodeError:
+                    error_msg = f"Failed to parse tool arguments for '{fc_name}': {str(tool_args)[:200]}"
+                    log_error(error_msg)
+                    results.append((fc_name, f"Error: {error_msg}"))
+                    self.consecutive_error_count += 1
+                    continue
+
+            log_info(f"Executing {fc_name}")
+
+            try:
+                display_name, tool_result = await dispatcher.dispatch(fc_name, tool_args)
+                self.consecutive_error_count = 0  # Reset on success
+                log_info(f"Tool result: {str(tool_result)[:200]}...")
+            except KeyError as e:
+                tool_result = f"Error: {e}"
+                log_error(str(e))
+                self.consecutive_error_count += 1
+            except Exception as e:
+                tool_result = f"Error: {e}"
+                log_error(f"Tool execution failed: {e}")
+                self.consecutive_error_count += 1
+
+            results.append((fc_name, tool_result))
+
+        return results
+
+    async def _execute_tools_parallel(self, dispatcher, fc_list):
+        """Execute tools in parallel using asyncio.gather(). Returns list of (name, result_text) tuples.
+
+        Error counting (batch semantics):
+        - ALL succeed: consecutive_error_count = 0
+        - ALL fail: consecutive_error_count += 1 (capped at +1 per batch)
+        - PARTIAL success: consecutive_error_count UNCHANGED
+        """
+        async def _run_one(fc):
+            fc_name = fc["name"]
+            tool_args = fc.get("arguments", {})
+
+            # Parse JSON string args
+            if isinstance(tool_args, str):
+                try:
+                    tool_args = json.loads(tool_args)
+                except json.JSONDecodeError:
+                    error_msg = f"Failed to parse tool arguments for '{fc_name}': {str(tool_args)[:200]}"
+                    log_error(error_msg)
+                    return fc_name, f"Error: {error_msg}", False
+
+            try:
+                display_name, tool_result = await dispatcher.dispatch(fc_name, tool_args)
+                log_info(f"Tool result: {str(tool_result)[:200]}...")
+                return fc_name, tool_result, True  # True = success
+            except KeyError as e:
+                log_error(str(e))
+                return fc_name, f"Error: {e}", False
+            except Exception as e:
+                log_error(f"Tool execution failed: {e}")
+                return fc_name, f"Error: {e}", False
+
+        gathered = await asyncio.gather(*[_run_one(fc) for fc in fc_list], return_exceptions=True)
+
+        results = []
+        successes = 0
+        failures = 0
+
+        for item in gathered:
+            if isinstance(item, Exception):
+                # Unexpected exception from gather itself
+                results.append(("unknown", f"Error: {item}"))
+                failures += 1
+            else:
+                fc_name, result_text, success = item
+                results.append((fc_name, result_text))
+                if success:
+                    successes += 1
+                else:
+                    failures += 1
+
+        # Batch error counting semantics
+        total = successes + failures
+        if total > 0 and successes == total:
+            # ALL succeed -> reset
+            self.consecutive_error_count = 0
+        elif total > 0 and failures == total:
+            # ALL fail -> +1 (capped per batch)
+            self.consecutive_error_count += 1
+        # PARTIAL success -> unchanged (no modification)
+
+        return results
+
     async def _autonomous_loop(
         self,
         dispatcher,
@@ -567,7 +674,8 @@ Continue with the task based on these results."""
         task: str,
         max_rounds: int,
         max_tokens: int,
-        model: Optional[str] = None
+        model: Optional[str] = None,
+        parallel_tools: bool = False
     ) -> str:
         """Core autonomous loop using stateful /v1/responses API with explicit tool result injection.
 
@@ -588,139 +696,225 @@ Continue with the task based on these results."""
             max_rounds: Maximum number of autonomous loop iterations
             max_tokens: Maximum tokens per LLM response
             model: Optional model name override
+            parallel_tools: If True, execute multiple tool calls in parallel via asyncio.gather()
         """
         previous_response_id = None
         pending_tool_results = []  # Track tool results to inject into next round
-        consecutive_error_count = 0
+        self.consecutive_error_count = 0
 
-        for round_num in range(max_rounds):
-            log_info(f"\n--- Round {round_num + 1}/{max_rounds} ---")
+        # --- OPP-07: Metrics tracking initialisation ---
+        self.last_loop_metrics = None
+        loop_start_time = time.monotonic()
+        total_error_count = 0       # Never resets — cumulative across all rounds
+        completed_rounds = 0
+        round_metrics_list: list[Any] = []
+        final_status = "max_rounds"  # Default if the for-loop exhausts without return
 
-            # Build input text with tool results injection and self-correction hints
-            input_text = self._build_input_text(
-                round_num, task, pending_tool_results, consecutive_error_count
-            )
-            if round_num > 0:
-                pending_tool_results = []
+        try:
+            for round_num in range(max_rounds):
+                log_info(f"\n--- Round {round_num + 1}/{max_rounds} ---")
 
-            # Call /v1/responses with tools (stateful API!)
-            # Use tool_choice="required" on first round to FORCE tool usage
-            # This prevents LLMs from hallucinating instead of calling tools
-            # On subsequent rounds, use "auto" to allow final answers
-            current_tool_choice = "required" if round_num == 0 else "auto"
+                # Per-round metrics state
+                round_start_time = time.monotonic()
+                round_tool_calls: list[dict[str, Any]] = []
+                round_errors = 0
 
-            # CRITICAL: Run sync HTTP call in thread pool to avoid blocking event loop
-            # This prevents MCP connection TaskGroup failures during long LLM calls
-            try:
-                response = await asyncio.to_thread(
-                    self.llm.create_response,
-                    input_text=input_text,
-                    tools=openai_tools,
-                    previous_response_id=previous_response_id,
-                    max_tokens=max_tokens,
-                    model=model,
-                    tool_choice=current_tool_choice,
-                    temperature=DEFAULT_TEMPERATURE
+                # Build input text with tool results injection and self-correction hints
+                input_text = self._build_input_text(
+                    round_num, task, pending_tool_results, self.consecutive_error_count
                 )
-            except Exception as e:
-                consecutive_error_count += 1
-                log_error(f"LLM call failed (consecutive: {consecutive_error_count}): {e}")
-                if consecutive_error_count >= MAX_CONSECUTIVE_ERRORS:
-                    return f"Task aborted: {consecutive_error_count} consecutive errors. Last: {e}"
-                pending_tool_results.append(("_llm_error", f"LLM call failed: {e}"))
-                continue
+                if round_num > 0:
+                    pending_tool_results = []
 
-            # Save response ID for next round (maintains conversation state)
-            previous_response_id = response["id"]
-            log_info(f"Response ID: {previous_response_id}")
+                # Call /v1/responses with tools (stateful API!)
+                # Use tool_choice="required" on first round to FORCE tool usage
+                # This prevents LLMs from hallucinating instead of calling tools
+                # On subsequent rounds, use "auto" to allow final answers
+                current_tool_choice = "required" if round_num == 0 else "auto"
 
-            # Check for incomplete response (truncation)
-            status = response.get("status")
-            if status == "incomplete":
-                incomplete_reason = response.get("incomplete_details", {}).get("reason", "unknown")
-                log_error(f"Response incomplete: {incomplete_reason}")
-
-            # Process output array (not choices - different format!)
-            output = response.get("output", [])
-
-            # Find text output (final answer) - it's nested inside "message" type items
-            text_content = None
-            for item in output:
-                if item.get("type") == "message":
-                    content = item.get("content", [])
-                    for content_item in content:
-                        if content_item.get("type") == "output_text":
-                            text_content = content_item.get("text", "")
-                            log_info(f"LLM text: {text_content[:100]}...")
-                            break
-                    if text_content:
-                        break
-                elif item.get("type") == "reasoning":
-                    reasoning_content = item.get("content", [])
-                    for rc in reasoning_content:
-                        if rc.get("type") == "reasoning_text":
-                            log_info(f"LLM reasoning: {rc.get('text', '')[:200]}...")
-
-            # Check for function calls
-            function_calls = [
-                item for item in output
-                if item.get("type") == "function_call"
-            ]
-
-            if function_calls:
-                log_info(f"LLM requested {len(function_calls)} tool call(s)")
-
-                # Execute tools and collect results for next round
-                for fc in function_calls:
-                    fc_name = fc["name"]
-                    tool_args = fc.get("arguments", {})
-
-                    # Parse arguments if they're a JSON string
-                    if isinstance(tool_args, str):
+                # CRITICAL: Run sync HTTP call in thread pool to avoid blocking event loop
+                # This prevents MCP connection TaskGroup failures during long LLM calls
+                try:
+                    response = await asyncio.to_thread(
+                        self.llm.create_response,
+                        input_text=input_text,
+                        tools=openai_tools,
+                        previous_response_id=previous_response_id,
+                        max_tokens=max_tokens,
+                        model=model,
+                        tool_choice=current_tool_choice,
+                        temperature=DEFAULT_TEMPERATURE
+                    )
+                except Exception as e:
+                    self.consecutive_error_count += 1
+                    total_error_count += 1
+                    round_errors += 1
+                    log_error(f"LLM call failed (consecutive: {self.consecutive_error_count}): {e}")
+                    if self.consecutive_error_count >= MAX_CONSECUTIVE_ERRORS:
+                        final_status = "aborted"
+                        # Record round before early return
+                        completed_rounds += 1
                         try:
-                            tool_args = json.loads(tool_args)
-                        except json.JSONDecodeError:
-                            error_msg = f"Failed to parse tool arguments for '{fc_name}': {str(tool_args)[:200]}"
-                            log_error(error_msg)
-                            pending_tool_results.append((fc_name, f"Error: {error_msg}"))
-                            consecutive_error_count += 1
-                            if consecutive_error_count >= MAX_CONSECUTIVE_ERRORS:
-                                return f"Task aborted: {consecutive_error_count} consecutive errors. Last: JSON parse error"
-                            continue
-
-                    log_info(f"Executing {fc_name}")
-
+                            llm_call_duration = time.monotonic() - round_start_time
+                            rm = RoundMetrics(
+                                round_number=completed_rounds,
+                                llm_call_duration_seconds=llm_call_duration,
+                                tool_calls=round_tool_calls,
+                                error_count=round_errors,
+                            )
+                            if len(round_metrics_list) < 100:
+                                round_metrics_list.append(rm)
+                            else:
+                                round_metrics_list.pop(0)
+                                round_metrics_list.append(rm)
+                        except Exception:
+                            pass
+                        return f"Task aborted: {self.consecutive_error_count} consecutive errors. Last: {e}"
+                    pending_tool_results.append(("_llm_error", f"LLM call failed: {e}"))
+                    # Record this round and continue
+                    completed_rounds += 1
                     try:
-                        display_name, tool_result = await dispatcher.dispatch(fc_name, tool_args)
-                        consecutive_error_count = 0  # Reset on success
-                        log_info(f"Tool result: {str(tool_result)[:200]}...")
-                    except KeyError as e:
-                        tool_result = f"Error: {e}"
-                        log_error(str(e))
-                        consecutive_error_count += 1
-                        if consecutive_error_count >= MAX_CONSECUTIVE_ERRORS:
-                            pending_tool_results.append((fc_name, tool_result))
-                            return f"Task aborted: {consecutive_error_count} consecutive errors. Last: {e}"
-                    except Exception as e:
-                        tool_result = f"Error: {e}"
-                        log_error(f"Tool execution failed: {e}")
-                        consecutive_error_count += 1
-                        if consecutive_error_count >= MAX_CONSECUTIVE_ERRORS:
-                            pending_tool_results.append((fc_name, tool_result))
-                            return f"Task aborted: {consecutive_error_count} consecutive errors. Last tool error: {e}"
+                        llm_call_duration = time.monotonic() - round_start_time
+                        rm = RoundMetrics(
+                            round_number=completed_rounds,
+                            llm_call_duration_seconds=llm_call_duration,
+                            tool_calls=round_tool_calls,
+                            error_count=round_errors,
+                        )
+                        if len(round_metrics_list) < 100:
+                            round_metrics_list.append(rm)
+                        else:
+                            round_metrics_list.pop(0)
+                            round_metrics_list.append(rm)
+                    except Exception:
+                        pass
+                    continue
 
-                    pending_tool_results.append((fc_name, tool_result))
+                llm_call_duration = time.monotonic() - round_start_time
 
-                # Continue loop - tool results will be injected in next iteration
-            else:
-                # Final answer - no function calls
-                log_info("LLM provided final answer")
-                if text_content:
-                    return text_content
+                # Save response ID for next round (maintains conversation state)
+                previous_response_id = response["id"]
+                log_info(f"Response ID: {previous_response_id}")
+
+                # Check for incomplete response (truncation)
+                status = response.get("status")
+                if status == "incomplete":
+                    incomplete_reason = response.get("incomplete_details", {}).get("reason", "unknown")
+                    log_error(f"Response incomplete: {incomplete_reason}")
+
+                # Process output array (not choices - different format!)
+                output = response.get("output", [])
+
+                # Find text output (final answer) - it's nested inside "message" type items
+                text_content = None
+                for item in output:
+                    if item.get("type") == "message":
+                        content = item.get("content", [])
+                        for content_item in content:
+                            if content_item.get("type") == "output_text":
+                                text_content = content_item.get("text", "")
+                                log_info(f"LLM text: {text_content[:100]}...")
+                                break
+                        if text_content:
+                            break
+                    elif item.get("type") == "reasoning":
+                        reasoning_content = item.get("content", [])
+                        for rc in reasoning_content:
+                            if rc.get("type") == "reasoning_text":
+                                log_info(f"LLM reasoning: {rc.get('text', '')[:200]}...")
+
+                # Check for function calls
+                function_calls = [
+                    item for item in output
+                    if item.get("type") == "function_call"
+                ]
+
+                if function_calls:
+                    log_info(f"LLM requested {len(function_calls)} tool call(s)")
+
+                    if parallel_tools and len(function_calls) > 1:
+                        pending_tool_results = await self._execute_tools_parallel(dispatcher, function_calls)
+                    else:
+                        pending_tool_results = await self._execute_tools_sequential(dispatcher, function_calls)
+
+                    # Track tool call metrics (after execution)
+                    for tc_name, tc_result in pending_tool_results:
+                        is_error = "error" in str(tc_result).lower()[:20]
+                        round_tool_calls.append({
+                            "name": tc_name,
+                            "duration_seconds": 0.0,
+                            "success": not is_error,
+                        })
+                        if is_error:
+                            round_errors += 1
+                            total_error_count += 1
+
+                    # Record completed round metrics
+                    completed_rounds += 1
+                    try:
+                        rm = RoundMetrics(
+                            round_number=completed_rounds,
+                            llm_call_duration_seconds=llm_call_duration,
+                            tool_calls=round_tool_calls,
+                            error_count=round_errors,
+                        )
+                        if len(round_metrics_list) < 100:
+                            round_metrics_list.append(rm)
+                        else:
+                            round_metrics_list.pop(0)
+                            round_metrics_list.append(rm)
+                    except Exception:
+                        pass
+
+                    # Check abort threshold after tool execution
+                    if self.consecutive_error_count >= MAX_CONSECUTIVE_ERRORS:
+                        final_status = "aborted"
+                        return f"Task aborted: {self.consecutive_error_count} consecutive errors. Last batch had failures."
+
+                    # Continue loop - tool results will be injected in next iteration
                 else:
-                    return "No content in response"
+                    # Final answer - no function calls
+                    log_info("LLM provided final answer")
 
-        return "Task incomplete: Maximum rounds reached"
+                    # Record completed round metrics (no tool calls this round)
+                    completed_rounds += 1
+                    try:
+                        rm = RoundMetrics(
+                            round_number=completed_rounds,
+                            llm_call_duration_seconds=llm_call_duration,
+                            tool_calls=round_tool_calls,
+                            error_count=round_errors,
+                        )
+                        if len(round_metrics_list) < 100:
+                            round_metrics_list.append(rm)
+                        else:
+                            round_metrics_list.pop(0)
+                            round_metrics_list.append(rm)
+                    except Exception:
+                        pass
+
+                    final_status = "completed"
+                    if text_content:
+                        return text_content
+                    else:
+                        return "No content in response"
+
+            return "Task incomplete: Maximum rounds reached"
+
+        finally:
+            # Always set last_loop_metrics regardless of how the loop exited.
+            # Wrap in try/except so a metrics bug can NEVER break the caller.
+            try:
+                self.last_loop_metrics = LoopMetrics(
+                    total_rounds=completed_rounds,
+                    total_duration_seconds=time.monotonic() - loop_start_time,
+                    total_tool_calls=sum(len(rm.tool_calls) for rm in round_metrics_list),
+                    total_errors=total_error_count,
+                    final_status=final_status,
+                    rounds=round_metrics_list,
+                )
+            except Exception:
+                pass  # Never break the caller for metrics
 
 
 __all__ = [

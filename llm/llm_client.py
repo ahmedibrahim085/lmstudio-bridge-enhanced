@@ -23,7 +23,13 @@ from llm.exceptions import (
 )
 from utils.error_handling import retry_with_backoff
 from utils.lms_helper import LMSHelper
-from config.constants import JIT_TTL_DEFAULT, JIT_TTL_EMBEDDING
+from config.constants import (
+    JIT_TTL_DEFAULT,
+    JIT_TTL_EMBEDDING,
+    ANTHROPIC_MESSAGES_ENDPOINT,
+    DEFAULT_ANTHROPIC_MAX_TOKENS,
+    DEFAULT_ANTHROPIC_API_VERSION,
+)
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -149,6 +155,10 @@ class LLMClient:
         )
         self.session.mount('http://', adapter)
         self.session.mount('https://', adapter)
+
+        # Native MCP support cache (OPP-16)
+        self._native_mcp_supported: Optional[bool] = None
+        self._native_mcp_checked_at: float = 0.0
 
     def _get_endpoint(self, path: str) -> str:
         """Get full URL for an endpoint.
@@ -408,6 +418,89 @@ class LLMClient:
                 flattened.append(tool)
         return flattened
 
+    @staticmethod
+    def convert_tools_to_anthropic_format(tools: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Convert OpenAI tool format to Anthropic tool format.
+
+        OpenAI: {"type": "function", "function": {"name": "...", "parameters": {...}}}
+        Anthropic: {"name": "...", "description": "...", "input_schema": {...}}
+
+        Args:
+            tools: List of tools in OpenAI format
+
+        Returns:
+            List of tools in Anthropic format
+        """
+        converted = []
+        for tool in tools:
+            if tool.get("type") == "function" and "function" in tool:
+                func = tool["function"]
+                anthropic_tool = {
+                    "name": func["name"],
+                    "description": func.get("description", ""),
+                }
+                if "parameters" in func:
+                    anthropic_tool["input_schema"] = func["parameters"]
+                converted.append(anthropic_tool)
+            else:
+                converted.append(tool)
+        return converted
+
+    @staticmethod
+    def extract_anthropic_tool_calls(response: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Extract tool_use blocks from an Anthropic response.
+
+        Args:
+            response: Anthropic API response dict
+
+        Returns:
+            List of dicts with id, name, input for each tool call
+        """
+        calls = []
+        for block in response.get("content", []):
+            if block.get("type") == "tool_use":
+                calls.append({
+                    "id": block.get("id"),
+                    "name": block.get("name"),
+                    "input": block.get("input", {}),
+                })
+        return calls
+
+    @staticmethod
+    def build_anthropic_tool_result(
+        tool_use_id: str,
+        content: Union[str, dict, None],
+        is_error: bool = False,
+    ) -> Dict[str, Any]:
+        """Build an Anthropic tool_result message.
+
+        Args:
+            tool_use_id: The id from the tool_use block
+            content: Result content (str, dict auto-serialized, None -> "")
+            is_error: Whether this is an error result
+
+        Returns:
+            Message dict with role=user and tool_result content block
+        """
+        if content is None:
+            content_str = ""
+        elif isinstance(content, dict):
+            content_str = json.dumps(content)
+        else:
+            content_str = str(content)
+
+        block: Dict[str, Any] = {
+            "type": "tool_result",
+            "tool_use_id": tool_use_id,
+            "content": content_str,
+        }
+        if is_error:
+            block["is_error"] = True
+
+        return {"role": "user", "content": [block]}
+
+    # TODO(OPP-10): Extract to anthropic_adapter.py
+
     @retry_with_backoff(
         max_retries=DEFAULT_MAX_RETRIES + 1,
         base_delay=DEFAULT_RETRY_DELAY,
@@ -488,7 +581,8 @@ class LLMClient:
         tool_choice: Optional[str] = None,
         temperature: Optional[float] = None,
         ttl: Optional[int] = None,
-        timeout: int = DEFAULT_LLM_TIMEOUT
+        timeout: int = DEFAULT_LLM_TIMEOUT,
+        draft_model: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Create a stateful response with optional function calling.
 
@@ -566,6 +660,10 @@ class LLMClient:
         # Add temperature if explicitly set (optional — not auto-added when None)
         if temperature is not None:
             payload["temperature"] = temperature
+
+        # Add draft model for speculative decoding (GGUF only, LM Studio validates)
+        if draft_model is not None:
+            payload["draft_model"] = draft_model
 
         # Always include TTL for JIT model loading
         payload["ttl"] = resolved_ttl
@@ -682,6 +780,169 @@ class LLMClient:
             model=model
         )
 
+    @retry_with_backoff(
+        max_retries=DEFAULT_MAX_RETRIES + 1,
+        base_delay=DEFAULT_RETRY_DELAY,
+        exceptions=(LLMResponseError, LLMTimeoutError)
+    )
+    def anthropic_messages(
+        self,
+        messages: List[Dict[str, Any]],
+        system: str = "",
+        max_tokens: int = DEFAULT_ANTHROPIC_MAX_TOKENS,
+        temperature: float = 0.7,
+        tools: Optional[List[Dict[str, Any]]] = None,
+        tool_choice: Optional[Dict[str, Any]] = None,
+        model: Optional[str] = None,
+        timeout: int = DEFAULT_LLM_TIMEOUT,
+    ) -> Dict[str, Any]:
+        """Send a request to LM Studio's Anthropic-compatible /v1/messages endpoint.
+
+        Args:
+            messages: List of message dicts with 'role' and 'content' (NO system role).
+            system: Top-level system prompt (Anthropic format: not in messages).
+            max_tokens: Maximum tokens to generate (required by Anthropic protocol).
+            temperature: Controls randomness (0.0 to 1.0).
+            tools: Optional list of tools in Anthropic format.
+            tool_choice: Optional tool selection strategy.
+            model: Model override for this request.
+            timeout: Request timeout in seconds.
+
+        Returns:
+            Response dictionary in Anthropic format.
+
+        Raises:
+            LLMTimeoutError: If request times out.
+            LLMConnectionError: If cannot connect to LM Studio.
+            LLMRateLimitError: If rate limit exceeded.
+            LLMResponseError: If LM Studio returns an error.
+            LLMError: For other unexpected errors.
+        """
+        target_model = model if model is not None else self.model
+
+        self._ensure_model_loaded(target_model, ttl=JIT_TTL_DEFAULT)
+
+        # Filter system messages from the messages array (Anthropic uses top-level system)
+        filtered_messages = [m for m in messages if m.get("role") != "system"]
+
+        payload = {
+            "messages": filtered_messages,
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+        }
+
+        if target_model and target_model != "default":
+            payload["model"] = target_model
+
+        if system:
+            payload["system"] = system
+
+        if tools:
+            payload["tools"] = tools
+        if tool_choice is not None:
+            payload["tool_choice"] = tool_choice
+
+        headers = {
+            "anthropic-version": DEFAULT_ANTHROPIC_API_VERSION,
+        }
+
+        try:
+            response = self.session.post(
+                self._get_endpoint(ANTHROPIC_MESSAGES_ENDPOINT),
+                json=payload,
+                headers=headers,
+                timeout=timeout,
+            )
+            response.raise_for_status()
+            return response.json()
+
+        except Exception as e:
+            _handle_request_exception(e, "Anthropic messages")
+
+    def supports_native_mcp(self) -> bool:
+        """Check if LM Studio supports native MCP in API requests.
+
+        Probes GET /api/v1/server/info, checks for 'mcp' in capabilities.
+        Result cached with TTL=300s.
+        Returns False on any error (safe default).
+        """
+        now = time.monotonic()
+        if self._native_mcp_supported is not None and (now - self._native_mcp_checked_at) < 300:
+            return self._native_mcp_supported
+
+        try:
+            resp = self.session.get(
+                self._get_endpoint("api/v1/server/info"),
+                timeout=HEALTH_CHECK_TIMEOUT,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            supported = bool(data.get("capabilities", {}).get("mcp", False))
+        except Exception:
+            supported = False
+
+        self._native_mcp_supported = supported
+        self._native_mcp_checked_at = now
+        return supported
+
+    def chat_completion_with_native_mcp(
+        self,
+        messages: List[Dict[str, Any]],
+        mcp_servers: List[Dict[str, Any]],
+        model: Optional[str] = None,
+        temperature: float = 0.7,
+        max_tokens: int = DEFAULT_MAX_TOKENS,
+        timeout: int = DEFAULT_LLM_TIMEOUT,
+        require_native: bool = False,
+    ) -> Dict[str, Any]:
+        """Send chat completion with native MCP server configuration.
+
+        Args:
+            messages: Chat messages
+            mcp_servers: List of MCP server configs [{name, transport, command, args, env}]
+            model: Optional model override
+            temperature: Sampling temperature
+            max_tokens: Maximum tokens in response
+            timeout: Request timeout in seconds
+            require_native: If True, raises LLMResponseError when native MCP unsupported
+
+        Returns:
+            Chat completion response dict
+
+        Raises:
+            ValueError: If mcp_servers is empty
+            LLMResponseError: If native MCP not supported (when require_native=True)
+            LLMTimeoutError: On timeout
+        """
+        if not mcp_servers:
+            raise ValueError("mcp_servers must not be empty")
+
+        if require_native and not self.supports_native_mcp():
+            raise LLMResponseError("Native MCP not supported by this LM Studio version")
+
+        target_model = model if model is not None else self.model
+
+        payload = {
+            "messages": messages,
+            "mcp_servers": mcp_servers,
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+        }
+
+        if target_model and target_model != "default":
+            payload["model"] = target_model
+
+        try:
+            response = self.session.post(
+                self._get_endpoint("v1/chat/completions"),
+                json=payload,
+                timeout=timeout,
+            )
+            response.raise_for_status()
+            return response.json()
+        except Exception as e:
+            _handle_request_exception(e, "Native MCP chat completion")
+
     def list_models(self) -> List[str]:
         """List all available models in LM Studio.
 
@@ -733,6 +994,7 @@ class LLMClient:
                         "loaded_instances": entry.get("loaded_instances", []),
                         "size_bytes": entry.get("size_bytes"),
                         "quantization": entry.get("quantization"),
+                        "compatibility_type": entry.get("compatibility_type"),
                     }
                     for entry in raw_list
                 ]
