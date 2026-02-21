@@ -560,6 +560,111 @@ Continue with the task based on these results."""
 
         return input_text
 
+    async def _execute_tools_sequential(self, dispatcher, fc_list):
+        """Execute tools sequentially. Returns list of (name, result_text) tuples.
+
+        Updates self.consecutive_error_count:
+        - Success: resets to 0
+        - Failure: increments by 1 per failing tool
+        """
+        results = []
+        for fc in fc_list:
+            fc_name = fc["name"]
+            tool_args = fc.get("arguments", {})
+
+            # Parse JSON string args
+            if isinstance(tool_args, str):
+                try:
+                    tool_args = json.loads(tool_args)
+                except json.JSONDecodeError:
+                    error_msg = f"Failed to parse tool arguments for '{fc_name}': {str(tool_args)[:200]}"
+                    log_error(error_msg)
+                    results.append((fc_name, f"Error: {error_msg}"))
+                    self.consecutive_error_count += 1
+                    continue
+
+            log_info(f"Executing {fc_name}")
+
+            try:
+                display_name, tool_result = await dispatcher.dispatch(fc_name, tool_args)
+                self.consecutive_error_count = 0  # Reset on success
+                log_info(f"Tool result: {str(tool_result)[:200]}...")
+            except KeyError as e:
+                tool_result = f"Error: {e}"
+                log_error(str(e))
+                self.consecutive_error_count += 1
+            except Exception as e:
+                tool_result = f"Error: {e}"
+                log_error(f"Tool execution failed: {e}")
+                self.consecutive_error_count += 1
+
+            results.append((fc_name, tool_result))
+
+        return results
+
+    async def _execute_tools_parallel(self, dispatcher, fc_list):
+        """Execute tools in parallel using asyncio.gather(). Returns list of (name, result_text) tuples.
+
+        Error counting (batch semantics):
+        - ALL succeed: consecutive_error_count = 0
+        - ALL fail: consecutive_error_count += 1 (capped at +1 per batch)
+        - PARTIAL success: consecutive_error_count UNCHANGED
+        """
+        async def _run_one(fc):
+            fc_name = fc["name"]
+            tool_args = fc.get("arguments", {})
+
+            # Parse JSON string args
+            if isinstance(tool_args, str):
+                try:
+                    tool_args = json.loads(tool_args)
+                except json.JSONDecodeError:
+                    error_msg = f"Failed to parse tool arguments for '{fc_name}': {str(tool_args)[:200]}"
+                    log_error(error_msg)
+                    return fc_name, f"Error: {error_msg}", False
+
+            try:
+                display_name, tool_result = await dispatcher.dispatch(fc_name, tool_args)
+                log_info(f"Tool result: {str(tool_result)[:200]}...")
+                return fc_name, tool_result, True  # True = success
+            except KeyError as e:
+                log_error(str(e))
+                return fc_name, f"Error: {e}", False
+            except Exception as e:
+                log_error(f"Tool execution failed: {e}")
+                return fc_name, f"Error: {e}", False
+
+        gathered = await asyncio.gather(*[_run_one(fc) for fc in fc_list], return_exceptions=True)
+
+        results = []
+        successes = 0
+        failures = 0
+
+        for item in gathered:
+            if isinstance(item, Exception):
+                # Unexpected exception from gather itself
+                results.append(("unknown", f"Error: {item}"))
+                failures += 1
+            else:
+                fc_name, result_text, success = item
+                results.append((fc_name, result_text))
+                if success:
+                    successes += 1
+                else:
+                    failures += 1
+
+        # Batch error counting semantics
+        total = successes + failures
+        if total > 0 and successes == total:
+            # ALL succeed -> reset
+            self.consecutive_error_count = 0
+        elif total > 0 and failures == total:
+            # ALL fail -> +1 (capped per batch)
+            self.consecutive_error_count += 1
+        # PARTIAL success -> unchanged (no modification)
+
+        return results
+
     async def _autonomous_loop(
         self,
         dispatcher,
@@ -567,7 +672,8 @@ Continue with the task based on these results."""
         task: str,
         max_rounds: int,
         max_tokens: int,
-        model: Optional[str] = None
+        model: Optional[str] = None,
+        parallel_tools: bool = False
     ) -> str:
         """Core autonomous loop using stateful /v1/responses API with explicit tool result injection.
 
@@ -588,17 +694,18 @@ Continue with the task based on these results."""
             max_rounds: Maximum number of autonomous loop iterations
             max_tokens: Maximum tokens per LLM response
             model: Optional model name override
+            parallel_tools: If True, execute multiple tool calls in parallel via asyncio.gather()
         """
         previous_response_id = None
         pending_tool_results = []  # Track tool results to inject into next round
-        consecutive_error_count = 0
+        self.consecutive_error_count = 0
 
         for round_num in range(max_rounds):
             log_info(f"\n--- Round {round_num + 1}/{max_rounds} ---")
 
             # Build input text with tool results injection and self-correction hints
             input_text = self._build_input_text(
-                round_num, task, pending_tool_results, consecutive_error_count
+                round_num, task, pending_tool_results, self.consecutive_error_count
             )
             if round_num > 0:
                 pending_tool_results = []
@@ -623,10 +730,10 @@ Continue with the task based on these results."""
                     temperature=DEFAULT_TEMPERATURE
                 )
             except Exception as e:
-                consecutive_error_count += 1
-                log_error(f"LLM call failed (consecutive: {consecutive_error_count}): {e}")
-                if consecutive_error_count >= MAX_CONSECUTIVE_ERRORS:
-                    return f"Task aborted: {consecutive_error_count} consecutive errors. Last: {e}"
+                self.consecutive_error_count += 1
+                log_error(f"LLM call failed (consecutive: {self.consecutive_error_count}): {e}")
+                if self.consecutive_error_count >= MAX_CONSECUTIVE_ERRORS:
+                    return f"Task aborted: {self.consecutive_error_count} consecutive errors. Last: {e}"
                 pending_tool_results.append(("_llm_error", f"LLM call failed: {e}"))
                 continue
 
@@ -670,46 +777,14 @@ Continue with the task based on these results."""
             if function_calls:
                 log_info(f"LLM requested {len(function_calls)} tool call(s)")
 
-                # Execute tools and collect results for next round
-                for fc in function_calls:
-                    fc_name = fc["name"]
-                    tool_args = fc.get("arguments", {})
+                if parallel_tools and len(function_calls) > 1:
+                    pending_tool_results = await self._execute_tools_parallel(dispatcher, function_calls)
+                else:
+                    pending_tool_results = await self._execute_tools_sequential(dispatcher, function_calls)
 
-                    # Parse arguments if they're a JSON string
-                    if isinstance(tool_args, str):
-                        try:
-                            tool_args = json.loads(tool_args)
-                        except json.JSONDecodeError:
-                            error_msg = f"Failed to parse tool arguments for '{fc_name}': {str(tool_args)[:200]}"
-                            log_error(error_msg)
-                            pending_tool_results.append((fc_name, f"Error: {error_msg}"))
-                            consecutive_error_count += 1
-                            if consecutive_error_count >= MAX_CONSECUTIVE_ERRORS:
-                                return f"Task aborted: {consecutive_error_count} consecutive errors. Last: JSON parse error"
-                            continue
-
-                    log_info(f"Executing {fc_name}")
-
-                    try:
-                        display_name, tool_result = await dispatcher.dispatch(fc_name, tool_args)
-                        consecutive_error_count = 0  # Reset on success
-                        log_info(f"Tool result: {str(tool_result)[:200]}...")
-                    except KeyError as e:
-                        tool_result = f"Error: {e}"
-                        log_error(str(e))
-                        consecutive_error_count += 1
-                        if consecutive_error_count >= MAX_CONSECUTIVE_ERRORS:
-                            pending_tool_results.append((fc_name, tool_result))
-                            return f"Task aborted: {consecutive_error_count} consecutive errors. Last: {e}"
-                    except Exception as e:
-                        tool_result = f"Error: {e}"
-                        log_error(f"Tool execution failed: {e}")
-                        consecutive_error_count += 1
-                        if consecutive_error_count >= MAX_CONSECUTIVE_ERRORS:
-                            pending_tool_results.append((fc_name, tool_result))
-                            return f"Task aborted: {consecutive_error_count} consecutive errors. Last tool error: {e}"
-
-                    pending_tool_results.append((fc_name, tool_result))
+                # Check abort threshold after tool execution
+                if self.consecutive_error_count >= MAX_CONSECUTIVE_ERRORS:
+                    return f"Task aborted: {self.consecutive_error_count} consecutive errors. Last batch had failures."
 
                 # Continue loop - tool results will be injected in next iteration
             else:
