@@ -8,16 +8,17 @@ Uses a single class-level cache (MODELS_FETCH_CACHE_TTL seconds) shared across
 all ModelValidator instances to avoid repeated /v1/models polling.
 """
 
+import logging
+import threading
 import time
 from typing import Optional
-import logging
 
 import httpx
 
-from llm.exceptions import ModelNotFoundError, LLMConnectionError
-from utils.error_handling import retry_with_backoff
 from config import get_config
 from config.constants import MODELS_FETCH_CACHE_TTL
+from llm.exceptions import LLMConnectionError, ModelNotFoundError
+from utils.error_handling import retry_with_backoff
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +41,12 @@ class ModelValidator:
     # Uses time.monotonic() — immune to NTP jumps.
     _class_cache: Optional[list[str]] = None
     _class_cache_time: float = 0.0
+    # Lock protecting all reads and writes of _class_cache / _class_cache_time.
+    # threading.Lock (not asyncio.Lock) because the cache is a shared class-level
+    # attribute accessed across threads (FastMCP serves requests concurrently).
+    # IMPORTANT: the lock is NEVER held during network I/O — only during the
+    # cheap in-memory read-check and the final cache write.
+    _class_cache_lock: threading.Lock = threading.Lock()
 
     def __init__(self, api_base: Optional[str] = None):
         """Initialize model validator.
@@ -70,18 +77,21 @@ class ModelValidator:
         Raises:
             LLMConnectionError: If unable to connect to LM Studio API
         """
-        # Check class-level cache first (shared across all instances)
+        # Check class-level cache first (shared across all instances).
+        # Lock protects the read-check — released BEFORE any network I/O.
         now = time.monotonic()
-        if (
-            not force_refresh
-            and ModelValidator._class_cache is not None
-            and (now - ModelValidator._class_cache_time) < MODELS_FETCH_CACHE_TTL
-        ):
-            logger.debug(
-                f"Using class-level model cache "
-                f"(age: {now - ModelValidator._class_cache_time:.1f}s)"
-            )
-            return ModelValidator._class_cache
+        with ModelValidator._class_cache_lock:
+            if (
+                not force_refresh
+                and ModelValidator._class_cache is not None
+                and (now - ModelValidator._class_cache_time) < MODELS_FETCH_CACHE_TTL
+            ):
+                logger.debug(
+                    f"Using class-level model cache "
+                    f"(age: {now - ModelValidator._class_cache_time:.1f}s)"
+                )
+                return ModelValidator._class_cache
+        # Lock is released here — network I/O happens outside the lock.
 
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
@@ -100,8 +110,9 @@ class ModelValidator:
                         models = [m["key"] for m in native_data if "key" in m]
                         if models:
                             logger.info(f"Fetched {len(models)} models via native API")
-                            ModelValidator._class_cache = models
-                            ModelValidator._class_cache_time = now
+                            with ModelValidator._class_cache_lock:
+                                ModelValidator._class_cache = models
+                                ModelValidator._class_cache_time = now
                             return models
                 except Exception:
                     logger.debug("Native API unavailable, falling back to /v1/models")
@@ -120,8 +131,9 @@ class ModelValidator:
                 if models:
                     logger.debug(f"Available models: {', '.join(models)}")
 
-                ModelValidator._class_cache = models
-                ModelValidator._class_cache_time = now
+                with ModelValidator._class_cache_lock:
+                    ModelValidator._class_cache = models
+                    ModelValidator._class_cache_time = now
                 return models
 
         except httpx.HTTPError as e:
@@ -129,8 +141,8 @@ class ModelValidator:
             raise LLMConnectionError(
                 f"Could not connect to LM Studio API at {self.api_base}. "
                 f"Please ensure LM Studio is running and the server is started.",
-                original_exception=e
-            )
+                original_exception=e,
+            ) from e
 
     async def get_available_models(self, use_cache: bool = True) -> list[str]:
         """Get list of available models.
@@ -195,8 +207,8 @@ class ModelValidator:
         logger.info(f"Model '{model_name}' validated successfully")
         return True
 
-    def clear_cache(self):
-        """Clear the class-level model cache.
+    def clear_cache(self) -> None:
+        """Clear the class-level model cache. Thread-safe.
 
         This forces the next get_available_models() call to fetch fresh data
         from the API. Useful for testing or when you know models have changed.
@@ -205,9 +217,25 @@ class ModelValidator:
             >>> validator = ModelValidator()
             >>> validator.clear_cache()  # Force refresh on next call
         """
-        ModelValidator._class_cache = None
-        ModelValidator._class_cache_time = 0.0
+        with ModelValidator._class_cache_lock:
+            ModelValidator._class_cache = None
+            ModelValidator._class_cache_time = 0.0
         logger.debug("Model cache cleared")
+
+    @classmethod
+    def reset_cache(cls) -> None:
+        """Reset the class-level model cache. Thread-safe.
+
+        Identical to clear_cache() but callable without an instance.
+        Preferred in test setup/teardown and class-level operations.
+
+        Example:
+            >>> ModelValidator.reset_cache()  # Reset without creating an instance
+        """
+        with cls._class_cache_lock:
+            cls._class_cache = None
+            cls._class_cache_time = 0.0
+        logger.debug("Model cache reset via classmethod")
 
 
 __all__ = [

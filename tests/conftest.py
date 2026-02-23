@@ -52,12 +52,13 @@ def reset_model_validator_cache():
     Use this fixture in tests that mock _fetch_models() differently
     and need cache isolation. Most tests should let the cache work
     naturally (30s TTL) to match production behavior.
+
+    Uses reset_cache() classmethod (thread-safe, via _class_cache_lock)
+    rather than direct attribute assignment.
     """
-    ModelValidator._class_cache = None
-    ModelValidator._class_cache_time = 0.0
+    ModelValidator.reset_cache()
     yield
-    ModelValidator._class_cache = None
-    ModelValidator._class_cache_time = 0.0
+    ModelValidator.reset_cache()
 
 
 # ============================================================================
