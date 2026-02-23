@@ -32,6 +32,7 @@ from config.constants import (
     DEFAULT_TEMPERATURE,
     DEFAULT_VISION_DETAIL,
     FORMAT_ANTHROPIC,
+    MAX_ANTHROPIC_LOOP_MESSAGES,
     MAX_CONSECUTIVE_ERRORS,
 )
 from llm.exceptions import ModelNotFoundError
@@ -1095,6 +1096,12 @@ Continue with the task based on these results."""
                         is_error=str(tool_result).startswith("Error:"),
                     )
                     messages.append(tool_result_msg)
+
+                # Trim message history to prevent unbounded memory growth.
+                # Keep first message (user task) + last (limit-1) messages.
+                if len(messages) > MAX_ANTHROPIC_LOOP_MESSAGES:
+                    messages = [messages[0]] + messages[-(MAX_ANTHROPIC_LOOP_MESSAGES - 1):]
+                    log_info(f"Trimmed messages to {len(messages)} (window={MAX_ANTHROPIC_LOOP_MESSAGES})")
 
                 # Check abort threshold after tool execution
                 if self.consecutive_error_count >= MAX_CONSECUTIVE_ERRORS:

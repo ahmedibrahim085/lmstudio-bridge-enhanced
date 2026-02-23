@@ -444,6 +444,11 @@ SUPPORTED_API_FORMATS = [FORMAT_OPENAI, FORMAT_ANTHROPIC, FORMAT_RESPONSES]
 # Used in: tools/dynamic_autonomous.py
 DEFAULT_AUTONOMOUS_FORMAT = FORMAT_RESPONSES  # Current behavior preserved
 
+# Maximum messages to keep in Anthropic autonomous loop before trimming
+# Keeps initial user task + last N messages to prevent unbounded memory growth
+# The Responses loop doesn't need this because LM Studio manages state server-side
+MAX_ANTHROPIC_LOOP_MESSAGES = 100
+
 # System prompt template for Anthropic-format autonomous execution
 # Anthropic uses top-level system prompt, not a system message in the array
 ANTHROPIC_AUTONOMOUS_SYSTEM_TEMPLATE = (
