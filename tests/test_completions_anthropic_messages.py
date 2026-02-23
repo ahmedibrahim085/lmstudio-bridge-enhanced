@@ -538,3 +538,182 @@ class TestCompletionErrorHandling:
         mock_llm.text_completion.side_effect = ConnectionError("LM Studio down")
         with pytest.raises(ConnectionError, match="LM Studio down"):
             await completion_tools.text_completion(prompt="test")
+
+
+# ==============================================================================
+# H-2: stream=True validation in create_response
+# ==============================================================================
+
+class TestCreateResponseStreamValidation:
+    """H-2: create_response must reject stream=True."""
+
+    @pytest.mark.asyncio
+    async def test_create_response_rejects_stream_true(self, completion_tools, mock_llm):
+        """create_response raises ValueError when stream=True."""
+        with pytest.raises(ValueError, match="stream=True is not supported"):
+            await completion_tools.create_response(input_text="test", stream=True)
+
+    @pytest.mark.asyncio
+    async def test_create_response_allows_stream_false(self, completion_tools, mock_llm):
+        """create_response works normally when stream=False (default)."""
+        mock_llm.create_response.return_value = {"id": "resp_1", "output": []}
+        result = await completion_tools.create_response(input_text="test", stream=False)
+        assert "resp_1" in result
+
+    @pytest.mark.asyncio
+    async def test_create_response_stream_false_is_default(self, completion_tools, mock_llm):
+        """create_response works with default args (stream defaults to False)."""
+        mock_llm.create_response.return_value = {"id": "resp_2", "output": []}
+        result = await completion_tools.create_response(input_text="test")
+        assert "resp_2" in result
+
+
+# ==============================================================================
+# H-9: json.loads type validation in anthropic_messages
+# ==============================================================================
+
+class TestAnthropicMessagesTypeValidation:
+    """H-9: anthropic_messages must validate json.loads result type."""
+
+    @pytest.mark.asyncio
+    async def test_rejects_json_null(self, completion_tools, mock_llm):
+        """json.loads('null') returns None — must be rejected."""
+        result = await completion_tools.anthropic_messages(messages="null")
+        result_dict = json.loads(result)
+        assert "error" in result_dict
+        assert (
+            "must be a JSON array" in result_dict["error"]
+            or "list" in result_dict["error"].lower()
+        )
+
+    @pytest.mark.asyncio
+    async def test_rejects_json_number(self, completion_tools, mock_llm):
+        """json.loads('123') returns int — must be rejected."""
+        result = await completion_tools.anthropic_messages(messages="123")
+        result_dict = json.loads(result)
+        assert "error" in result_dict
+
+    @pytest.mark.asyncio
+    async def test_rejects_json_string(self, completion_tools, mock_llm):
+        """json.loads('"hello"') returns str — must be rejected."""
+        result = await completion_tools.anthropic_messages(messages='"hello"')
+        result_dict = json.loads(result)
+        assert "error" in result_dict
+
+    @pytest.mark.asyncio
+    async def test_rejects_json_object(self, completion_tools, mock_llm):
+        """json.loads('{"role":"user"}') returns dict — must be rejected (needs to be array)."""
+        result = await completion_tools.anthropic_messages(
+            messages='{"role":"user","content":"hi"}'
+        )
+        result_dict = json.loads(result)
+        assert "error" in result_dict
+
+    @pytest.mark.asyncio
+    async def test_accepts_json_array(self, completion_tools, mock_llm):
+        """json.loads('[...]') returns list — should be accepted."""
+        mock_llm.anthropic_messages.return_value = {"id": "msg_1", "content": []}
+        result = await completion_tools.anthropic_messages(
+            messages='[{"role": "user", "content": "hello"}]'
+        )
+        result_dict = json.loads(result)
+        assert "error" not in result_dict
+        assert result_dict["id"] == "msg_1"
+
+
+# ==============================================================================
+# H-10: Input validation for temperature and max_tokens
+# ==============================================================================
+
+class TestInputValidation:
+    """H-10: MCP tool parameters must be validated."""
+
+    # -- temperature --
+
+    @pytest.mark.asyncio
+    async def test_chat_rejects_negative_temperature(self, completion_tools, mock_llm):
+        """chat_completion raises ValueError for temperature < 0."""
+        with pytest.raises(ValueError, match="temperature"):
+            await completion_tools.chat_completion(prompt="test", temperature=-0.1)
+
+    @pytest.mark.asyncio
+    async def test_chat_rejects_temperature_above_max(self, completion_tools, mock_llm):
+        """chat_completion raises ValueError for temperature > 2.0."""
+        with pytest.raises(ValueError, match="temperature"):
+            await completion_tools.chat_completion(prompt="test", temperature=2.1)
+
+    @pytest.mark.asyncio
+    async def test_chat_accepts_temperature_at_bounds(self, completion_tools, mock_llm):
+        """Temperature 0.0 and 2.0 are valid boundary values."""
+        mock_llm.chat_completion.return_value = {
+            "choices": [{"message": {"content": "ok"}}]
+        }
+        await completion_tools.chat_completion(prompt="test", temperature=0.0)
+        await completion_tools.chat_completion(prompt="test", temperature=2.0)
+
+    # -- max_tokens --
+
+    @pytest.mark.asyncio
+    async def test_chat_rejects_zero_max_tokens(self, completion_tools, mock_llm):
+        """chat_completion raises ValueError for max_tokens=0."""
+        with pytest.raises(ValueError, match="max_tokens"):
+            await completion_tools.chat_completion(prompt="test", max_tokens=0)
+
+    @pytest.mark.asyncio
+    async def test_chat_rejects_negative_max_tokens(self, completion_tools, mock_llm):
+        """chat_completion raises ValueError for max_tokens < 0."""
+        with pytest.raises(ValueError, match="max_tokens"):
+            await completion_tools.chat_completion(prompt="test", max_tokens=-1)
+
+    # -- text_completion validates too --
+
+    @pytest.mark.asyncio
+    async def test_text_rejects_bad_temperature(self, completion_tools, mock_llm):
+        """text_completion raises ValueError for temperature > 2.0."""
+        with pytest.raises(ValueError, match="temperature"):
+            await completion_tools.text_completion(prompt="test", temperature=3.0)
+
+    # -- anthropic_messages validates too --
+
+    @pytest.mark.asyncio
+    async def test_anthropic_rejects_bad_temperature(self, completion_tools, mock_llm):
+        """anthropic_messages returns error JSON for temperature < 0.
+
+        Unlike chat_completion/text_completion which raise exceptions,
+        anthropic_messages wraps all errors in JSON response format.
+        """
+        result = await completion_tools.anthropic_messages(
+            messages='[{"role":"user","content":"hi"}]', temperature=-1.0
+        )
+        result_dict = json.loads(result)
+        assert "error" in result_dict
+        assert "temperature" in result_dict["error"]
+
+
+# ==============================================================================
+# H-11: max_tokens defaults must match constants
+# ==============================================================================
+
+class TestMaxTokensDefaults:
+    """H-11: max_tokens defaults must use constants, not hardcoded values."""
+
+    def test_chat_completion_default_max_tokens(self):
+        """chat_completion default matches DEFAULT_MAX_TOKENS."""
+        import inspect
+        from config.constants import DEFAULT_MAX_TOKENS
+        sig = inspect.signature(CompletionTools.chat_completion)
+        assert sig.parameters["max_tokens"].default == DEFAULT_MAX_TOKENS
+
+    def test_text_completion_default_max_tokens(self):
+        """text_completion default matches DEFAULT_MAX_TOKENS."""
+        import inspect
+        from config.constants import DEFAULT_MAX_TOKENS
+        sig = inspect.signature(CompletionTools.text_completion)
+        assert sig.parameters["max_tokens"].default == DEFAULT_MAX_TOKENS
+
+    def test_anthropic_messages_default_max_tokens(self):
+        """anthropic_messages default matches DEFAULT_ANTHROPIC_MAX_TOKENS."""
+        import inspect
+        from config.constants import DEFAULT_ANTHROPIC_MAX_TOKENS
+        sig = inspect.signature(CompletionTools.anthropic_messages)
+        assert sig.parameters["max_tokens"].default == DEFAULT_ANTHROPIC_MAX_TOKENS

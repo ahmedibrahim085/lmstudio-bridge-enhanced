@@ -115,6 +115,32 @@ ERROR_EMPTY_CHAT_RESPONSE = "Empty response content from chat completion model"
 ERROR_NO_TEXT_COMPLETION = "No completion generated from text completion (empty choices)"
 ERROR_EMPTY_TEXT_COMPLETION = "Empty completion content from text completion model"
 
+# H-2: stream=True guard for create_response
+# Used in: tools/completions.py (CompletionTools.create_response)
+ERROR_STREAM_NOT_SUPPORTED = (
+    "stream=True is not supported in create_response. "
+    "Use the stream_create_response tool for streaming responses."
+)
+
+# H-9: type validation after json.loads in anthropic_messages
+# Used in: tools/completions.py (CompletionTools.anthropic_messages)
+ERROR_MESSAGES_NOT_LIST = (
+    "messages must be a JSON array of message objects, got {actual_type}"
+)
+
+# H-10: Input validation bounds for MCP tool parameters
+# Used in: tools/completions.py (MCP tool wrappers and CompletionTools methods)
+MIN_TEMPERATURE = 0.0
+MAX_TEMPERATURE = 2.0
+MIN_MAX_TOKENS = 1
+MAX_MAX_TOKENS = 131072  # 128K context — upper bound for any model
+ERROR_TEMPERATURE_OUT_OF_RANGE = (
+    "temperature must be between {min} and {max}, got {value}"
+)
+ERROR_MAX_TOKENS_OUT_OF_RANGE = (
+    "max_tokens must be between {min} and {max}, got {value}"
+)
+
 # Success Messages
 SUCCESS_MODEL_LOADED = "Model '{model}' loaded successfully"
 SUCCESS_VALIDATION_PASSED = "Model '{model}' validation passed"
