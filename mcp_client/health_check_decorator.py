@@ -15,6 +15,15 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+__all__ = [
+    "MCPUnavailableError",
+    "require_any_mcp",
+    "require_filesystem",
+    "require_github",
+    "require_memory",
+    "require_mcp",
+]
+
 
 class MCPUnavailableError(Exception):
     """Raised when an MCP is not available and operation cannot proceed."""
