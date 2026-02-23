@@ -33,6 +33,10 @@ ANTHROPIC_MESSAGES_ENDPOINT = "messages"  # Path segment for _get_endpoint (api_
 DEFAULT_ANTHROPIC_MAX_TOKENS = 4096  # Anthropic requires max_tokens (no default in protocol)
 DEFAULT_ANTHROPIC_API_VERSION = "2023-06-01"  # anthropic-version header value
 
+# Model loading delays (seconds) — used in sync LMSHelper methods
+MODEL_REACTIVATION_DELAY = 1    # Delay after reactivation API call before verifying
+MODEL_LOADING_DELAY = 2          # Delay for model loading/verification transitions
+
 # LM Studio Native REST API Endpoints (Model Lifecycle)
 LMS_LOAD_MODEL_ENDPOINT = "/api/v1/models/load"
 LMS_UNLOAD_MODEL_ENDPOINT = "/api/v1/models/unload"

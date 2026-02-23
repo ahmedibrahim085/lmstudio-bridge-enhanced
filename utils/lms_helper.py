@@ -23,9 +23,11 @@ Note: This is OPTIONAL. The system works without it, but LMS CLI provides
 import subprocess
 import json
 import logging
+import time
 from typing import Optional, Dict, List, Any
 from pathlib import Path
 
+from config.constants import MODEL_REACTIVATION_DELAY, MODEL_LOADING_DELAY
 from utils.retry import run_with_retry
 from utils.validation import validate_model_name, ValidationError
 
@@ -689,8 +691,7 @@ ALTERNATIVE:
 
                         if response.status_code == 200:
                             # API call succeeded, check if model is now active
-                            import time
-                            time.sleep(1)  # Give it a moment to transition
+                            time.sleep(MODEL_REACTIVATION_DELAY)  # Give it a moment to transition
 
                             # Verify model is now loaded
                             if cls.is_model_loaded(model_name):
@@ -715,8 +716,7 @@ ALTERNATIVE:
                 if status == "loading":
                     # Model is currently loading, wait briefly
                     logger.info(f"⏳ Model '{model_name}' is loading, waiting...")
-                    import time
-                    time.sleep(2)
+                    time.sleep(MODEL_LOADING_DELAY)
                     # Check again after wait
                     return cls.is_model_loaded(model_name) or False
 
@@ -812,8 +812,7 @@ ALTERNATIVE:
             raise Exception(f"Failed to load model '{model_name}'")
 
         # Give LM Studio time to fully load the model
-        import time
-        time.sleep(2)
+        time.sleep(MODEL_LOADING_DELAY)
 
         if not cls.verify_model_loaded(model_name):
             raise Exception(
