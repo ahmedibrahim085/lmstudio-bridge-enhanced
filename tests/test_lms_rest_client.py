@@ -48,7 +48,30 @@ class TestLMSRestClientListStatus:
         return LMSRestClient(base_url="http://localhost:1234")
 
     def test_list_all_models_happy_path(self):
-        """GET /api/v1/models 200 → returns model list."""
+        """GET /api/v1/models 200 with dict response → returns models list (real API format)."""
+        client = self._make_client()
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "models": [
+                {"key": "qwen/qwen3-coder-30b", "loaded_instances": [{"instance_id": "inst-1"}]},
+                {"key": "mistral/mistral-7b", "loaded_instances": []},
+            ]
+        }
+
+        mock_http = MagicMock()
+        mock_http.get.return_value = mock_response
+        with patch.object(client, "_get_client", return_value=mock_http):
+            result = client.list_all_models()
+
+        assert result is not None
+        assert len(result) == 2
+        assert result[0]["key"] == "qwen/qwen3-coder-30b"
+        mock_http.get.assert_called_once()
+
+    def test_list_all_models_bare_list_backward_compat(self):
+        """GET /api/v1/models 200 with bare list → returns list (backward compatibility)."""
         client = self._make_client()
 
         mock_response = MagicMock()
@@ -66,7 +89,44 @@ class TestLMSRestClientListStatus:
         assert result is not None
         assert len(result) == 2
         assert result[0]["key"] == "qwen/qwen3-coder-30b"
-        mock_http.get.assert_called_once()
+
+    def test_list_all_models_dict_response(self):
+        """GET /api/v1/models returns {"models": [...]} dict → list is returned, not []."""
+        client = self._make_client()
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "models": [{"key": "test-model", "loaded_instances": []}]
+        }
+
+        mock_http = MagicMock()
+        mock_http.get.return_value = mock_response
+        with patch.object(client, "_get_client", return_value=mock_http):
+            result = client.list_all_models()
+
+        assert result is not None
+        assert len(result) == 1
+        assert result[0]["key"] == "test-model"
+
+    def test_list_all_models_dict_with_data_key(self):
+        """GET /api/v1/models returns {"data": [...]} dict → list is returned."""
+        client = self._make_client()
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "data": [{"key": "data-model", "loaded_instances": []}]
+        }
+
+        mock_http = MagicMock()
+        mock_http.get.return_value = mock_response
+        with patch.object(client, "_get_client", return_value=mock_http):
+            result = client.list_all_models()
+
+        assert result is not None
+        assert len(result) == 1
+        assert result[0]["key"] == "data-model"
 
     def test_list_all_models_connection_error_returns_none(self):
         """ConnectionError → returns None (not raises)."""

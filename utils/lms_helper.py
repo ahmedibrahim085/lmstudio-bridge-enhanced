@@ -79,6 +79,9 @@ class LMSRestClient:
                 data = response.json()
                 if isinstance(data, list):
                     return data
+                if isinstance(data, dict):
+                    # Native /api/v1/models wraps in {"models": [...]}
+                    return data.get("models", data.get("data", []))
                 return []
             logger.warning(f"Native models API returned {response.status_code}")
             return None
