@@ -17,9 +17,12 @@ Key Features:
 
 import asyncio
 import json
+import logging
 import time
 from contextlib import AsyncExitStack
 from typing import Any, Dict, List, Optional, Union
+
+logger = logging.getLogger(__name__)
 
 from mcp import ClientSession
 from mcp.client.stdio import StdioServerParameters, stdio_client

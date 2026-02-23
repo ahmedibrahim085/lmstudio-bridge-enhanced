@@ -282,7 +282,7 @@ class CacheManager:
                 if data.get("updated_at"):
                     stats.last_updated = datetime.fromisoformat(data["updated_at"])
             except Exception:
-                pass
+                logger.warning("Failed to read cache timestamp from %s", self.cache_path, exc_info=True)
 
         return stats
 
