@@ -1,6 +1,6 @@
 # LM Studio Bridge Enhanced — OPP Roadmap
 
-> Updated: 2026-02-20 | LM Studio target: 0.4.3+ | Baseline: 561 tests passing
+> Updated: 2026-02-23 | LM Studio target: 0.4.3+ | Baseline: 709 tests passing, 69% coverage
 
 ---
 
@@ -10,7 +10,7 @@
 |-------|------|--------|-----|-------------|
 | Phase 1 (Foundation) | OPP-01, 02, 03, 04 | **DONE** | PR #3 | 72 |
 | Phase 1.5 (Code Quality) | OPP-05, 06, 07, 08, 09, 10 | **DONE** | PR #4 + #5 | 86 |
-| Round A (Phases 2+3 parallel) | OPP-11, 16, 13, 05, 06, 07 | Not started | — | — |
+| Round A (Phases 2+3 parallel) | OPP-11, 16, 13, 05, 06, 07 | **DONE** | PR #6 + #7 | 107 |
 | Round B (Phase 4) | OPP-12, 10, 08, 14, 18 | Not started | — | — |
 | Round C (Phase 5) | OPP-17, 09, 15 | Not started | — | — |
 
