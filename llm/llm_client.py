@@ -6,33 +6,43 @@ This module provides a generic interface to interact with ANY local LLM
 running in LM Studio, not specific to any particular model.
 """
 
+import json
+import logging
+import time
+from typing import Any, Dict, List, Optional, Union
+
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
-import json
-import time
-import logging
-from typing import List, Dict, Any, Optional, Union
+
 from config import get_config
-from llm.exceptions import (
-    LLMError,
-    LLMTimeoutError,
-    LLMConnectionError,
-    LLMResponseError,
-    LLMRateLimitError,
-)
-from utils.error_handling import retry_with_backoff
-from utils.lms_helper import LMSHelper
 from config.constants import (
     ANTHROPIC_MESSAGES_ENDPOINT,
     DEFAULT_ANTHROPIC_API_VERSION,
     DEFAULT_ANTHROPIC_MAX_TOKENS,
     DEFAULT_MAX_RETRIES,
+    DEFAULT_THINKING_BUDGET_TOKENS,
     JIT_TTL_DEFAULT,
     JIT_TTL_EMBEDDING,
+    MAX_THINKING_BUDGET_TOKENS,
+    MIN_THINKING_BUDGET_TOKENS,
     STREAM_READ_TIMEOUT,
 )
+from llm.exceptions import (
+    LLMConnectionError,
+    LLMError,
+    LLMRateLimitError,
+    LLMResponseError,
+    LLMTimeoutError,
+)
 from llm.sse_parser import parse_sse_stream
+from llm.thinking_parser import (
+    estimate_thinking_tokens,
+    parse_thinking_blocks,
+    strip_thinking_blocks,
+)
+from utils.error_handling import retry_with_backoff
+from utils.lms_helper import LMSHelper
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -742,7 +752,7 @@ class LLMClient:
                 images="https://example.com/image.jpg"
             )
         """
-        from utils.image_utils import process_image_input, build_vision_content, ImageInput
+        from utils.image_utils import ImageInput, build_vision_content, process_image_input
 
         # Normalize to list
         if isinstance(images, str):
@@ -1302,6 +1312,192 @@ class LLMClient:
         # Based on Claude Code's 30K character limit for tool responses
         # 8192 tokens ≈ 24K-32K chars, safely under the limit
         return 8192
+
+    # ------------------------------------------------------------------
+    # OPP-14: Extended Thinking
+    # ------------------------------------------------------------------
+
+    def thinking_completion(
+        self,
+        messages: List[Dict[str, Any]],
+        temperature: float = 0.7,
+        max_tokens: int = DEFAULT_MAX_TOKENS,
+        thinking_budget: Optional[int] = None,
+        timeout: int = DEFAULT_LLM_TIMEOUT,
+        response_format: Optional[Dict[str, Any]] = None,
+        model: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Generate a chat completion with extended thinking support.
+
+        Like :meth:`chat_completion` but reserves a token budget for the
+        model's chain-of-thought reasoning and enriches the returned dict with
+        parsed thinking blocks.
+
+        Unlike :meth:`chat_completion` this method has **no retry decorator**
+        because thinking completions are expensive and retrying them
+        automatically could waste significant compute.
+
+        Args:
+            messages: List of message dicts with ``role`` and ``content``.
+            temperature: Controls randomness (0.0 to 1.0).
+            max_tokens: Tokens to allocate for the *visible* response.  The
+                actual ``max_tokens`` sent to the API will be
+                ``thinking_budget + max_tokens`` so reasoning tokens do not
+                eat into the response budget.
+            thinking_budget: Tokens to reserve for reasoning.  Must be in
+                ``[MIN_THINKING_BUDGET_TOKENS, MAX_THINKING_BUDGET_TOKENS]``.
+                Defaults to :data:`~config.constants.DEFAULT_THINKING_BUDGET_TOKENS`
+                when ``None``.
+            timeout: Request timeout in seconds.
+            response_format: Optional structured output format dict.
+            model: Optional per-request model override.
+
+        Returns:
+            Standard chat completion response dict **plus** three extra keys:
+
+            - ``thinking_blocks`` (list[dict]): Each item has at minimum a
+              ``"content"`` key holding the raw thinking text.
+            - ``thinking_tokens_estimated`` (int): Rough token count across
+              all thinking blocks.
+            - ``content_without_thinking`` (str): The assistant reply with all
+              thinking blocks stripped and whitespace trimmed.
+
+        Raises:
+            ValueError: If *thinking_budget* is outside the allowed range.
+            LLMTimeoutError: If request times out.
+            LLMConnectionError: If cannot connect to LM Studio.
+            LLMRateLimitError: If rate limit exceeded.
+            LLMResponseError: If LM Studio returns an error.
+            LLMError: For other unexpected errors.
+        """
+        # Resolve and validate budget
+        budget = thinking_budget if thinking_budget is not None else DEFAULT_THINKING_BUDGET_TOKENS
+
+        if budget < MIN_THINKING_BUDGET_TOKENS or budget > MAX_THINKING_BUDGET_TOKENS:
+            raise ValueError(
+                f"thinking_budget must be between {MIN_THINKING_BUDGET_TOKENS} and "
+                f"{MAX_THINKING_BUDGET_TOKENS}, got {budget}."
+            )
+
+        # Bump max_tokens so the thinking budget doesn't consume response tokens
+        effective_max_tokens = budget + max_tokens
+
+        # Determine target model and JIT-load if needed
+        target_model = model if model is not None else self.model
+        self._ensure_model_loaded(target_model, ttl=JIT_TTL_DEFAULT)
+
+        # Delegate to chat_completion (single attempt — no retry wrapper)
+        response = self.chat_completion(
+            messages=messages,
+            temperature=temperature,
+            max_tokens=effective_max_tokens,
+            timeout=timeout,
+            response_format=response_format,
+            model=model,
+        )
+
+        # Extract the assistant text from the response
+        assistant_text: str = ""
+        try:
+            assistant_text = response["choices"][0]["message"]["content"] or ""
+        except (KeyError, IndexError, TypeError):
+            assistant_text = ""
+
+        # Parse thinking blocks and build enrichment
+        blocks = parse_thinking_blocks(assistant_text)
+        thinking_token_total = sum(
+            estimate_thinking_tokens(b.content) for b in blocks
+        )
+
+        response["thinking_blocks"] = [{"content": b.content} for b in blocks]
+        response["thinking_tokens_estimated"] = thinking_token_total
+        response["content_without_thinking"] = strip_thinking_blocks(assistant_text)
+
+        return response
+
+    def stream_thinking_completion(
+        self,
+        messages: List[Dict[str, Any]],
+        temperature: float = 0.7,
+        max_tokens: int = DEFAULT_MAX_TOKENS,
+        thinking_budget: Optional[int] = None,
+        timeout: float = STREAM_READ_TIMEOUT,
+        response_format: Optional[Dict[str, Any]] = None,
+        model: Optional[str] = None,
+    ):
+        """Stream a chat completion for a thinking-capable model.
+
+        Streaming counterpart to :meth:`thinking_completion`.  Validates the
+        thinking budget, then delegates to :meth:`stream_chat_completion` and
+        yields SSE chunks as-is.  Callers should accumulate the streamed text
+        and call :func:`~llm.thinking_parser.parse_thinking_blocks` post-hoc
+        to extract thinking blocks from the full response.
+
+        Args:
+            messages: List of message dicts with ``role`` and ``content``.
+            temperature: Controls randomness (0.0 to 1.0).
+            max_tokens: Tokens for the visible response portion.
+            thinking_budget: Tokens reserved for reasoning.  Must be in
+                ``[MIN_THINKING_BUDGET_TOKENS, MAX_THINKING_BUDGET_TOKENS]``.
+                Defaults to :data:`~config.constants.DEFAULT_THINKING_BUDGET_TOKENS`.
+            timeout: Read timeout in seconds.
+            response_format: Optional structured output format dict.
+            model: Optional per-request model override.
+
+        Yields:
+            dict: Parsed SSE event payload from :meth:`stream_chat_completion`.
+
+        Raises:
+            ValueError: If *thinking_budget* is outside the allowed range.
+            LLMTimeoutError: If the connection times out.
+            LLMConnectionError: If LM Studio cannot be reached.
+            LLMRateLimitError: If HTTP 429 is returned.
+            LLMResponseError: If LM Studio returns another HTTP error.
+        """
+        # Resolve and validate budget (eager — before any network call)
+        budget = thinking_budget if thinking_budget is not None else DEFAULT_THINKING_BUDGET_TOKENS
+
+        if budget < MIN_THINKING_BUDGET_TOKENS or budget > MAX_THINKING_BUDGET_TOKENS:
+            raise ValueError(
+                f"thinking_budget must be between {MIN_THINKING_BUDGET_TOKENS} and "
+                f"{MAX_THINKING_BUDGET_TOKENS}, got {budget}."
+            )
+
+        effective_max_tokens = budget + max_tokens
+
+        yield from self.stream_chat_completion(
+            messages=messages,
+            temperature=temperature,
+            max_tokens=effective_max_tokens,
+            timeout=timeout,
+            response_format=response_format,
+            model=model,
+        )
+
+    @staticmethod
+    def is_thinking_capable(model_id: str) -> bool:
+        """Check whether *model_id* is a thinking / reasoning model.
+
+        Delegates to :meth:`~model_registry.schemas.ModelMetadata._is_thinking_model`
+        which matches against known reasoning-model name patterns (qwq, deepseek-r1,
+        thinking, o1, r1, …).
+
+        Args:
+            model_id: Model identifier string to test.
+
+        Returns:
+            ``True`` if the model appears to be a thinking/reasoning model,
+            ``False`` otherwise.
+
+        Examples:
+            >>> LLMClient.is_thinking_capable("qwen/qwq-32b")
+            True
+            >>> LLMClient.is_thinking_capable("qwen/qwen3-coder-30b")
+            False
+        """
+        from model_registry.schemas import ModelMetadata
+
+        return ModelMetadata._is_thinking_model(model_id)
 
     def health_check(self) -> bool:
         """Check if LM Studio API is accessible.

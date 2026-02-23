@@ -403,3 +403,22 @@ SSE_DATA_PREFIX = "data: "
 # This is separate from DEFAULT_LLM_TIMEOUT which is for non-streaming calls
 # Used in: llm/llm_client.py streaming methods
 STREAM_READ_TIMEOUT = 300.0
+
+# ==============================================================================
+# OPP-14: EXTENDED THINKING CONFIGURATION
+# ==============================================================================
+
+# Default thinking token budget (tokens allocated for reasoning)
+# Used in: llm/llm_client.py thinking methods
+DEFAULT_THINKING_BUDGET_TOKENS = 4096
+
+# Minimum and maximum allowed thinking budget
+MIN_THINKING_BUDGET_TOKENS = 128
+MAX_THINKING_BUDGET_TOKENS = 32768
+
+# Tags used by thinking models (QwQ, DeepSeek-R1, etc.)
+THINKING_TAG_OPEN = "<think>"
+THINKING_TAG_CLOSE = "</think>"
+
+# Approximate characters per token for budget estimation
+CHARS_PER_TOKEN_ESTIMATE = 4
