@@ -184,7 +184,7 @@ DEFAULT_FALLBACK_MODEL = "qwen/qwen3-coder-next"
 # Default model for autonomous execution tasks (coding, analysis, implementation)
 # Used in: lmstudio_bridge.py:423, tools/dynamic_autonomous.py:129,261,430
 #          tools/dynamic_autonomous_register.py:82,163,231
-DEFAULT_AUTONOMOUS_MODEL = "qwen/qwen3-coder-30b"
+DEFAULT_AUTONOMOUS_MODEL = "qwen/qwen3-coder-next"
 
 # Default model for code review tasks (smaller, faster for review)
 # Used in: run_code_review.py:60, retry_magistral.py:38
@@ -204,13 +204,13 @@ DEFAULT_VISION_MODEL = "qwen/qwen3-vl-8b"
 
 # Example model name for documentation and docstrings
 # Used in: tools/lms_cli_tools.py docstrings, examples
-EXAMPLE_MODEL_NAME = "qwen/qwen3-coder-30b"
+EXAMPLE_MODEL_NAME = "qwen/qwen3-coder-next"
 
 # List of models to use for comprehensive code reviews
 # Used in: get_llm_reviews.py:141,148,155 (multiple model reviews)
 REVIEW_MODELS = [
     "mistralai/magistral-small-2509",   # Fast, efficient for quick reviews
-    "qwen/qwen3-coder-30b",             # Coding specialist
+    "qwen/qwen3-coder-next",            # Coding specialist
     "qwen/qwen3-4b-thinking-2507"       # Deep reasoning
 ]
 
