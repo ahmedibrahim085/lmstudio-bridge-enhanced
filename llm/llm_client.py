@@ -6,7 +6,6 @@ This module provides a generic interface to interact with ANY local LLM
 running in LM Studio, not specific to any particular model.
 """
 
-import json
 import logging
 import time
 from typing import Any, Dict, List, NoReturn, Optional, Union
@@ -22,7 +21,6 @@ from config.constants import (
     DEFAULT_ANTHROPIC_MAX_TOKENS,
     DEFAULT_LLM_TIMEOUT,
     DEFAULT_MAX_RETRIES,
-    DEFAULT_MAX_ROUNDS,
     DEFAULT_MAX_TOKENS,
     DEFAULT_RETRY_BASE_DELAY,
     DEFAULT_THINKING_BUDGET_TOKENS,
@@ -54,7 +52,6 @@ from utils.lms_helper import LMSHelper
 logger = logging.getLogger(__name__)
 
 # All constants imported from config.constants — single source of truth.
-# DEFAULT_MAX_ROUNDS replaces former DEFAULT_MAX_ROUNDS.
 # DEFAULT_RETRY_BASE_DELAY replaces former DEFAULT_RETRY_BASE_DELAY.
 # Former DEFAULT_RETRY_BACKOFF removed (was dead — retry_with_backoff has no backoff param).
 
@@ -1457,95 +1454,6 @@ class LLMClient:
             return False
 
 
-class AutonomousLLMClient:
-    """LLM client with autonomous tool calling capabilities.
-
-    This client manages the autonomous loop where the LLM can make
-    multiple tool calls without manual intervention.
-    """
-
-    def __init__(
-        self,
-        llm_client: Optional[LLMClient] = None,
-        max_rounds: int = DEFAULT_MAX_ROUNDS
-    ):
-        """Initialize autonomous LLM client.
-
-        Args:
-            llm_client: Optional LLM client (creates default if None)
-            max_rounds: Maximum autonomous rounds before stopping (default: 10000)
-        """
-        self.llm = llm_client or LLMClient()
-        self.max_rounds = max_rounds
-
-    async def autonomous_execution(
-        self,
-        task: str,
-        tools: List[Dict[str, Any]],
-        tool_executor,  # From mcp_client.executor
-        system_prompt: Optional[str] = None
-    ) -> str:
-        """Execute task autonomously with tool calling.
-
-        Args:
-            task: Task description for the LLM
-            tools: Available tools in OpenAI format
-            tool_executor: Tool executor instance for executing tools
-            system_prompt: Optional system instructions
-
-        Returns:
-            Final answer from LLM
-
-        Raises:
-            Exception: If autonomous execution fails
-        """
-        # Initialize messages
-        messages = []
-        if system_prompt:
-            messages.append({"role": "system", "content": system_prompt})
-        messages.append({"role": "user", "content": task})
-
-        # Autonomous loop
-        for round_num in range(self.max_rounds):
-            # Call LLM with tools
-            response = self.llm.chat_completion(
-                messages=messages,
-                tools=tools,
-                tool_choice="auto"
-            )
-
-            message = response["choices"][0]["message"]
-
-            # Check for tool calls
-            if message.get("tool_calls"):
-                # Add assistant message
-                messages.append(message)
-
-                # Execute each tool
-                for tool_call in message["tool_calls"]:
-                    tool_name = tool_call["function"]["name"]
-                    tool_args = json.loads(tool_call["function"]["arguments"])
-
-                    # Execute tool via MCP
-                    result = await tool_executor.execute_tool(tool_name, tool_args)
-
-                    # Add tool result to messages
-                    from mcp_client.executor import ToolExecutor
-                    content = ToolExecutor.extract_text_content(result)
-
-                    messages.append({
-                        "role": "tool",
-                        "tool_call_id": tool_call["id"],
-                        "content": content
-                    })
-            else:
-                # LLM has final answer
-                return message.get("content", "No content in response")
-
-        return "Max rounds reached without final answer"
-
-
 __all__ = [
     "LLMClient",
-    "AutonomousLLMClient"
 ]

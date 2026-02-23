@@ -1,6 +1,6 @@
 """Generic LLM client for LM Studio - works with ANY local LLM."""
 
-from .llm_client import LLMClient, AutonomousLLMClient
+from .llm_client import LLMClient
 from .message_manager import (
     Message,
     ConversationHistory,
@@ -18,7 +18,6 @@ from .exceptions import (
 
 __all__ = [
     "LLMClient",
-    "AutonomousLLMClient",
     "Message",
     "ConversationHistory",
     "MessageFormatter",
