@@ -351,6 +351,87 @@ class TestLMSRestClientLoadUnload:
 
 
 # ==============================================================================
+# LMSRestClient — TTL cache for list_all_models (3 tests)
+# ==============================================================================
+
+class TestLMSRestClientCache:
+    """Unit tests for TTL cache on LMSRestClient.list_all_models()."""
+
+    def _make_client(self):
+        from utils.lms_helper import LMSRestClient
+        client = LMSRestClient(base_url="http://localhost:1234")
+        # Always start with a clean cache for predictable tests
+        client.invalidate_cache()
+        return client
+
+    def _make_200_response(self, models=None):
+        if models is None:
+            models = [{"key": "cached-model", "loaded_instances": []}]
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"models": models}
+        return mock_response
+
+    def test_list_all_models_uses_cache_on_second_call(self):
+        """Second call within TTL uses cache — HTTP GET called only once."""
+        client = self._make_client()
+
+        mock_response = self._make_200_response()
+        mock_http = MagicMock()
+        mock_http.get.return_value = mock_response
+
+        with patch.object(client, "_get_client", return_value=mock_http):
+            result1 = client.list_all_models()
+            result2 = client.list_all_models()
+
+        assert result1 == result2
+        assert result1 is not None
+        assert len(result1) == 1
+        # HTTP GET must be called only once — second call is a cache hit
+        assert mock_http.get.call_count == 1, (
+            f"Expected 1 HTTP GET (cache hit on second call), got {mock_http.get.call_count}"
+        )
+
+    def test_invalidate_cache_forces_refresh(self):
+        """After invalidate_cache(), next call makes a fresh HTTP GET."""
+        client = self._make_client()
+
+        mock_response = self._make_200_response()
+        mock_http = MagicMock()
+        mock_http.get.return_value = mock_response
+
+        with patch.object(client, "_get_client", return_value=mock_http):
+            client.list_all_models()        # call 1 — populates cache
+            client.invalidate_cache()       # clear cache
+            client.list_all_models()        # call 2 — must hit network again
+
+        assert mock_http.get.call_count == 2, (
+            f"Expected 2 HTTP GETs (cache cleared between calls), got {mock_http.get.call_count}"
+        )
+
+    def test_cache_expires_after_ttl(self):
+        """After TTL expires, next call makes a fresh HTTP GET."""
+        import time
+        client = self._make_client()
+
+        mock_response = self._make_200_response()
+        mock_http = MagicMock()
+        mock_http.get.return_value = mock_response
+
+        with patch.object(client, "_get_client", return_value=mock_http):
+            client.list_all_models()  # call 1 — populates cache
+
+            # Manually expire the cache by backdating the cache timestamp
+            client._models_cache_time = time.time() - 9999.0
+
+            client.list_all_models()  # call 2 — TTL expired, must hit network
+
+        assert mock_http.get.call_count == 2, (
+            f"Expected 2 HTTP GETs (TTL expired), got {mock_http.get.call_count}"
+        )
+
+
+# ==============================================================================
 # LMSHelper dispatch tests (4)
 # ==============================================================================
 

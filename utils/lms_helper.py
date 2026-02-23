@@ -60,6 +60,8 @@ class LMSRestClient:
         self._load_timeout = LMS_REST_LOAD_TIMEOUT
         self._default_timeout = LMS_REST_DEFAULT_TIMEOUT
         self._client: "httpx.Client | None" = None
+        self._models_cache: list[dict] | None = None
+        self._models_cache_time: float = 0.0
 
     def _get_client(self) -> "httpx.Client":
         """Get or create the shared httpx.Client for connection pooling."""
@@ -69,7 +71,14 @@ class LMSRestClient:
         return self._client
 
     def list_all_models(self) -> Optional[List[Dict[str, Any]]]:
-        """GET /api/v1/models — returns models[] or None on error."""
+        """GET /api/v1/models — returns models[] or None on error. Cached for LMS_REST_MODELS_CACHE_TTL seconds."""
+        import time as _time
+        from config.constants import LMS_REST_MODELS_CACHE_TTL
+
+        now = _time.time()
+        if self._models_cache is not None and (now - self._models_cache_time) < LMS_REST_MODELS_CACHE_TTL:
+            return self._models_cache
+
         try:
             response = self._get_client().get(
                 f"{self.base_url}{self._models_endpoint}",
@@ -78,16 +87,25 @@ class LMSRestClient:
             if response.status_code == 200:
                 data = response.json()
                 if isinstance(data, list):
-                    return data
-                if isinstance(data, dict):
+                    result = data
+                elif isinstance(data, dict):
                     # Native /api/v1/models wraps in {"models": [...]}
-                    return data.get("models", data.get("data", []))
-                return []
+                    result = data.get("models", data.get("data", []))
+                else:
+                    result = []
+                self._models_cache = result
+                self._models_cache_time = now
+                return result
             logger.warning(f"Native models API returned {response.status_code}")
             return None
         except Exception as e:
             logger.debug(f"Native models API unavailable: {e}")
             return None
+
+    def invalidate_cache(self) -> None:
+        """Clear the models cache. Forces a fresh HTTP GET on next call."""
+        self._models_cache = None
+        self._models_cache_time = 0.0
 
     def is_model_loaded(self, model_key: str) -> Optional[bool]:
         """Check if model is loaded via loaded_instances. Returns True/False/None."""
