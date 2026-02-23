@@ -35,7 +35,9 @@ import tests.test_constants as tc
 from config.constants import (
     DEFAULT_FALLBACK_MODEL,
     DEFAULT_REVIEW_MODEL,
+    DEFAULT_SMALL_MODEL,
     DEFAULT_THINKING_MODEL,
+    DEFAULT_VISION_MODEL,
 )
 
 
@@ -144,8 +146,8 @@ class TestGetattr:
         assert reasoning_model == DEFAULT_REVIEW_MODEL
         assert coding_model == DEFAULT_FALLBACK_MODEL
         assert thinking_model == DEFAULT_THINKING_MODEL
-        assert small_model == "ibm/granite-4-h-tiny"
-        assert vision_model == "qwen/qwen-vl-7b"
+        assert small_model == DEFAULT_SMALL_MODEL
+        assert vision_model == DEFAULT_VISION_MODEL
 
     def test_getattr_caches_in_module_globals(self):
         """After first access, the resolved value is written into module.__dict__.
@@ -321,8 +323,8 @@ class TestEnsureDiscovery:
             "REASONING_MODEL": DEFAULT_REVIEW_MODEL,
             "CODING_MODEL": DEFAULT_FALLBACK_MODEL,
             "THINKING_MODEL": DEFAULT_THINKING_MODEL,
-            "SMALL_MODEL": "ibm/granite-4-h-tiny",
-            "VISION_MODEL": "qwen/qwen-vl-7b",
+            "SMALL_MODEL": DEFAULT_SMALL_MODEL,
+            "VISION_MODEL": DEFAULT_VISION_MODEL,
         }
         for attr, fallback in expected.items():
             assert tc._resolved_cache.get(attr) == fallback, (

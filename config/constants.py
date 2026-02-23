@@ -164,6 +164,14 @@ DEFAULT_REVIEW_MODEL = "mistralai/magistral-small-2509"
 # Used in: get_llm_reviews.py:155
 DEFAULT_THINKING_MODEL = "qwen/qwen3-4b-thinking-2507"
 
+# Default model for small/lightweight tasks
+# Used in: tests/test_constants.py (SMALL_MODEL fallback)
+DEFAULT_SMALL_MODEL = "ibm/granite-4-h-tiny"
+
+# Default model for vision/multimodal tasks
+# Used in: tests/test_constants.py (VISION_MODEL fallback)
+DEFAULT_VISION_MODEL = "qwen/qwen-vl-7b"
+
 # Example model name for documentation and docstrings
 # Used in: tools/lms_cli_tools.py docstrings, examples
 EXAMPLE_MODEL_NAME = "qwen/qwen3-coder-30b"
@@ -482,6 +490,33 @@ MULTIMODAL_DETAIL_DEFAULT = DEFAULT_VISION_DETAIL  # "auto"
 # ==============================================================================
 # OPP-15: CONVERSATION BRANCHING
 # ==============================================================================
+
+# ==============================================================================
+# TEST INFRASTRUCTURE — Model discovery, lifecycle, and VRAM budget
+# ==============================================================================
+
+# Keywords for classifying models into roles during test discovery
+# Maps role name → list of substring patterns to match against model identifiers
+MODEL_ROLE_KEYWORDS: dict[str, list[str]] = {
+    "chat": ["chat", "instruct", "-it-", "-it"],
+    "reasoning": ["magistral", "deepseek-r1", "reasoning"],
+    "coding": ["coder", "codestral", "starcoder", "deepseek-coder"],
+    "thinking": ["thinking", "qwq", "thought"],
+    "small": ["tiny", "mini", "small", "1b-", "3b-", "4b-"],
+    "vision": ["-vl-", "-vl", "vision", "llava", "multimodal"],
+}
+
+# TTL (seconds) for models loaded by the test session
+# Models auto-unload after this idle time; prevents VRAM leak across sessions
+TEST_MODEL_TTL = 1800  # 30 minutes
+
+# Maximum number of models the test session will keep loaded simultaneously
+# Acts as a VRAM budget proxy — prevents OOM from loading too many models
+TEST_MAX_LOADED_MODELS = 3
+
+# Class-level cache TTL for ModelValidator._fetch_models()
+# Prevents repeated /v1/models polling across multiple ModelValidator instances
+MODELS_FETCH_CACHE_TTL = 30  # seconds
 
 # Maximum depth of conversation tree (prevent runaway branching)
 MAX_BRANCH_DEPTH = 50
