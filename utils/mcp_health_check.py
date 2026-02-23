@@ -11,11 +11,14 @@ server crashes or connectivity problems.
 """
 
 import asyncio
-import subprocess
 import json
+import logging
+import subprocess
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
-from dataclasses import dataclass
+
+logger = logging.getLogger(__name__)
 
 __all__ = [
     "MCPHealthChecker",
@@ -176,12 +179,15 @@ class MCPHealthChecker:
                     await conn.disconnect()
                     return True
             except asyncio.TimeoutError:
+                logger.warning("MCP '%s' connection timed out", mcp_name)
                 return False
             except Exception:
+                logger.warning("MCP '%s' connection failed", mcp_name, exc_info=True)
                 return False
 
         except Exception:
             # Import failed or other issue
+            logger.debug("MCP '%s' import/setup failed", mcp_name, exc_info=True)
             return False
 
     async def check_mcp_health(self, mcp_name: str) -> MCPStatus:

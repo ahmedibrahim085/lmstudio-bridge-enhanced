@@ -102,7 +102,7 @@ class LMSRestClient:
             logger.warning(f"Native models API returned {response.status_code}")
             return None
         except Exception as e:
-            logger.debug(f"Native models API unavailable: {e}")
+            logger.warning(f"Native models API unavailable: {e}", exc_info=True)
             return None
 
     def invalidate_cache(self) -> None:
@@ -130,6 +130,7 @@ class LMSRestClient:
             )
             return response.status_code == 200
         except Exception:
+            logger.warning("LM Studio server availability check failed", exc_info=True)
             return False
 
     def load_model(self, model_key: str, context_length=None, flash_attention=None):

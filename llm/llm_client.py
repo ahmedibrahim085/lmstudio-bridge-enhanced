@@ -1097,6 +1097,7 @@ class LLMClient:
             data = resp.json()
             supported = bool(data.get("capabilities", {}).get("mcp", False))
         except Exception:
+            logger.warning("Native MCP support check failed", exc_info=True)
             supported = False
 
         self._native_mcp_supported = supported
@@ -1217,7 +1218,7 @@ class LLMClient:
                     for entry in raw_list
                 ]
         except Exception:
-            logger.debug("Native /api/v1/models unavailable, falling back to /v1/models")
+            logger.warning("Native /api/v1/models unavailable, falling back to /v1/models", exc_info=True)
 
         # Fallback
         return [{"model_id": m} for m in self.list_models()]
