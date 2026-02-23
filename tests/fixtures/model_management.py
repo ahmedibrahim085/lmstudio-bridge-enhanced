@@ -8,7 +8,6 @@ to LMSHelper (DOGFOODING) — no raw subprocess calls.
 import pytest
 from llm.exceptions import ModelMemoryError
 from utils.lms_helper import LMSHelper
-from tests.fixtures.model_discovery import discover_models
 
 
 def ensure_model_loaded(model_name: str) -> bool:
@@ -78,25 +77,22 @@ def get_default_model() -> str | None:
 
 
 @pytest.fixture
-def require_any_model():
+def require_any_model(discovered_models):
     """
     Fixture to ensure ANY model is loaded.
-    Uses dynamic discovery for model selection.
+    Uses the session-scoped discovered_models fixture.
     """
     current_model = get_default_model()
 
     if current_model:
-        print(f"✅ Using currently loaded model: {current_model}")
         return current_model
 
-    # No model loaded — try to load the best available via discovery
-    discovered = discover_models()
-    if not discovered.lmstudio_available:
+    if not discovered_models.lmstudio_available:
         pytest.skip("LM Studio not available")
 
     # Try chat model first, then any role
     for role in ["chat", "coding", "reasoning"]:
-        model = discovered.roles.get(role)
+        model = discovered_models.roles.get(role)
         if model:
             try:
                 if ensure_model_loaded(model):
@@ -108,18 +104,10 @@ def require_any_model():
 
 
 @pytest.fixture
-def require_model_with_capability():
-    """
-    Factory fixture: require a model with a specific capability.
-
-    Usage:
-        def test_vision(require_model_with_capability):
-            model = require_model_with_capability("vision")
-            # model is guaranteed to be loaded and vision-capable
-    """
+def require_model_with_capability(discovered_models):
+    """Factory fixture: require a model with a specific capability."""
     def _require(capability: str) -> str:
-        discovered = discover_models()
-        model = discovered.roles.get(capability)
+        model = discovered_models.roles.get(capability)
         if not model:
             pytest.skip(f"No model with '{capability}' capability available")
         if not ensure_model_loaded(model):

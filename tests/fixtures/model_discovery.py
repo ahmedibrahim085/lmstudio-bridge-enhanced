@@ -17,7 +17,7 @@ from config.constants import (
     DEFAULT_THINKING_MODEL,
     MODEL_ROLE_KEYWORDS,
 )
-from utils.lms_helper import LMSHelper
+from utils.lms_helper import LMSHelper, LMSRestClient
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +31,7 @@ class DiscoveredModels:
         loaded_ids: Model keys currently loaded in LM Studio.
         roles: Maps role name → best model key for that role.
         lmstudio_available: Whether LM Studio was reachable during discovery.
+        models_metadata: Full model metadata from native API (model_key → API response dict).
     """
 
     downloaded_ids: list[str] = field(default_factory=list)
@@ -180,21 +181,98 @@ def _resolve_roles(
     return roles
 
 
+def _wake_up_loaded_role_models(
+    roles: dict[str, str],
+    loaded_ids: list[str],
+    base_url: str,
+) -> None:
+    """Send 1-token completion to each loaded role model to verify responsiveness (D-5)."""
+    import httpx
+
+    from config.constants import WAKE_UP_PING_MAX_TOKENS, WAKE_UP_PING_TIMEOUT
+
+    pinged: set[str] = set()
+    for role, model_key in roles.items():
+        if model_key in loaded_ids and model_key not in pinged:
+            try:
+                response = httpx.post(
+                    f"{base_url}/v1/chat/completions",
+                    json={
+                        "model": model_key,
+                        "messages": [{"role": "user", "content": "hi"}],
+                        "max_tokens": WAKE_UP_PING_MAX_TOKENS,
+                    },
+                    timeout=WAKE_UP_PING_TIMEOUT,
+                )
+                if response.status_code == 200:
+                    logger.debug(f"Wake-up ping OK: {model_key} (role={role})")
+                else:
+                    logger.warning(
+                        f"Wake-up ping failed for {model_key}: HTTP {response.status_code}"
+                    )
+                pinged.add(model_key)
+            except Exception as e:
+                logger.warning(f"Wake-up ping failed for {model_key}: {e}")
+                pinged.add(model_key)
+
+
 def discover_models() -> DiscoveredModels:
-    """Discover available models by querying LM Studio via LMSHelper.
+    """Discover available models by querying LM Studio.
 
-    Safe to call even when LM Studio is not running — returns empty
-    DiscoveredModels with lmstudio_available=False.
-
-    Returns:
-        DiscoveredModels with populated fields if LM Studio is available.
+    Uses REST API first (native metadata with capabilities),
+    falls back to LMSHelper CLI if REST unavailable.
+    Safe to call when LM Studio is not running.
     """
+    # Try REST API first (richer metadata)
+    rest_client = LMSRestClient()
+    if rest_client.is_server_available():
+        try:
+            raw_models = rest_client.list_all_models()
+            if raw_models is not None:
+                models_metadata: dict[str, dict] = {}
+                loaded_ids: list[str] = []
+                downloaded_ids: list[str] = []
+
+                for m in raw_models:
+                    key = m.get("key", "")
+                    if not key:
+                        continue
+                    base_name = LMSHelper._get_base_model_name(key)
+                    models_metadata[base_name] = m
+                    downloaded_ids.append(base_name)
+                    if m.get("loaded_instances"):
+                        if base_name not in loaded_ids:
+                            loaded_ids.append(base_name)
+
+                # Deduplicate downloaded
+                downloaded_ids = list(dict.fromkeys(downloaded_ids))
+
+                roles = _resolve_roles(loaded_ids, downloaded_ids, models_metadata)
+
+                # Wake-up ping for loaded models assigned to roles
+                _wake_up_loaded_role_models(roles, loaded_ids, rest_client.base_url)
+
+                result = DiscoveredModels(
+                    downloaded_ids=downloaded_ids,
+                    loaded_ids=loaded_ids,
+                    roles=roles,
+                    lmstudio_available=True,
+                    models_metadata=models_metadata,
+                )
+                logger.info(
+                    f"Discovery via REST: {len(loaded_ids)} loaded, "
+                    f"{len(downloaded_ids)} downloaded, {len(roles)} roles"
+                )
+                return result
+        except Exception as e:
+            logger.warning(f"REST discovery failed, falling back to CLI: {e}")
+
+    # Fallback: CLI-based discovery (existing logic)
     if not LMSHelper.is_installed():
         logger.info("LMS CLI not installed — returning empty discovery")
         return DiscoveredModels()
 
     try:
-        # Get loaded models
         loaded_raw = LMSHelper.list_loaded_models()
         if loaded_raw is None:
             logger.info("LM Studio not reachable — returning empty discovery")
@@ -207,7 +285,6 @@ def discover_models() -> DiscoveredModels:
             if base_name and base_name not in loaded_ids:
                 loaded_ids.append(base_name)
 
-        # Get downloaded models
         downloaded_raw = LMSHelper.list_downloaded_models() or []
         downloaded_ids = []
         for m in downloaded_raw:
@@ -215,7 +292,6 @@ def discover_models() -> DiscoveredModels:
             if model_key and model_key not in downloaded_ids:
                 downloaded_ids.append(model_key)
 
-        # Resolve roles
         roles = _resolve_roles(loaded_ids, downloaded_ids)
 
         result = DiscoveredModels(
@@ -224,14 +300,11 @@ def discover_models() -> DiscoveredModels:
             roles=roles,
             lmstudio_available=True,
         )
-
         logger.info(
-            f"Discovery complete: {len(loaded_ids)} loaded, "
-            f"{len(downloaded_ids)} downloaded, "
-            f"{len(roles)} roles assigned"
+            f"Discovery via CLI: {len(loaded_ids)} loaded, "
+            f"{len(downloaded_ids)} downloaded, {len(roles)} roles"
         )
         return result
-
     except Exception as e:
         logger.warning(f"Model discovery failed: {e}")
         return DiscoveredModels()

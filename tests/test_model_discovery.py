@@ -200,13 +200,24 @@ class TestDiscoveredModels:
 # ---------------------------------------------------------------------------
 
 
+def _make_rest_unavailable():
+    """Return a context manager that makes LMSRestClient.is_server_available() return False."""
+    mock_rest = MagicMock()
+    mock_rest.is_server_available.return_value = False
+    return patch("tests.fixtures.model_discovery.LMSRestClient", return_value=mock_rest)
+
+
 class TestDiscoverModels:
-    """Unit tests for discover_models(), with LMSHelper fully mocked."""
+    """Unit tests for discover_models(), with LMSHelper fully mocked.
+
+    All tests in this class exercise the CLI fallback path by making REST unavailable.
+    The REST-first path is covered by TestDiscoverModelsV2.
+    """
 
     @pytest.mark.unit
     def test_discover_models_lms_not_installed(self):
         """When LMSHelper.is_installed() returns False, an empty DiscoveredModels is returned."""
-        with patch("tests.fixtures.model_discovery.LMSHelper") as mock_lms:
+        with _make_rest_unavailable(), patch("tests.fixtures.model_discovery.LMSHelper") as mock_lms:
             mock_lms.is_installed.return_value = False
 
             result = discover_models()
@@ -221,7 +232,7 @@ class TestDiscoverModels:
     @pytest.mark.unit
     def test_discover_models_lms_unreachable(self):
         """When list_loaded_models() returns None, an empty DiscoveredModels is returned."""
-        with patch("tests.fixtures.model_discovery.LMSHelper") as mock_lms:
+        with _make_rest_unavailable(), patch("tests.fixtures.model_discovery.LMSHelper") as mock_lms:
             mock_lms.is_installed.return_value = True
             mock_lms.list_loaded_models.return_value = None
 
@@ -243,7 +254,7 @@ class TestDiscoverModels:
             {"modelKey": "qwen-vl-7b"},
         ]
 
-        with patch("tests.fixtures.model_discovery.LMSHelper") as mock_lms:
+        with _make_rest_unavailable(), patch("tests.fixtures.model_discovery.LMSHelper") as mock_lms:
             mock_lms.is_installed.return_value = True
             mock_lms.list_loaded_models.return_value = loaded_raw
             mock_lms.list_downloaded_models.return_value = downloaded_raw
@@ -270,7 +281,7 @@ class TestDiscoverModels:
             {"modelKey": "llama-3-8b-instruct:2"},
         ]
 
-        with patch("tests.fixtures.model_discovery.LMSHelper") as mock_lms:
+        with _make_rest_unavailable(), patch("tests.fixtures.model_discovery.LMSHelper") as mock_lms:
             mock_lms.is_installed.return_value = True
             mock_lms.list_loaded_models.return_value = loaded_raw
             mock_lms.list_downloaded_models.return_value = []
@@ -286,7 +297,7 @@ class TestDiscoverModels:
     @pytest.mark.unit
     def test_discover_models_exception_returns_empty(self):
         """When LMSHelper raises an unexpected exception, an empty DiscoveredModels is returned."""
-        with patch("tests.fixtures.model_discovery.LMSHelper") as mock_lms:
+        with _make_rest_unavailable(), patch("tests.fixtures.model_discovery.LMSHelper") as mock_lms:
             mock_lms.is_installed.return_value = True
             mock_lms.list_loaded_models.side_effect = RuntimeError("LMS crashed")
 
@@ -303,7 +314,7 @@ class TestDiscoverModels:
         """When list_loaded_models() returns an empty list, lmstudio_available is True and loaded_ids is empty."""
         downloaded_raw = [{"modelKey": "qwen3-coder-30b"}]
 
-        with patch("tests.fixtures.model_discovery.LMSHelper") as mock_lms:
+        with _make_rest_unavailable(), patch("tests.fixtures.model_discovery.LMSHelper") as mock_lms:
             mock_lms.is_installed.return_value = True
             mock_lms.list_loaded_models.return_value = []
             mock_lms.list_downloaded_models.return_value = downloaded_raw
@@ -477,3 +488,118 @@ class TestResolveRolesV2:
         # Even though downloaded-vision is smaller, loaded-vision should win
         roles = _resolve_roles(loaded, downloaded, metadata)
         assert roles.get("vision") == "loaded-vision"
+
+
+# ---------------------------------------------------------------------------
+# discover_models() v2 — REST-first + wake-up ping (Commit 7)
+# ---------------------------------------------------------------------------
+
+
+class TestDiscoverModelsV2:
+    """Unit tests for the rewritten discover_models() with REST-first path."""
+
+    @pytest.mark.unit
+    def test_discover_models_uses_rest_when_available(self):
+        """When REST is available, discovery uses native metadata and sets lmstudio_available=True."""
+        raw_models = [
+            {
+                "key": "qwen/qwen3-coder-30b",
+                "loaded_instances": [{"instance_id": "inst-1"}],
+                "capabilities": {"vision": False},
+                "size_bytes": 18_000_000_000,
+            }
+        ]
+        with (
+            patch("tests.fixtures.model_discovery.LMSRestClient") as mock_rest_cls,
+            patch("tests.fixtures.model_discovery.LMSHelper") as mock_lms,
+            patch("tests.fixtures.model_discovery._wake_up_loaded_role_models"),
+        ):
+            mock_rest = MagicMock()
+            mock_rest_cls.return_value = mock_rest
+            mock_rest.is_server_available.return_value = True
+            mock_rest.list_all_models.return_value = raw_models
+            mock_rest.base_url = "http://localhost:1234"
+            mock_lms._get_base_model_name.side_effect = lambda k: k
+
+            result = discover_models()
+
+        assert result.lmstudio_available is True
+        assert "qwen/qwen3-coder-30b" in result.loaded_ids
+        assert "qwen/qwen3-coder-30b" in result.downloaded_ids
+
+    @pytest.mark.unit
+    def test_discover_models_falls_back_to_cli(self):
+        """When REST is unavailable, discovery falls back to CLI and still returns models."""
+        loaded_raw = [{"modelKey": "some-instruct-7b", "identifier": "some-instruct-7b"}]
+        with (
+            patch("tests.fixtures.model_discovery.LMSRestClient") as mock_rest_cls,
+            patch("tests.fixtures.model_discovery.LMSHelper") as mock_lms,
+        ):
+            mock_rest = MagicMock()
+            mock_rest_cls.return_value = mock_rest
+            mock_rest.is_server_available.return_value = False
+
+            mock_lms.is_installed.return_value = True
+            mock_lms.list_loaded_models.return_value = loaded_raw
+            mock_lms.list_downloaded_models.return_value = []
+            mock_lms._get_base_model_name.side_effect = lambda k: k
+
+            result = discover_models()
+
+        assert result.lmstudio_available is True
+        assert "some-instruct-7b" in result.loaded_ids
+
+    @pytest.mark.unit
+    def test_discover_models_populates_metadata(self):
+        """REST path populates models_metadata with capabilities from native API."""
+        raw_models = [
+            {
+                "key": "vision-model",
+                "loaded_instances": [],
+                "capabilities": {"vision": True},
+                "size_bytes": 8_000_000_000,
+            }
+        ]
+        with (
+            patch("tests.fixtures.model_discovery.LMSRestClient") as mock_rest_cls,
+            patch("tests.fixtures.model_discovery.LMSHelper") as mock_lms,
+            patch("tests.fixtures.model_discovery._wake_up_loaded_role_models"),
+        ):
+            mock_rest = MagicMock()
+            mock_rest_cls.return_value = mock_rest
+            mock_rest.is_server_available.return_value = True
+            mock_rest.list_all_models.return_value = raw_models
+            mock_rest.base_url = "http://localhost:1234"
+            mock_lms._get_base_model_name.side_effect = lambda k: k
+
+            result = discover_models()
+
+        assert "vision-model" in result.models_metadata
+        assert result.models_metadata["vision-model"]["capabilities"]["vision"] is True
+
+    @pytest.mark.unit
+    def test_wake_up_ping_called_for_loaded_role_models(self):
+        """_wake_up_loaded_role_models is called when REST discovery finds loaded role models."""
+        raw_models = [
+            {
+                "key": "chat-instruct",
+                "loaded_instances": [{"instance_id": "inst-1"}],
+                "capabilities": {},
+                "size_bytes": 4_000_000_000,
+            }
+        ]
+        with (
+            patch("tests.fixtures.model_discovery.LMSRestClient") as mock_rest_cls,
+            patch("tests.fixtures.model_discovery.LMSHelper") as mock_lms,
+            patch("tests.fixtures.model_discovery._wake_up_loaded_role_models") as mock_ping,
+        ):
+            mock_rest = MagicMock()
+            mock_rest_cls.return_value = mock_rest
+            mock_rest.is_server_available.return_value = True
+            mock_rest.list_all_models.return_value = raw_models
+            mock_rest.base_url = "http://localhost:1234"
+            mock_lms._get_base_model_name.side_effect = lambda k: k
+
+            discover_models()
+
+        mock_ping.assert_called_once()
