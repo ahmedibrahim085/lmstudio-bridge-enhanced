@@ -422,3 +422,16 @@ THINKING_TAG_CLOSE = "</think>"
 
 # Approximate characters per token for budget estimation
 CHARS_PER_TOKEN_ESTIMATE = 4
+
+# ==============================================================================
+# OPP-10: FORMAT ADAPTER — 3-way API format routing
+# ==============================================================================
+
+# Canonical format identifiers for 3-way routing
+# Used in: llm/format_adapter.py
+FORMAT_OPENAI = "openai"
+FORMAT_ANTHROPIC = "anthropic"
+FORMAT_RESPONSES = "responses"
+
+# All supported format identifiers (for validation)
+SUPPORTED_API_FORMATS = [FORMAT_OPENAI, FORMAT_ANTHROPIC, FORMAT_RESPONSES]

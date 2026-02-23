@@ -35,6 +35,7 @@ from llm.exceptions import (
     LLMResponseError,
     LLMTimeoutError,
 )
+from llm.format_adapter import FormatAdapter
 from llm.sse_parser import parse_sse_stream
 from llm.thinking_parser import (
     estimate_thinking_tokens,
@@ -398,42 +399,27 @@ class LLMClient:
     def convert_tools_to_responses_format(tools: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Convert OpenAI tool format to LM Studio /v1/responses format.
 
+        Delegates to FormatAdapter.openai_tools_to_responses for centralized logic.
+
         OpenAI format (for /v1/chat/completions):
             {"type": "function", "function": {"name": "...", "description": "...", ...}}
 
         LM Studio format (for /v1/responses):
             {"type": "function", "name": "...", "description": "...", ...}
 
-        The key difference: LM Studio uses a flattened structure without the nested
-        "function" object.
-
         Args:
             tools: List of tools in OpenAI format
 
         Returns:
             List of tools in LM Studio flattened format
-
-        Example:
-            >>> tools = [{"type": "function", "function": {"name": "test", "description": "..."}}]
-            >>> LLMClient.convert_tools_to_responses_format(tools)
-            [{"type": "function", "name": "test", "description": "..."}]
         """
-        flattened = []
-        for tool in tools:
-            if tool.get("type") == "function" and "function" in tool:
-                # Flatten: move function contents to top level
-                flattened.append({
-                    "type": "function",
-                    **tool["function"]  # Spread name, description, parameters
-                })
-            else:
-                # Already flat or different type
-                flattened.append(tool)
-        return flattened
+        return FormatAdapter.openai_tools_to_responses(tools)
 
     @staticmethod
     def convert_tools_to_anthropic_format(tools: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Convert OpenAI tool format to Anthropic tool format.
+
+        Delegates to FormatAdapter.openai_tools_to_anthropic for centralized logic.
 
         OpenAI: {"type": "function", "function": {"name": "...", "parameters": {...}}}
         Anthropic: {"name": "...", "description": "...", "input_schema": {...}}
@@ -444,24 +430,13 @@ class LLMClient:
         Returns:
             List of tools in Anthropic format
         """
-        converted = []
-        for tool in tools:
-            if tool.get("type") == "function" and "function" in tool:
-                func = tool["function"]
-                anthropic_tool = {
-                    "name": func["name"],
-                    "description": func.get("description", ""),
-                }
-                if "parameters" in func:
-                    anthropic_tool["input_schema"] = func["parameters"]
-                converted.append(anthropic_tool)
-            else:
-                converted.append(tool)
-        return converted
+        return FormatAdapter.openai_tools_to_anthropic(tools)
 
     @staticmethod
     def extract_anthropic_tool_calls(response: Dict[str, Any]) -> List[Dict[str, Any]]:
         """Extract tool_use blocks from an Anthropic response.
+
+        Delegates to FormatAdapter.extract_anthropic_tool_calls for centralized logic.
 
         Args:
             response: Anthropic API response dict
@@ -469,15 +444,7 @@ class LLMClient:
         Returns:
             List of dicts with id, name, input for each tool call
         """
-        calls = []
-        for block in response.get("content", []):
-            if block.get("type") == "tool_use":
-                calls.append({
-                    "id": block.get("id"),
-                    "name": block.get("name"),
-                    "input": block.get("input", {}),
-                })
-        return calls
+        return FormatAdapter.extract_anthropic_tool_calls(response)
 
     @staticmethod
     def build_anthropic_tool_result(
@@ -487,6 +454,8 @@ class LLMClient:
     ) -> Dict[str, Any]:
         """Build an Anthropic tool_result message.
 
+        Delegates to FormatAdapter.build_anthropic_tool_result for centralized logic.
+
         Args:
             tool_use_id: The id from the tool_use block
             content: Result content (str, dict auto-serialized, None -> "")
@@ -495,24 +464,7 @@ class LLMClient:
         Returns:
             Message dict with role=user and tool_result content block
         """
-        if content is None:
-            content_str = ""
-        elif isinstance(content, dict):
-            content_str = json.dumps(content)
-        else:
-            content_str = str(content)
-
-        block: Dict[str, Any] = {
-            "type": "tool_result",
-            "tool_use_id": tool_use_id,
-            "content": content_str,
-        }
-        if is_error:
-            block["is_error"] = True
-
-        return {"role": "user", "content": [block]}
-
-    # TODO(OPP-10): Extract to anthropic_adapter.py
+        return FormatAdapter.build_anthropic_tool_result(tool_use_id, content, is_error)
 
     @retry_with_backoff(
         max_retries=DEFAULT_MAX_RETRIES,
