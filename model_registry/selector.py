@@ -25,6 +25,12 @@ from model_registry.schemas import ModelMetadata, ModelType
 
 logger = logging.getLogger(__name__)
 
+__all__ = [
+    "NoModelsAvailableError",
+    "SmartModelSelector",
+    "select_best_model",
+]
+
 
 # ---------------------------------------------------------------------------
 # Custom exception

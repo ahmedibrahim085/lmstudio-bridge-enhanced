@@ -22,6 +22,10 @@ from .schemas import ModelMetadata, RegistryStats, ResearchStatus
 
 logger = logging.getLogger(__name__)
 
+__all__ = [
+    "CacheManager",
+]
+
 # Default cache filename
 DEFAULT_CACHE_FILENAME = "model_registry.json"
 

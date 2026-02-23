@@ -43,6 +43,12 @@ from .research import (
 
 logger = logging.getLogger(__name__)
 
+__all__ = [
+    "ModelRegistry",
+    "get_registry",
+    "reset_registry",
+]
+
 
 class ModelRegistry:
     """

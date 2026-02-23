@@ -45,6 +45,11 @@ from model_registry.selector import NoModelsAvailableError, select_best_model
 
 logger = logging.getLogger(__name__)
 
+__all__ = [
+    "register_model_registry_tools",
+    "select_best_model_tool",
+]
+
 
 # ---------------------------------------------------------------------------
 # MCP Tool handler
