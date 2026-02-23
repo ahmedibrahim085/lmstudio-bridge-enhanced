@@ -93,6 +93,9 @@ class ModelValidator:
                     native_response = await client.get(f"{native_base}/api/v1/models")
                     native_response.raise_for_status()
                     native_data = native_response.json()
+                    # Handle both bare list and {"models": [...]} wrapper
+                    if isinstance(native_data, dict):
+                        native_data = native_data.get("models", native_data.get("data", []))
                     if isinstance(native_data, list) and native_data:
                         models = [m["key"] for m in native_data if "key" in m]
                         if models:

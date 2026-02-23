@@ -242,6 +242,52 @@ async def test_use_cache_false_bypasses_class_cache():
         await validator.get_available_models(use_cache=False)
 
 
+@pytest.mark.asyncio
+async def test_fetch_models_handles_native_dict_response():
+    """REGRESSION F-2: _fetch_models must unwrap {"models": [...]} dict from native API.
+
+    Bug: native /api/v1/models returns {"models": [...]} but the code checked
+    isinstance(native_data, list) — always False for a dict — so it fell through
+    to /v1/models instead of using the richer native data.
+
+    Setup: native returns dict with 2 models, /v1/models returns empty.
+    If fix works  → returns ["model-a", "model-b"] from native.
+    If bug remains → falls through to /v1/models → returns [] (or raises).
+    """
+    from unittest.mock import AsyncMock, patch, MagicMock
+
+    validator = ModelValidator(api_base="http://localhost:1234/v1")
+
+    # Reset class cache so we always hit the network path
+    ModelValidator._class_cache = None
+    ModelValidator._class_cache_time = 0.0
+
+    native_dict_response = MagicMock()
+    native_dict_response.status_code = 200
+    native_dict_response.json.return_value = {
+        "models": [{"key": "model-a"}, {"key": "model-b"}]
+    }
+    native_dict_response.raise_for_status = MagicMock()
+
+    # /v1/models returns empty — if we fall through here, result is []
+    fallback_response = MagicMock()
+    fallback_response.status_code = 200
+    fallback_response.json.return_value = {"data": []}
+    fallback_response.raise_for_status = MagicMock()
+
+    mock_client = AsyncMock()
+    mock_client.get = AsyncMock(side_effect=[native_dict_response, fallback_response])
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+
+    with patch("llm.model_validator.httpx.AsyncClient", return_value=mock_client):
+        result = await validator._fetch_models(force_refresh=True)
+
+    assert result == ["model-a", "model-b"], (
+        f"Expected ['model-a', 'model-b'] from native dict response, got {result!r}"
+    )
+
+
 if __name__ == "__main__":
     # Run tests
     pytest.main([__file__, "-v"])
