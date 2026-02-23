@@ -51,39 +51,6 @@ def ensure_model_loaded(model_name: str) -> bool:
         return False
 
 
-def _require_model(model: str):
-    """Helper to require a model with proper error handling."""
-    try:
-        if not ensure_model_loaded(model):
-            pytest.skip(f"Model '{model}' could not be loaded")
-    except ModelMemoryError as e:
-        pytest.skip(f"Model '{model}' requires too much memory: {e.required_memory or 'unknown'}")
-
-
-@pytest.fixture
-def require_qwen_coder():
-    """Fixture to ensure qwen/qwen3-coder-30b is loaded."""
-    _require_model("qwen/qwen3-coder-30b")
-
-
-@pytest.fixture
-def require_qwen_thinking():
-    """Fixture to ensure qwen/qwen3-4b-thinking-2507 is loaded."""
-    _require_model("qwen/qwen3-4b-thinking-2507")
-
-
-@pytest.fixture
-def require_magistral():
-    """Fixture to ensure mistralai/magistral-small-2509 is loaded."""
-    _require_model("mistralai/magistral-small-2509")
-
-
-@pytest.fixture
-def require_deepseek_r1():
-    """Fixture to ensure deepseek/deepseek-r1-0528-qwen3-8b is loaded."""
-    _require_model("deepseek/deepseek-r1-0528-qwen3-8b")
-
-
 def get_default_model() -> str | None:
     """
     Get the currently loaded model (default).
