@@ -17,7 +17,7 @@ ModelValidator for model validation with its own class-level cache.
 
 These two worlds MUST NOT cross:
 - Test fixtures NEVER call ModelValidator (prevents cache pollution)
-- ModelValidator's class cache is reset per-test via autouse fixture below
+- ModelValidator's class cache is reset via opt-in fixture for tests that need isolation
 - discover_models() and ModelLifecycleManager delegate to LMSHelper only
 """
 
@@ -45,17 +45,13 @@ from utils.mcp_health_check import (
 logger = logging.getLogger(__name__)
 
 
-@pytest.fixture(autouse=True)
-def _reset_model_validator_class_cache():
-    """Clear ModelValidator class-level cache between tests.
+@pytest.fixture
+def reset_model_validator_cache():
+    """Reset ModelValidator class-level cache. Opt-in only.
 
-    The class-level cache in _fetch_models() persists across tests, which
-    can cause test-ordering failures when different tests mock _fetch_models
-    differently. Reset before each test for isolation.
-
-    IMPORTANT: discover_models() and ModelLifecycleManager must NEVER call
-    ModelValidator internally — they use LMSHelper only. This ensures the
-    session-scoped discovery fixtures are not affected by this per-test reset.
+    Use this fixture in tests that mock _fetch_models() differently
+    and need cache isolation. Most tests should let the cache work
+    naturally (30s TTL) to match production behavior.
     """
     ModelValidator._class_cache = None
     ModelValidator._class_cache_time = 0.0

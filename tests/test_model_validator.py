@@ -93,7 +93,7 @@ async def test_get_available_models_returns_list():
 
 
 @pytest.mark.asyncio
-async def test_cache_used_on_second_call():
+async def test_cache_used_on_second_call(reset_model_validator_cache):
     """Should use class-level cache on second call within TTL."""
     if not await is_lm_studio_available():
         pytest.skip("LM Studio not available")
@@ -111,7 +111,7 @@ async def test_cache_used_on_second_call():
 
 
 @pytest.mark.asyncio
-async def test_cache_can_be_cleared():
+async def test_cache_can_be_cleared(reset_model_validator_cache):
     """Should be able to clear class-level cache."""
     if not await is_lm_studio_available():
         pytest.skip("LM Studio not available")
@@ -129,7 +129,7 @@ async def test_cache_can_be_cleared():
 
 
 @pytest.mark.asyncio
-async def test_cache_not_used_when_disabled():
+async def test_cache_not_used_when_disabled(reset_model_validator_cache):
     """Should fetch fresh data when cache is disabled."""
     if not await is_lm_studio_available():
         pytest.skip("LM Studio not available")
@@ -171,7 +171,7 @@ async def test_fetch_models_retries_on_failure():
 
 
 @pytest.mark.asyncio
-async def test_class_cache_shared_across_validators():
+async def test_class_cache_shared_across_validators(reset_model_validator_cache):
     """Class-level cache is shared across all ModelValidator instances.
 
     After one instance populates the cache, another instance sees it.
@@ -223,7 +223,7 @@ async def test_error_message_includes_available_models():
 
 
 @pytest.mark.asyncio
-async def test_use_cache_false_bypasses_class_cache():
+async def test_use_cache_false_bypasses_class_cache(reset_model_validator_cache):
     """REGRESSION C-1: use_cache=False must bypass class-level cache.
 
     When class cache is warm and use_cache=False is requested,
@@ -243,7 +243,7 @@ async def test_use_cache_false_bypasses_class_cache():
 
 
 @pytest.mark.asyncio
-async def test_fetch_models_handles_native_dict_response():
+async def test_fetch_models_handles_native_dict_response(reset_model_validator_cache):
     """REGRESSION F-2: _fetch_models must unwrap {"models": [...]} dict from native API.
 
     Bug: native /api/v1/models returns {"models": [...]} but the code checked
