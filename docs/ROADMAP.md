@@ -1,18 +1,18 @@
 # LM Studio Bridge Enhanced — OPP Roadmap
 
-> Updated: 2026-02-23 | LM Studio target: 0.4.3+ | Baseline: 709 tests passing, 69% coverage
+> Updated: 2026-02-23 | LM Studio target: 0.4.3+ | Baseline: ~1405 tests passing, 89% coverage
 
 ---
 
 ## Phase Completion Status
 
-| Phase | OPPs | Status | PR | Tests Added |
-|-------|------|--------|-----|-------------|
+| Phase | OPPs | Status | PR/Version | Tests Added |
+|-------|------|--------|------------|-------------|
 | Phase 1 (Foundation) | OPP-01, 02, 03, 04 | **DONE** | PR #3 | 72 |
 | Phase 1.5 (Code Quality) | OPP-05, 06, 07, 08, 09, 10 | **DONE** | PR #4 + #5 | 86 |
 | Round A (Phases 2+3 parallel) | OPP-11, 16, 13, 05, 06, 07 | **DONE** | PR #6 + #7 | 107 |
-| Round B (Phase 4) | OPP-12, 10, 08, 14, 18 | Not started | — | — |
-| Round C (Phase 5) | OPP-17, 09, 15 | Not started | — | — |
+| Round B (Phase 4) | OPP-12, 10, 08, 14, 18 | **DONE** | v3.4.0 | ~80 |
+| Round C (Phase 5) | OPP-17, 09, 15 | **DONE** | v4.0.0 | ~30 |
 
 ---
 
@@ -85,25 +85,25 @@ Changes from original:
 | — | OPP-02 | Self-Correcting Loops | 10 | 9 | 1.0 | 2 | 45 | — | DONE |
 | — | OPP-03 | JIT Loading | 9 | 8 | 1.0 | 2 | 36 | — | DONE |
 | — | OPP-04 | Model Lifecycle REST | 9 | 7 | 1.0 | 2 | 31.5 | — | DONE |
-| 1 | OPP-11 | Anthropic Endpoint | 9 | 9 | 1.0 | 1 | 81 | A | Ready |
-| 2 | OPP-16 | Native MCP via API | 7 | 10 | 0.91 | 1 | 63.8 | A | Ready |
-| 3 | OPP-13 | Anthropic Tool Use | 9 | 8 | 1.0 | 1.33 | 54 | A | Ready (after OPP-11) |
-| 4 | OPP-06 | Parallel Tool Execution | 6 | 8 | **0.9** | 1 | **43.2** | A | Ready |
-| 5 | OPP-05 | Speculative Decoding | 10 | 8 | **0.7** | 1.33 | **42** | A | Ready (llama.cpp only) |
-| 6 | OPP-07 | Loop Observability | 8 | 8 | 0.8 | 2 | 25.6 | A | Ready |
-| 7 | OPP-12 | Streaming | 5 | 8 | 0.8 | 1.5 | 21.3 | B | Ready |
-| 8 | OPP-08 | Smart Model Selection | 6 | 6 | 1.0 | 2 | 18 | B | Ready (after OPP-07) |
-| 9 | OPP-10 | Format Adapter (3-way) | 5 | 8 | 1.0 | **2.5** | **16** | B | Ready (after OPP-11) |
-| 10 | OPP-18 | Headless Deployment | 4 | 5 | 0.8 | 1 | **16** | B | **NEW** |
-| 11 | OPP-14 | Extended Thinking | 7 | 6 | **0.7** | 2 | **14.7** | B | Ready (model-dependent) |
-| 12 | OPP-17 | Dual-Format Autonomous | 7 | 6 | 1.0 | 3 | 14 | C | Ready (after OPP-11+13) |
-| 13 | OPP-09 | Multi-Modal Loops | 6 | 6 | 1.0 | 3 | 12 | C | Ready (MLX vision pending) |
-| 14 | OPP-15 | Conversation Branching | 5 | 5 | **0.8** | 5 | **4** | C | Ready (native API only) |
+| — | OPP-11 | Anthropic Endpoint | 9 | 9 | 1.0 | 1 | 81 | A | DONE |
+| — | OPP-16 | Native MCP via API | 7 | 10 | 0.91 | 1 | 63.8 | A | DONE |
+| — | OPP-13 | Anthropic Tool Use | 9 | 8 | 1.0 | 1.33 | 54 | A | DONE |
+| — | OPP-06 | Parallel Tool Execution | 6 | 8 | **0.9** | 1 | **43.2** | A | DONE |
+| — | OPP-05 | Speculative Decoding | 10 | 8 | **0.7** | 1.33 | **42** | A | DONE |
+| — | OPP-07 | Loop Observability | 8 | 8 | 0.8 | 2 | 25.6 | A | DONE |
+| — | OPP-12 | Streaming | 5 | 8 | 0.8 | 1.5 | 21.3 | B | DONE |
+| — | OPP-08 | Smart Model Selection | 6 | 6 | 1.0 | 2 | 18 | B | DONE |
+| — | OPP-10 | Format Adapter (3-way) | 5 | 8 | 1.0 | **2.5** | **16** | B | DONE |
+| — | OPP-18 | Headless Deployment | 4 | 5 | 0.8 | 1 | **16** | B | DONE |
+| — | OPP-14 | Extended Thinking | 7 | 6 | **0.7** | 2 | **14.7** | B | DONE |
+| — | OPP-17 | Dual-Format Autonomous | 7 | 6 | 1.0 | 3 | 14 | C | DONE |
+| — | OPP-09 | Multi-Modal Loops | 6 | 6 | 1.0 | 3 | 12 | C | DONE |
+| — | OPP-15 | Conversation Branching | 5 | 5 | **0.8** | 5 | **4** | C | DONE |
 
 **Round totals**:
-- Round A (Phases 2+3 parallel): **309.6** — 6 OPPs
-- Round B (Phase 4): **85.9** — 5 OPPs
-- Round C (Phase 5): **30** — 3 OPPs
+- Round A (Phases 2+3 parallel): **309.6** — 6 OPPs — **DONE**
+- Round B (Phase 4): **85.9** — 5 OPPs — **DONE**
+- Round C (Phase 5): **30** — 3 OPPs — **DONE**
 
 ---
 
@@ -117,7 +117,7 @@ Phase 3 (OPP-05, 06, 07) depends ONLY on Phase 1 — which is DONE. It does NOT 
 
 ```
                     ┌─ Track 1: OPP-11 (Anthropic endpoint) ← OPP-01 ✅
-                    │    └─→ OPP-13 (Anthropic tool use) ← OPP-11
+                    │    └─→ OPP-13 (Anthropic tool use) ← OPP-11 ✅
                     │
                     ├─ Track 2: OPP-16 (Native MCP) ← OPP-04 ✅
 Phase 1 (DONE) ────┤
@@ -128,44 +128,23 @@ Phase 1 (DONE) ────┤
                     └─                      │
                          ┌──────────────────┘
                          ▼
-               Round B — Phase 4
+               Round B — Phase 4 ✅
                ┌─ OPP-12 (Streaming) ← OPP-03 ✅
-               ├─ OPP-10 (Format adapter 3-way) ← OPP-01 ✅, OPP-11
-               ├─ OPP-08 (Smart selection) ← OPP-01 ✅, OPP-07
+               ├─ OPP-10 (Format adapter 3-way) ← OPP-01 ✅, OPP-11 ✅
+               ├─ OPP-08 (Smart selection) ← OPP-01 ✅, OPP-07 ✅
                ├─ OPP-14 (Extended thinking) ← OPP-02 ✅
                └─ OPP-18 (Headless deploy) ← OPP-04 ✅
                          │
                          ▼
-               Round C — Phase 5
-               ├─ OPP-17 (Dual-format) ← OPP-11, OPP-13
-               ├─ OPP-09 (Multi-modal) ← OPP-10
-               └─ OPP-15 (Branching) ← OPP-03 ✅, OPP-12
+               Round C — Phase 5 ✅
+               ├─ OPP-17 (Dual-format) ← OPP-11 ✅, OPP-13 ✅
+               ├─ OPP-09 (Multi-modal) ← OPP-10 ✅
+               └─ OPP-15 (Branching) ← OPP-03 ✅, OPP-12 ✅
 ```
-
-### Round A — Detailed Execution Order
-
-Within Round A, file overlap analysis determines serialization constraints:
-
-| Step | OPP | Files Modified | Parallel With |
-|------|-----|---------------|---------------|
-| A1 | OPP-11 + OPP-16 + OPP-05 | llm_client.py (non-overlapping sections), lms_helper.py, config/constants.py | All 3 parallel |
-| A2 | OPP-06 | tools/dynamic_autonomous.py (tool execution) | After A1 |
-| A3 | OPP-07 | tools/dynamic_autonomous.py (logging/metrics) | After A2 |
-| A4 | OPP-13 | llm/anthropic_adapter.py (new) | After OPP-11 (A1) |
-
-**Rationale**: OPP-06 and OPP-07 both modify `tools/dynamic_autonomous.py`, so they serialize. OPP-13 depends on OPP-11's Anthropic endpoint.
-
-### Round B — All 5 OPPs Parallel
-
-All Round B OPPs have satisfied dependencies after Round A. Minimal file overlap expected (each touches different modules).
-
-### Round C — All 3 OPPs Parallel
-
-All Round C OPPs have satisfied dependencies after Round B.
 
 ---
 
-## Updated Dependency Matrix
+## Updated Dependency Matrix (ALL SATISFIED)
 
 ```
 Phase 1 (Layer 0 - DONE):
@@ -182,25 +161,25 @@ Phase 1.5 (Code Quality - DONE):
   OPP-09 ✅ (JIT guard dedup + stale export)
   OPP-10 ✅ (architecture guards)
 
-Round A — Phases 2+3 (parallel):
-  Track 1: OPP-11 ← OPP-01 ✅
-  Track 2: OPP-16 ← OPP-04 ✅
-  Track 3: OPP-05* ← OPP-01 ✅  [*Speculative Decoding — llama.cpp only, add MLX guard]
-  Track 4: OPP-06* ← OPP-02 ✅  [*Parallel Tools — boosted by continuous batching]
-  Track 5: OPP-07* ← OPP-02 ✅, OPP-03 ✅  [*Loop Observability + /v1/models/{id}/stats]
-  Sequential: OPP-13 ← OPP-11 (waits for Track 1)
+Round A — Phases 2+3 (parallel) — DONE:
+  Track 1: OPP-11 ✅ ← OPP-01 ✅
+  Track 2: OPP-16 ✅ ← OPP-04 ✅
+  Track 3: OPP-05 ✅ ← OPP-01 ✅
+  Track 4: OPP-06 ✅ ← OPP-02 ✅
+  Track 5: OPP-07 ✅ ← OPP-02 ✅, OPP-03 ✅
+  Sequential: OPP-13 ✅ ← OPP-11 ✅
 
-Round B — Phase 4:
-  OPP-12 ← OPP-03 ✅
-  OPP-10* ← OPP-01 ✅, OPP-11  [*Expanded: 3-way format routing incl /v1/responses]
-  OPP-08* ← OPP-01 ✅, OPP-07*
-  OPP-14 ← OPP-02 ✅  [*Model-dependent: needs reasoning-capable models]
-  OPP-18 ← OPP-04 ✅  [*NEW: llmster daemon headless deployment]
+Round B — Phase 4 — DONE:
+  OPP-12 ✅ ← OPP-03 ✅
+  OPP-10 ✅ ← OPP-01 ✅, OPP-11 ✅
+  OPP-08 ✅ ← OPP-01 ✅, OPP-07 ✅
+  OPP-14 ✅ ← OPP-02 ✅
+  OPP-18 ✅ ← OPP-04 ✅
 
-Round C — Phase 5:
-  OPP-17 ← OPP-11, OPP-13
-  OPP-09 ← OPP-10*  [*MLX parallel vision pending]
-  OPP-15 ← OPP-03 ✅, OPP-12  [*Native API only, not OpenAI-compat]
+Round C — Phase 5 — DONE:
+  OPP-17 ✅ ← OPP-11 ✅, OPP-13 ✅
+  OPP-09 ✅ ← OPP-10 ✅
+  OPP-15 ✅ ← OPP-03 ✅, OPP-12 ✅
 ```
 
 ---
@@ -218,13 +197,15 @@ Round C — Phase 5:
 
 ---
 
-## Remaining Work Summary
+## Completed Work Summary
 
-| Round | OPPs | RICE Total | Estimated Tests |
-|-------|------|-----------|-----------------|
-| Round A (Phase 2+3) | OPP-11, 16, 13, 05, 06, 07 | 309.6 | ~80 |
-| Round B (Phase 4) | OPP-12, 10, 08, 14, 18 | 85.9 | ~50 |
+| Round | OPPs | RICE Total | Tests Added |
+|-------|------|-----------|-------------|
+| Phase 1 (Foundation) | OPP-01, 02, 03, 04 | 212.5 | 72 |
+| Phase 1.5 (Code Quality) | 6 items | — | 86 |
+| Round A (Phase 2+3) | OPP-11, 16, 13, 05, 06, 07 | 309.6 | ~107 |
+| Round B (Phase 4) | OPP-12, 10, 08, 14, 18 | 85.9 | ~80 |
 | Round C (Phase 5) | OPP-17, 09, 15 | 30 | ~30 |
-| **TOTAL** | **14 OPPs** | **425.5** | **~160** |
+| **TOTAL** | **18 OPPs** | **638** | **~375** |
 
-Target: 561 (current) + ~160 = **~720 tests** at project completion.
+Final state: ~1405 tests, 89% coverage, VERSION 4.0.0.
