@@ -894,5 +894,74 @@ class TestBackwardCompatibility(unittest.TestCase):
             )
 
 
+# ---------------------------------------------------------------------------
+# Group 9: Public methods route through _run_autonomous_dispatch (C-2 fix)
+# ---------------------------------------------------------------------------
+
+
+class TestPublicMethodsUseDispatch(unittest.TestCase):
+    """Group 9: autonomous_with_mcp/multiple_mcps accept api_format and route via dispatch."""
+
+    def test_autonomous_with_mcp_accepts_api_format_param(self):
+        """C-2 regression: autonomous_with_mcp must accept api_format kwarg."""
+        import inspect
+
+        agent = _make_agent()
+        sig = inspect.signature(agent.autonomous_with_mcp)
+        self.assertIn(
+            "api_format",
+            sig.parameters,
+            "autonomous_with_mcp must accept api_format parameter",
+        )
+
+    def test_autonomous_with_multiple_mcps_accepts_api_format_param(self):
+        """C-2 regression: autonomous_with_multiple_mcps must accept api_format kwarg."""
+        import inspect
+
+        agent = _make_agent()
+        sig = inspect.signature(agent.autonomous_with_multiple_mcps)
+        self.assertIn(
+            "api_format",
+            sig.parameters,
+            "autonomous_with_multiple_mcps must accept api_format parameter",
+        )
+
+    def test_autonomous_with_mcp_source_calls_dispatch(self):
+        """C-2 regression: autonomous_with_mcp body must call _run_autonomous_dispatch."""
+        import inspect
+
+        agent = _make_agent()
+        source = inspect.getsource(agent.autonomous_with_mcp)
+        self.assertIn(
+            "_run_autonomous_dispatch",
+            source,
+            "autonomous_with_mcp must route through _run_autonomous_dispatch",
+        )
+        # Must NOT call _autonomous_loop directly (bypassing dispatch)
+        # Count occurrences: _run_autonomous_dispatch should appear, raw _autonomous_loop( should not
+        self.assertNotIn(
+            "await self._autonomous_loop(",
+            source,
+            "autonomous_with_mcp must NOT call _autonomous_loop directly — use _run_autonomous_dispatch",
+        )
+
+    def test_autonomous_with_multiple_mcps_source_calls_dispatch(self):
+        """C-2 regression: autonomous_with_multiple_mcps body must call _run_autonomous_dispatch."""
+        import inspect
+
+        agent = _make_agent()
+        source = inspect.getsource(agent.autonomous_with_multiple_mcps)
+        self.assertIn(
+            "_run_autonomous_dispatch",
+            source,
+            "autonomous_with_multiple_mcps must route through _run_autonomous_dispatch",
+        )
+        self.assertNotIn(
+            "await self._autonomous_loop(",
+            source,
+            "autonomous_with_multiple_mcps must NOT call _autonomous_loop directly — use _run_autonomous_dispatch",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

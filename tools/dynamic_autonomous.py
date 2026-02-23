@@ -176,7 +176,8 @@ class DynamicAutonomousAgent:
         task: str,
         max_rounds: int = DEFAULT_MAX_ROUNDS,
         max_tokens: Union[int, str] = "auto",
-        model: Optional[str] = None
+        model: Optional[str] = None,
+        api_format: str = DEFAULT_AUTONOMOUS_FORMAT,
     ) -> str:
         """
         Execute task autonomously using tools from a SINGLE MCP.
@@ -277,14 +278,15 @@ class DynamicAutonomousAgent:
                         else max_tokens
                     )
 
-                    # Execute autonomous loop
-                    return await self._autonomous_loop(
+                    # Execute autonomous loop via format-aware dispatch
+                    return await self._run_autonomous_dispatch(
                         dispatcher=_SingleSessionDispatcher(session),
                         openai_tools=openai_tools,
                         task=task,
                         max_rounds=max_rounds,
                         max_tokens=actual_max_tokens,
-                        model=model
+                        model=model,
+                        api_format=api_format,
                     )
 
         except ValueError as e:
@@ -302,7 +304,8 @@ class DynamicAutonomousAgent:
         task: str,
         max_rounds: int = DEFAULT_MAX_ROUNDS,
         max_tokens: Union[int, str] = "auto",
-        model: Optional[str] = None
+        model: Optional[str] = None,
+        api_format: str = DEFAULT_AUTONOMOUS_FORMAT,
     ) -> str:
         """
         Execute task autonomously using tools from MULTIPLE MCPs simultaneously!
@@ -445,14 +448,15 @@ class DynamicAutonomousAgent:
                     else max_tokens
                 )
 
-                # Execute autonomous loop with ALL tools
-                return await self._autonomous_loop(
+                # Execute autonomous loop via format-aware dispatch
+                return await self._run_autonomous_dispatch(
                     dispatcher=_MultiSessionDispatcher(tool_to_session),
                     openai_tools=all_openai_tools,
                     task=task,
                     max_rounds=max_rounds,
                     max_tokens=actual_max_tokens,
-                    model=model
+                    model=model,
+                    api_format=api_format,
                 )
 
         except ValueError as e:
@@ -478,7 +482,8 @@ class DynamicAutonomousAgent:
         task: str,
         max_rounds: int = DEFAULT_MAX_ROUNDS,
         max_tokens: Union[int, str] = "auto",
-        model: Optional[str] = None
+        model: Optional[str] = None,
+        api_format: str = DEFAULT_AUTONOMOUS_FORMAT,
     ) -> str:
         """
         Execute task with ALL available MCPs discovered from .mcp.json!
@@ -535,7 +540,8 @@ class DynamicAutonomousAgent:
             task=task,
             max_rounds=max_rounds,
             max_tokens=max_tokens,
-            model=model
+            model=model,
+            api_format=api_format,
         )
 
     async def autonomous_with_images(
