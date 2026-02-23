@@ -20,6 +20,18 @@ from utils.lms_helper import LMSHelper
 from utils.retry_logic import retry_with_exponential_backoff
 
 
+@pytest.fixture(autouse=True)
+def _prevent_rest_api_leaks():
+    """Prevent ALL benchmark tests from hitting LM Studio REST API.
+
+    Without this, tests that mock subprocess.run but NOT _get_rest_client()
+    leak real HTTP requests to LM Studio (load_model tries REST first).
+    This caused 486+ 'model-0..49 not found' errors in 10 seconds.
+    """
+    with patch.object(LMSHelper, '_get_rest_client', return_value=None):
+        yield
+
+
 class TestLatencyBenchmarks:
     """Benchmark latency metrics."""
 

@@ -26,6 +26,17 @@ from utils.retry_logic import (
 )
 
 
+@pytest.fixture(autouse=True)
+def _prevent_rest_api_leaks():
+    """Prevent ALL failure scenario tests from hitting LM Studio REST API.
+
+    Without this, tests that mock subprocess.run but NOT _get_rest_client()
+    leak real HTTP requests to LM Studio (load_model tries REST first).
+    """
+    with patch.object(LMSHelper, '_get_rest_client', return_value=None):
+        yield
+
+
 class TestModelLoadingFailures:
     """Test model loading failure scenarios (5 tests)."""
 
