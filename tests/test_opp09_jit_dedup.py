@@ -128,7 +128,7 @@ class TestJITGuardBehavior:
             mock_lms.is_model_loaded.return_value = False
             mock_lms.ensure_model_loaded_with_verification.return_value = True
             client._ensure_model_loaded("my-model", ttl=1800)
-            mock_lms.ensure_model_loaded_with_verification.assert_called_once_with("my-model", ttl=1800)
+            mock_lms.ensure_model_loaded_with_verification.assert_called_once_with("my-model", ttl=1800, skip_initial_check=True)
 
     def test_raises_on_load_failure(self):
         """Should raise LLMConnectionError when loading fails."""

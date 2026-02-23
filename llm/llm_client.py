@@ -191,7 +191,9 @@ class LLMClient:
 
             if is_loaded is False:
                 logger.warning(f"{label} '{target_model}' not loaded, attempting to load...")
-                load_success = LMSHelper.ensure_model_loaded_with_verification(target_model, ttl=ttl)
+                load_success = LMSHelper.ensure_model_loaded_with_verification(
+                    target_model, ttl=ttl, skip_initial_check=True
+                )
 
                 if not load_success:
                     raise LLMConnectionError(

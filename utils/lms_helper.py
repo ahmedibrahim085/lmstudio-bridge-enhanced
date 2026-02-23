@@ -811,7 +811,12 @@ ALTERNATIVE:
             return False
 
     @classmethod
-    def ensure_model_loaded_with_verification(cls, model_name: str, ttl: Optional[int] = None) -> bool:
+    def ensure_model_loaded_with_verification(
+        cls,
+        model_name: str,
+        ttl: Optional[int] = None,
+        skip_initial_check: bool = False,
+    ) -> bool:
         """
         Ensure model is loaded AND verify it's actually available.
 
@@ -821,6 +826,9 @@ ALTERNATIVE:
         Args:
             model_name: Name of model to ensure is loaded
             ttl: Optional TTL override
+            skip_initial_check: If True, skip the initial is_model_loaded() call.
+                Set by callers (e.g. _ensure_model_loaded) that have already
+                performed this check to avoid a redundant HTTP GET.
 
         Returns:
             True if model is loaded and verified
@@ -828,9 +836,10 @@ ALTERNATIVE:
         Raises:
             Exception: If model loading or verification fails
         """
-        if cls.is_model_loaded(model_name):
-            logger.debug(f"Model '{model_name}' already loaded")
-            return True
+        if not skip_initial_check:
+            if cls.is_model_loaded(model_name):
+                logger.debug(f"Model '{model_name}' already loaded")
+                return True
 
         logger.info(f"Loading model '{model_name}'...")
         if not cls.load_model(model_name, keep_loaded=True, ttl=ttl):
