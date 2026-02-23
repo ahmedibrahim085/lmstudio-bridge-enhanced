@@ -88,36 +88,84 @@ class DiscoveredModels:
 def _resolve_roles(
     loaded_ids: list[str],
     downloaded_ids: list[str],
+    models_metadata: dict[str, dict] | None = None,
 ) -> dict[str, str]:
-    """Assign models to roles using keyword matching.
+    """Assign models to roles. Resolution order per D-11:
+    1. Env var override (LMS_TEST_{ROLE}_MODEL) — validated against available models
+    2. Structured API fields (vision, tool_use, type=embedding) — from models_metadata
+    3. Name-match keywords (for thinking, coding, chat, etc.)
+    4. Prefer loaded, then smallest by size_bytes (D-4)
 
-    Priority: loaded models first, then downloaded models.
-    Uses MODEL_ROLE_KEYWORDS from config/constants.py.
-
-    Args:
-        loaded_ids: Currently loaded model identifiers.
-        downloaded_ids: All downloaded model identifiers.
-
-    Returns:
-        Dict mapping role name → best model identifier for that role.
+    Fallback constants used only if model exists in available pools.
     """
-    roles: dict[str, str] = {}
+    import os
 
-    # Search loaded models first (prefer already-loaded for speed)
+    from config.constants import LMS_TEST_ENV_VARS
+
+    roles: dict[str, str] = {}
+    all_available = set(loaded_ids) | set(downloaded_ids)
+    if models_metadata is None:
+        models_metadata = {}
+
+    def _prefer_smallest(candidates: list[str]) -> str | None:
+        """Pick the smallest model by size_bytes. Falls back to first if no size data."""
+        if not candidates:
+            return None
+        if not models_metadata:
+            return candidates[0]
+        sized = [(c, models_metadata.get(c, {}).get("size_bytes")) for c in candidates]
+        with_size = [(c, s) for c, s in sized if s is not None]
+        if with_size:
+            with_size.sort(key=lambda x: (x[1], x[0]))  # smallest first, alphabetical tiebreak
+            return with_size[0][0]
+        return candidates[0]
+
+    # Tier 1: Env var overrides
+    for role, env_var in LMS_TEST_ENV_VARS.items():
+        if role in roles:
+            continue
+        env_model = os.environ.get(env_var)
+        if env_model:
+            if env_model in all_available:
+                roles[role] = env_model
+                logger.debug(f"Role '{role}' → '{env_model}' (env var {env_var})")
+            else:
+                logger.warning(
+                    f"Env var {env_var}='{env_model}' not in available models, skipping"
+                )
+
+    # Tier 2: Structured API fields (only for roles with API-detectable capabilities)
+    _STRUCTURED_ROLES = {
+        "vision": lambda meta: meta.get("capabilities", {}).get("vision", False),
+        "tool_use": lambda meta: meta.get("capabilities", {}).get("trained_for_tool_use", False),
+        "embedding": lambda meta: meta.get("type") == "embedding",
+    }
+    for role, detector in _STRUCTURED_ROLES.items():
+        if role in roles:
+            continue
+        # Prefer loaded models, then downloaded
+        candidates = [m for m in loaded_ids if detector(models_metadata.get(m, {}))]
+        if not candidates:
+            candidates = [m for m in downloaded_ids if detector(models_metadata.get(m, {}))]
+        if candidates:
+            picked = _prefer_smallest(candidates)
+            if picked:
+                roles[role] = picked
+                logger.debug(f"Role '{role}' → '{picked}' (structured API)")
+
+    # Tier 3: Keyword matching (loaded first, then downloaded)
     for pool_label, pool in [("loaded", loaded_ids), ("downloaded", downloaded_ids)]:
         for role, keywords in MODEL_ROLE_KEYWORDS.items():
             if role in roles:
-                continue  # Already assigned from a higher-priority pool
-            for model_id in pool:
-                model_lower = model_id.lower()
-                if any(kw in model_lower for kw in keywords):
-                    roles[role] = model_id
-                    logger.debug(
-                        f"Role '{role}' → '{model_id}' (matched from {pool_label})"
-                    )
-                    break
+                continue
+            candidates = [m for m in pool if any(kw in m.lower() for kw in keywords)]
+            if candidates:
+                picked = _prefer_smallest(candidates)
+                if picked:
+                    roles[role] = picked
+                    logger.debug(f"Role '{role}' → '{picked}' (keyword match from {pool_label})")
 
-    # Apply fallbacks from config/constants.py for unresolved roles
+    # Tier 4: Fallback constants (only if model exists in available pools)
     _FALLBACKS = {
         "chat": DEFAULT_FALLBACK_MODEL,
         "coding": DEFAULT_FALLBACK_MODEL,
@@ -125,11 +173,9 @@ def _resolve_roles(
         "thinking": DEFAULT_THINKING_MODEL,
     }
     for role, fallback in _FALLBACKS.items():
-        if role not in roles:
-            # Only use fallback if it's actually available
-            if fallback in loaded_ids or fallback in downloaded_ids:
-                roles[role] = fallback
-                logger.debug(f"Role '{role}' → '{fallback}' (fallback)")
+        if role not in roles and fallback in all_available:
+            roles[role] = fallback
+            logger.debug(f"Role '{role}' → '{fallback}' (fallback)")
 
     return roles
 

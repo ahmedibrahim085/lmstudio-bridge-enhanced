@@ -379,3 +379,101 @@ class TestDiscoveredModelsMetadata:
         """get_metadata returns None when the model key is absent."""
         dm = DiscoveredModels()
         assert dm.get_metadata("no-such-model") is None
+
+
+# ---------------------------------------------------------------------------
+# _resolve_roles() v2 — structured API + env overrides (Commit 6)
+# ---------------------------------------------------------------------------
+
+
+class TestResolveRolesV2:
+    """Unit tests for the rewritten _resolve_roles with 3-tier resolution."""
+
+    @pytest.mark.unit
+    def test_env_var_override_valid_model(self, monkeypatch):
+        """Env var for a role assigns the model when it is in the available pool."""
+        monkeypatch.setenv("LMS_TEST_CHAT_MODEL", "custom-chat-model")
+        loaded = ["custom-chat-model"]
+        downloaded = []
+        roles = _resolve_roles(loaded, downloaded)
+        assert roles.get("chat") == "custom-chat-model"
+
+    @pytest.mark.unit
+    def test_env_var_override_invalid_model(self, monkeypatch):
+        """Env var pointing to a model not in any pool is silently skipped."""
+        monkeypatch.setenv("LMS_TEST_CHAT_MODEL", "ghost-model-not-available")
+        # ghost-model-not-available is NOT in loaded or downloaded
+        loaded = ["some-instruct-model"]
+        downloaded = []
+        roles = _resolve_roles(loaded, downloaded)
+        # The env var override must be skipped; role may still be resolved by keyword
+        assert roles.get("chat") != "ghost-model-not-available"
+
+    @pytest.mark.unit
+    def test_structured_api_vision_detection(self):
+        """A model with capabilities.vision=True in metadata is assigned the vision role."""
+        loaded = ["vision-capable-model"]
+        downloaded = []
+        metadata = {"vision-capable-model": {"capabilities": {"vision": True}}}
+        roles = _resolve_roles(loaded, downloaded, metadata)
+        assert roles.get("vision") == "vision-capable-model"
+
+    @pytest.mark.unit
+    def test_structured_api_embedding_detection(self):
+        """A model with type='embedding' in metadata is assigned the embedding role."""
+        loaded = []
+        downloaded = ["embed-model"]
+        metadata = {"embed-model": {"type": "embedding"}}
+        roles = _resolve_roles(loaded, downloaded, metadata)
+        assert roles.get("embedding") == "embed-model"
+
+    @pytest.mark.unit
+    def test_keyword_match_still_works(self):
+        """Keyword matching for the coding role still works (backward compat)."""
+        loaded = ["my-coder-7b"]
+        downloaded = []
+        roles = _resolve_roles(loaded, downloaded)
+        assert roles.get("coding") == "my-coder-7b"
+
+    @pytest.mark.unit
+    def test_prefer_smallest_by_size(self):
+        """When two vision models are available, the smaller one (by size_bytes) is picked."""
+        loaded = ["vision-large", "vision-small"]
+        downloaded = []
+        metadata = {
+            "vision-large": {"capabilities": {"vision": True}, "size_bytes": 8_000_000_000},
+            "vision-small": {"capabilities": {"vision": True}, "size_bytes": 2_000_000_000},
+        }
+        roles = _resolve_roles(loaded, downloaded, metadata)
+        assert roles.get("vision") == "vision-small"
+
+    @pytest.mark.unit
+    def test_prefer_smallest_tiebreak_alphabetical(self):
+        """When two vision models have the same size, alphabetical order picks the first."""
+        loaded = ["beta-vision", "alpha-vision"]
+        downloaded = []
+        metadata = {
+            "beta-vision": {"capabilities": {"vision": True}, "size_bytes": 4_000_000_000},
+            "alpha-vision": {"capabilities": {"vision": True}, "size_bytes": 4_000_000_000},
+        }
+        roles = _resolve_roles(loaded, downloaded, metadata)
+        assert roles.get("vision") == "alpha-vision"
+
+    @pytest.mark.unit
+    def test_empty_pools_empty_roles(self):
+        """No models in either pool produces an empty roles dict."""
+        roles = _resolve_roles([], [])
+        assert roles == {}
+
+    @pytest.mark.unit
+    def test_loaded_preferred_over_downloaded(self):
+        """When a capability is present in both loaded and downloaded, loaded model wins."""
+        loaded = ["loaded-vision"]
+        downloaded = ["downloaded-vision"]
+        metadata = {
+            "loaded-vision": {"capabilities": {"vision": True}, "size_bytes": 5_000_000_000},
+            "downloaded-vision": {"capabilities": {"vision": True}, "size_bytes": 3_000_000_000},
+        }
+        # Even though downloaded-vision is smaller, loaded-vision should win
+        roles = _resolve_roles(loaded, downloaded, metadata)
+        assert roles.get("vision") == "loaded-vision"
