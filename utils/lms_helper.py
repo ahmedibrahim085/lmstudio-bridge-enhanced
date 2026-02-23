@@ -27,7 +27,7 @@ import time
 from typing import Optional, Dict, List, Any
 from pathlib import Path
 
-from config.constants import MODEL_REACTIVATION_DELAY, MODEL_LOADING_DELAY
+from config.constants import MODEL_REACTIVATION_DELAY, MODEL_LOADING_DELAY, LMS_REST_MODELS_CACHE_TTL
 from utils.retry import run_with_retry
 from utils.validation import validate_model_name, ValidationError
 
@@ -72,10 +72,7 @@ class LMSRestClient:
 
     def list_all_models(self) -> Optional[List[Dict[str, Any]]]:
         """GET /api/v1/models — returns models[] or None on error. Cached for LMS_REST_MODELS_CACHE_TTL seconds."""
-        import time as _time
-        from config.constants import LMS_REST_MODELS_CACHE_TTL
-
-        now = _time.time()
+        now = time.time()
         if self._models_cache is not None and (now - self._models_cache_time) < LMS_REST_MODELS_CACHE_TTL:
             return self._models_cache
 
