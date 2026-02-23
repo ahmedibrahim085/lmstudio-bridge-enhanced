@@ -17,6 +17,15 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass
 
+__all__ = [
+    "MCPHealthChecker",
+    "MCPStatus",
+    "check_filesystem_mcp",
+    "check_memory_mcp",
+    "check_required_mcps",
+    "pytest_skip_if_mcp_down",
+]
+
 
 @dataclass
 class MCPStatus:

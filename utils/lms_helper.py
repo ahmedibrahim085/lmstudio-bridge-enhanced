@@ -20,6 +20,12 @@ Note: This is OPTIONAL. The system works without it, but LMS CLI provides
       better reliability and debugging capabilities.
 """
 
+__all__ = [
+    "LMSHelper",
+    "LMSRestClient",
+    "check_lms_availability",
+]
+
 import subprocess
 import json
 import logging
