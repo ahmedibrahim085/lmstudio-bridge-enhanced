@@ -52,7 +52,7 @@ class MultiModalInput:
         images: list[str] | None = None,
     ) -> None:
         self.text = text
-        self.images = images if images else None if images is None else []
+        self.images = images
         # Private cache — populated lazily by the `processed_images` property
         self._processed: list[ImageInput] | None = None
 
