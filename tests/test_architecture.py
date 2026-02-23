@@ -224,9 +224,49 @@ class TestRoundAInvariants:
         assert ret is inspect.Parameter.empty or ret == str or ret == 'str', \
             f"_autonomous_loop return type should be str, got {ret}"
 
-    def test_retry_constants_not_colliding(self):
-        """llm_client.DEFAULT_MAX_RETRIES (2) != constants.DEFAULT_MAX_RETRIES (3)."""
-        from llm.llm_client import DEFAULT_MAX_RETRIES as llm_retries
-        from config.constants import DEFAULT_MAX_RETRIES as const_retries
-        assert llm_retries != const_retries, \
-            "Name collision: llm_client and constants both define DEFAULT_MAX_RETRIES with same value"
+class TestSingleSourceOfTruth:
+    """Guards for DEFAULT_MAX_RETRIES consolidation — single source of truth."""
+
+    def test_llm_client_does_not_define_local_default_max_retries(self):
+        """llm_client.py must NOT define its own DEFAULT_MAX_RETRIES assignment."""
+        with open("llm/llm_client.py", "r") as f:
+            tree = ast.parse(f.read())
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Assign):
+                for target in node.targets:
+                    if isinstance(target, ast.Name) and target.id == "DEFAULT_MAX_RETRIES":
+                        pytest.fail(
+                            "llm_client.py defines its own DEFAULT_MAX_RETRIES — "
+                            "must import from config.constants instead"
+                        )
+
+    def test_llm_client_imports_default_max_retries_from_constants(self):
+        """llm_client.py must import DEFAULT_MAX_RETRIES from config.constants."""
+        with open("llm/llm_client.py", "r") as f:
+            tree = ast.parse(f.read())
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom):
+                module = node.module or ""
+                if "config" in module and "constants" in module:
+                    names = [alias.name for alias in node.names]
+                    if "DEFAULT_MAX_RETRIES" in names:
+                        return  # Found the correct import
+        pytest.fail(
+            "llm_client.py does not import DEFAULT_MAX_RETRIES from config.constants"
+        )
+
+    def test_llm_client_no_plus_one_at_retry_call_sites(self):
+        """Call sites must not pass DEFAULT_MAX_RETRIES + 1 — the constant already encodes 3 total."""
+        with open("llm/llm_client.py", "r") as f:
+            content = f.read()
+        assert "DEFAULT_MAX_RETRIES + 1" not in content, (
+            "llm_client.py still uses DEFAULT_MAX_RETRIES + 1 at call sites — "
+            "after consolidation, pass DEFAULT_MAX_RETRIES directly (value=3 = total attempts)"
+        )
+
+    def test_constants_default_max_retries_equals_three(self):
+        """config.constants.DEFAULT_MAX_RETRIES must equal 3 (total attempts for retry_with_backoff)."""
+        from config.constants import DEFAULT_MAX_RETRIES
+        assert DEFAULT_MAX_RETRIES == 3, (
+            f"config.constants.DEFAULT_MAX_RETRIES should be 3 (total attempts), got {DEFAULT_MAX_RETRIES}"
+        )

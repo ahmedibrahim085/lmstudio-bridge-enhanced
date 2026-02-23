@@ -29,6 +29,7 @@ from config.constants import (
     ANTHROPIC_MESSAGES_ENDPOINT,
     DEFAULT_ANTHROPIC_MAX_TOKENS,
     DEFAULT_ANTHROPIC_API_VERSION,
+    DEFAULT_MAX_RETRIES,
 )
 
 # Configure logging
@@ -55,7 +56,7 @@ DEFAULT_MAX_TOKENS = 8192
 
 # Retry configuration for transient errors
 # Based on investigation findings: HTTP 500 errors are rare and transient
-DEFAULT_MAX_RETRIES = 2  # Retry up to 2 times (3 total attempts)
+# DEFAULT_MAX_RETRIES is imported from config.constants (value=3 = total attempts for retry_with_backoff)
 DEFAULT_RETRY_DELAY = 1.0  # Initial delay in seconds
 DEFAULT_RETRY_BACKOFF = 2.0  # Exponential backoff multiplier
 
@@ -212,7 +213,7 @@ class LLMClient:
             logger.warning(f"Could not verify {label.lower()} load state: {e}. Proceeding anyway...")
 
     @retry_with_backoff(
-        max_retries=DEFAULT_MAX_RETRIES + 1,  # +1 for initial attempt = 3 total
+        max_retries=DEFAULT_MAX_RETRIES,  # +1 for initial attempt = 3 total
         base_delay=DEFAULT_RETRY_DELAY,
         exceptions=(LLMResponseError, LLMTimeoutError)  # Only retry these
     )
@@ -315,7 +316,7 @@ class LLMClient:
             _handle_request_exception(e, "Chat completion")
 
     @retry_with_backoff(
-        max_retries=DEFAULT_MAX_RETRIES + 1,
+        max_retries=DEFAULT_MAX_RETRIES,
         base_delay=DEFAULT_RETRY_DELAY,
         exceptions=(LLMResponseError, LLMTimeoutError)
     )
@@ -502,7 +503,7 @@ class LLMClient:
     # TODO(OPP-10): Extract to anthropic_adapter.py
 
     @retry_with_backoff(
-        max_retries=DEFAULT_MAX_RETRIES + 1,
+        max_retries=DEFAULT_MAX_RETRIES,
         base_delay=DEFAULT_RETRY_DELAY,
         exceptions=(LLMResponseError, LLMTimeoutError)
     )
@@ -566,7 +567,7 @@ class LLMClient:
             _handle_request_exception(e, "Generate embeddings")
 
     @retry_with_backoff(
-        max_retries=DEFAULT_MAX_RETRIES + 1,
+        max_retries=DEFAULT_MAX_RETRIES,
         base_delay=DEFAULT_RETRY_DELAY,
         exceptions=(LLMResponseError, LLMTimeoutError)
     )
@@ -781,7 +782,7 @@ class LLMClient:
         )
 
     @retry_with_backoff(
-        max_retries=DEFAULT_MAX_RETRIES + 1,
+        max_retries=DEFAULT_MAX_RETRIES,
         base_delay=DEFAULT_RETRY_DELAY,
         exceptions=(LLMResponseError, LLMTimeoutError)
     )
