@@ -257,6 +257,34 @@ class TestCheckServerTypeUnavailable:
             result = await health_tools.check_server_type()
         assert result == ServerType.UNAVAILABLE
 
+    @pytest.mark.asyncio
+    async def test_fallback_to_second_endpoint_on_first_failure(self, health_tools):
+        """H-8 regression: first endpoint ConnectError must NOT abort — try second endpoint.
+
+        Previously, a network error on the diagnostics endpoint caused an immediate
+        return of UNAVAILABLE, skipping the system_status fallback entirely.
+        """
+        headless_json = MagicMock(status_code=200)
+        headless_json.headers = {"x-lmstudio-server-type": "headless"}
+        headless_json.json.return_value = {}
+
+        def side_effect(url, **kwargs):
+            if "diagnostics" in url:
+                raise httpx.ConnectError("diagnostics endpoint down")
+            return headless_json
+
+        with patch("tools.health.httpx.get", side_effect=side_effect):
+            result = await health_tools.check_server_type()
+        # Should detect headless via the second endpoint, NOT return UNAVAILABLE
+        assert result == ServerType.HEADLESS
+
+    @pytest.mark.asyncio
+    async def test_returns_unavailable_only_when_all_endpoints_fail(self, health_tools):
+        """UNAVAILABLE only returned when ALL endpoints AND /v1/models fail."""
+        with patch("tools.health.httpx.get", side_effect=httpx.ConnectError("all down")):
+            result = await health_tools.check_server_type()
+        assert result == ServerType.UNAVAILABLE
+
 
 # ---------------------------------------------------------------------------
 # Tests: check_server_health — comprehensive health status

@@ -170,11 +170,11 @@ class HealthTools:
                 httpx.ReadError,
                 httpx.TimeoutException,
             ):
-                # Network-level failure — server is not reachable
-                return ServerType.UNAVAILABLE
+                # Network-level failure on THIS endpoint — try next before giving up
+                continue
             except Exception as exc:
                 logger.debug("Unexpected error probing %s: %s", url, exc)
-                return ServerType.UNAVAILABLE
+                continue
 
         if server_reachable:
             return ServerType.UNKNOWN
