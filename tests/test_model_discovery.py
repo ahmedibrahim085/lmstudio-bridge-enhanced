@@ -314,3 +314,68 @@ class TestDiscoverModels:
         assert result.lmstudio_available is True
         assert result.loaded_ids == []
         assert "qwen3-coder-30b" in result.downloaded_ids
+
+
+# ---------------------------------------------------------------------------
+# DiscoveredModels — models_metadata field and convenience methods (Commit 5)
+# ---------------------------------------------------------------------------
+
+
+class TestDiscoveredModelsMetadata:
+    """Unit tests for the models_metadata field and related convenience methods."""
+
+    @pytest.mark.unit
+    def test_discovered_models_has_models_metadata_field(self):
+        """DiscoveredModels() zero-argument creates an empty models_metadata dict."""
+        dm = DiscoveredModels()
+        assert hasattr(dm, "models_metadata")
+        assert dm.models_metadata == {}
+
+    @pytest.mark.unit
+    def test_has_capability_returns_true(self):
+        """has_capability returns True when the model metadata contains capabilities.vision=True."""
+        dm = DiscoveredModels(
+            models_metadata={"vision-model": {"capabilities": {"vision": True}}}
+        )
+        assert dm.has_capability("vision-model", "vision") is True
+
+    @pytest.mark.unit
+    def test_has_capability_returns_false_missing(self):
+        """has_capability returns False when the capability key is absent."""
+        dm = DiscoveredModels(
+            models_metadata={"text-model": {"capabilities": {"vision": False}}}
+        )
+        assert dm.has_capability("text-model", "vision") is False
+
+    @pytest.mark.unit
+    def test_has_capability_returns_false_no_metadata(self):
+        """has_capability returns False when the model key is not in models_metadata."""
+        dm = DiscoveredModels()
+        assert dm.has_capability("nonexistent-model", "vision") is False
+
+    @pytest.mark.unit
+    def test_get_size_bytes_returns_value(self):
+        """get_size_bytes returns the size_bytes integer from model metadata."""
+        dm = DiscoveredModels(
+            models_metadata={"small-model": {"size_bytes": 1000}}
+        )
+        assert dm.get_size_bytes("small-model") == 1000
+
+    @pytest.mark.unit
+    def test_get_size_bytes_returns_none_no_metadata(self):
+        """get_size_bytes returns None when the model key is not in models_metadata."""
+        dm = DiscoveredModels()
+        assert dm.get_size_bytes("nonexistent-model") is None
+
+    @pytest.mark.unit
+    def test_get_metadata_returns_dict(self):
+        """get_metadata returns the full metadata dict for a known model key."""
+        meta = {"capabilities": {"vision": True}, "size_bytes": 5000}
+        dm = DiscoveredModels(models_metadata={"my-model": meta})
+        assert dm.get_metadata("my-model") == meta
+
+    @pytest.mark.unit
+    def test_get_metadata_returns_none_for_unknown(self):
+        """get_metadata returns None when the model key is absent."""
+        dm = DiscoveredModels()
+        assert dm.get_metadata("no-such-model") is None

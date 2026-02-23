@@ -37,6 +37,8 @@ class DiscoveredModels:
     loaded_ids: list[str] = field(default_factory=list)
     roles: dict[str, str] = field(default_factory=dict)
     lmstudio_available: bool = False
+    # Full model metadata from native API (model_key → API response dict)
+    models_metadata: dict[str, dict] = field(default_factory=dict)
 
     # Convenience accessors for common roles
     @property
@@ -62,6 +64,25 @@ class DiscoveredModels:
     @property
     def vision_model(self) -> str | None:
         return self.roles.get("vision")
+
+    def get_metadata(self, model_key: str) -> dict | None:
+        """Get full API metadata for a model."""
+        return self.models_metadata.get(model_key)
+
+    def has_capability(self, model_key: str, capability: str) -> bool:
+        """Check if model has a specific capability (e.g., 'vision', 'trained_for_tool_use')."""
+        meta = self.get_metadata(model_key)
+        if not meta:
+            return False
+        caps = meta.get("capabilities", {})
+        if isinstance(caps, dict):
+            return bool(caps.get(capability, False))
+        return False
+
+    def get_size_bytes(self, model_key: str) -> int | None:
+        """Get model size in bytes, or None if unknown."""
+        meta = self.get_metadata(model_key)
+        return meta.get("size_bytes") if meta else None
 
 
 def _resolve_roles(
