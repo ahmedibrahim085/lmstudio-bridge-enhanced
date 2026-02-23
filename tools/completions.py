@@ -5,6 +5,13 @@ Completion tools for LM Studio (chat and text completions).
 
 from typing import Optional, List, Dict, Any
 from llm.llm_client import LLMClient
+from llm.exceptions import LLMResponseError
+from config.constants import (
+    ERROR_NO_CHAT_RESPONSE,
+    ERROR_EMPTY_CHAT_RESPONSE,
+    ERROR_NO_TEXT_COMPLETION,
+    ERROR_EMPTY_TEXT_COMPLETION,
+)
 import json
 
 
@@ -41,37 +48,34 @@ class CompletionTools:
         Returns:
             The model's response to the prompt
         """
-        try:
-            messages = []
+        messages = []
 
-            # Add system message if provided
-            if system_prompt:
-                messages.append({"role": "system", "content": system_prompt})
+        # Add system message if provided
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
 
-            # Add user message
-            messages.append({"role": "user", "content": prompt})
+        # Add user message
+        messages.append({"role": "user", "content": prompt})
 
-            response = self.llm.chat_completion(
-                messages=messages,
-                temperature=temperature,
-                max_tokens=max_tokens,
-                response_format=response_format
-            )
+        response = self.llm.chat_completion(
+            messages=messages,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            response_format=response_format
+        )
 
-            # Extract the assistant's message
-            choices = response.get("choices", [])
-            if not choices:
-                return "Error: No response generated"
+        # Extract the assistant's message
+        choices = response.get("choices", [])
+        if not choices:
+            raise LLMResponseError(ERROR_NO_CHAT_RESPONSE)
 
-            message = choices[0].get("message", {})
-            content = message.get("content", "")
+        message = choices[0].get("message", {})
+        content = message.get("content", "")
 
-            if not content:
-                return "Error: Empty response from model"
+        if not content:
+            raise LLMResponseError(ERROR_EMPTY_CHAT_RESPONSE)
 
-            return content
-        except Exception as e:
-            return f"Error generating completion: {str(e)}"
+        return content
 
     async def text_completion(
         self,
@@ -94,27 +98,24 @@ class CompletionTools:
         Returns:
             The completed text from the model
         """
-        try:
-            response = self.llm.text_completion(
-                prompt=prompt,
-                temperature=temperature,
-                max_tokens=max_tokens,
-                stop_sequences=stop_sequences
-            )
+        response = self.llm.text_completion(
+            prompt=prompt,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            stop_sequences=stop_sequences
+        )
 
-            # Extract the completion text
-            choices = response.get("choices", [])
-            if not choices:
-                return "Error: No completion generated"
+        # Extract the completion text
+        choices = response.get("choices", [])
+        if not choices:
+            raise LLMResponseError(ERROR_NO_TEXT_COMPLETION)
 
-            text = choices[0].get("text", "")
+        text = choices[0].get("text", "")
 
-            if not text:
-                return "Error: Empty completion from model"
+        if not text:
+            raise LLMResponseError(ERROR_EMPTY_TEXT_COMPLETION)
 
-            return text
-        except Exception as e:
-            return f"Error generating text completion: {str(e)}"
+        return text
 
     async def create_response(
         self,

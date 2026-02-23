@@ -110,6 +110,10 @@ ERROR_CONNECTION_FAILED = "Failed to connect to LM Studio at {url}"
 ERROR_TIMEOUT = "Request timed out after {timeout} seconds"
 ERROR_VALIDATION_FAILED = "Model validation failed: {reason}"
 ERROR_MCP_NOT_FOUND = "MCP '{mcp}' not found in configuration"
+ERROR_NO_CHAT_RESPONSE = "No response generated from chat completion (empty choices)"
+ERROR_EMPTY_CHAT_RESPONSE = "Empty response content from chat completion model"
+ERROR_NO_TEXT_COMPLETION = "No completion generated from text completion (empty choices)"
+ERROR_EMPTY_TEXT_COMPLETION = "Empty completion content from text completion model"
 
 # Success Messages
 SUCCESS_MODEL_LOADED = "Model '{model}' loaded successfully"

@@ -22,6 +22,7 @@ import pytest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from tools.completions import CompletionTools
+from llm.exceptions import LLMResponseError
 
 
 @pytest.fixture
@@ -483,3 +484,57 @@ class TestAnthropicMessagesIntegration:
                 json.loads(result)  # Valid JSON
             except Exception as e:
                 pytest.fail(f"anthropic_messages raised {type(e).__name__}: {e}")
+
+
+class TestCompletionErrorHandling:
+    """C-3: chat_completion and text_completion must raise exceptions, not return error strings.
+
+    MCP protocol treats returned strings as success. Raising exceptions causes
+    FastMCP to set isError: true, which is correct error signaling.
+    """
+
+    # -- chat_completion --
+
+    @pytest.mark.asyncio
+    async def test_chat_completion_raises_on_empty_choices(self, completion_tools, mock_llm):
+        """chat_completion raises LLMResponseError when choices list is empty."""
+        mock_llm.chat_completion.return_value = {"choices": []}
+        with pytest.raises(LLMResponseError, match="No response generated"):
+            await completion_tools.chat_completion(prompt="test")
+
+    @pytest.mark.asyncio
+    async def test_chat_completion_raises_on_empty_content(self, completion_tools, mock_llm):
+        """chat_completion raises LLMResponseError when message content is empty."""
+        mock_llm.chat_completion.return_value = {"choices": [{"message": {"content": ""}}]}
+        with pytest.raises(LLMResponseError, match="Empty response content"):
+            await completion_tools.chat_completion(prompt="test")
+
+    @pytest.mark.asyncio
+    async def test_chat_completion_propagates_exceptions(self, completion_tools, mock_llm):
+        """chat_completion does not swallow exceptions — lets them propagate."""
+        mock_llm.chat_completion.side_effect = ConnectionError("LM Studio down")
+        with pytest.raises(ConnectionError, match="LM Studio down"):
+            await completion_tools.chat_completion(prompt="test")
+
+    # -- text_completion --
+
+    @pytest.mark.asyncio
+    async def test_text_completion_raises_on_empty_choices(self, completion_tools, mock_llm):
+        """text_completion raises LLMResponseError when choices list is empty."""
+        mock_llm.text_completion.return_value = {"choices": []}
+        with pytest.raises(LLMResponseError, match="No completion generated"):
+            await completion_tools.text_completion(prompt="test")
+
+    @pytest.mark.asyncio
+    async def test_text_completion_raises_on_empty_content(self, completion_tools, mock_llm):
+        """text_completion raises LLMResponseError when text content is empty."""
+        mock_llm.text_completion.return_value = {"choices": [{"text": ""}]}
+        with pytest.raises(LLMResponseError, match="Empty completion content"):
+            await completion_tools.text_completion(prompt="test")
+
+    @pytest.mark.asyncio
+    async def test_text_completion_propagates_exceptions(self, completion_tools, mock_llm):
+        """text_completion does not swallow exceptions — lets them propagate."""
+        mock_llm.text_completion.side_effect = ConnectionError("LM Studio down")
+        with pytest.raises(ConnectionError, match="LM Studio down"):
+            await completion_tools.text_completion(prompt="test")
