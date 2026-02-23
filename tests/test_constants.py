@@ -114,7 +114,13 @@ _discovery_done = False
 
 
 def _ensure_discovery():
-    """Run model discovery once, cache the result."""
+    """Run model discovery exactly once, populating _resolved_cache for all dynamic attrs.
+
+    Resolve-once semantics: the first call runs discover_models() and caches
+    every dynamic attribute. Subsequent calls are no-ops (_discovery_done guard).
+    On failure, all attrs get their static fallback from _MODEL_ATTR_MAP.
+    Results are frozen — changing LM Studio state after first access has no effect.
+    """
     global _discovery_done
     if _discovery_done:
         return
@@ -144,7 +150,13 @@ def _ensure_discovery():
 
 
 def __getattr__(name: str):
-    """PEP 562: resolve model constants lazily on first access."""
+    """PEP 562: resolve model constants lazily on first access.
+
+    On first access of any dynamic attr (e.g., DEFAULT_TEST_MODEL),
+    _ensure_discovery() runs once, resolving ALL dynamic attrs and storing
+    them in module globals. Subsequent accesses hit globals directly —
+    __getattr__ is never called again for that name.
+    """
     if name in _MODEL_ATTR_MAP:
         _ensure_discovery()
         if name in _resolved_cache:
