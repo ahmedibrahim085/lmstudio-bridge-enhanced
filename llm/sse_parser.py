@@ -44,6 +44,10 @@ from config.constants import SSE_DATA_PREFIX, SSE_DONE_SENTINEL
 
 logger = logging.getLogger(__name__)
 
+__all__ = [
+    "parse_sse_stream",
+]
+
 
 def parse_sse_stream(
     response: requests.Response,
