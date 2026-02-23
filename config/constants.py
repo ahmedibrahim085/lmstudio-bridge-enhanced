@@ -435,3 +435,32 @@ FORMAT_RESPONSES = "responses"
 
 # All supported format identifiers (for validation)
 SUPPORTED_API_FORMATS = [FORMAT_OPENAI, FORMAT_ANTHROPIC, FORMAT_RESPONSES]
+
+# ==============================================================================
+# OPP-17: DUAL-FORMAT AUTONOMOUS LOOP
+# ==============================================================================
+
+# Default API format for autonomous execution
+# Used in: tools/dynamic_autonomous.py
+DEFAULT_AUTONOMOUS_FORMAT = FORMAT_RESPONSES  # Current behavior preserved
+
+# System prompt template for Anthropic-format autonomous execution
+# Anthropic uses top-level system prompt, not a system message in the array
+ANTHROPIC_AUTONOMOUS_SYSTEM_TEMPLATE = (
+    "You are an autonomous agent with access to tools. "
+    "Use the available tools to complete the task. "
+    "When done, provide your final answer as plain text."
+)
+
+# ==============================================================================
+# OPP-15: CONVERSATION BRANCHING
+# ==============================================================================
+
+# Maximum depth of conversation tree (prevent runaway branching)
+MAX_BRANCH_DEPTH = 50
+
+# Maximum number of branches per conversation tree
+MAX_BRANCHES_PER_TREE = 100
+
+# Default branch name prefix
+DEFAULT_BRANCH_PREFIX = "branch"
