@@ -174,15 +174,22 @@ class CompletionTools:
         Returns:
             JSON string with Anthropic-format response
         """
-        parsed_messages = json.loads(messages) if isinstance(messages, str) else messages
-        result = self.llm.anthropic_messages(
-            messages=parsed_messages,
-            system=system,
-            max_tokens=max_tokens,
-            temperature=temperature,
-            model=model,
-        )
-        return json.dumps(result, indent=2)
+        try:
+            parsed_messages = json.loads(messages) if isinstance(messages, str) else messages
+            result = self.llm.anthropic_messages(
+                messages=parsed_messages,
+                system=system,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                model=model,
+            )
+            return json.dumps(result, indent=2)
+
+        except Exception as e:
+            error_response = {
+                "error": f"Failed to send Anthropic message: {str(e)}"
+            }
+            return json.dumps(error_response)
 
 
 # Register tools with FastMCP
