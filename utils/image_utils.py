@@ -22,32 +22,34 @@ Usage:
     content = build_vision_content("Describe this image", result)
 """
 
+import atexit
+import base64
 import os
 import re
-import base64
-from pathlib import Path
-from typing import Dict, Any, List, Optional, Union, Tuple
 from dataclasses import dataclass, field
 from enum import Enum
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple, Union
 from urllib.parse import urlparse
+
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 from config.constants import (
-    SUPPORTED_IMAGE_TYPES,
-    IMAGE_EXTENSION_MAP,
-    MAX_IMAGE_SIZE_BYTES,
-    MAX_IMAGE_DIMENSION,
-    DEFAULT_VISION_DETAIL,
-    IMAGE_URL_PATTERNS,
-    BASE64_DATA_URI_PREFIX,
     ALLOWED_URL_SCHEMES,
+    BASE64_DATA_URI_PREFIX,
+    BLOCKED_HOSTNAMES,
     BLOCKED_IP_PREFIXES,
     BLOCKED_IP_RANGES_172,
-    BLOCKED_HOSTNAMES,
-    ERROR_SSRF_BLOCKED_SCHEME,
+    DEFAULT_VISION_DETAIL,
     ERROR_SSRF_BLOCKED_HOST,
+    ERROR_SSRF_BLOCKED_SCHEME,
+    IMAGE_EXTENSION_MAP,
+    IMAGE_URL_PATTERNS,
+    MAX_IMAGE_DIMENSION,
+    MAX_IMAGE_SIZE_BYTES,
+    SUPPORTED_IMAGE_TYPES,
 )
 
 # Module-level HTTP session with connection pooling for image downloads
@@ -66,6 +68,25 @@ def _get_http_session():
         _http_session.mount('http://', adapter)
         _http_session.mount('https://', adapter)
     return _http_session
+
+
+def _close_http_session() -> None:
+    """Close the module-level HTTP session and release connection pool resources.
+
+    Safe to call multiple times (idempotent). After the first call
+    ``_http_session`` is set to ``None`` so subsequent calls are no-ops.
+
+    Registered automatically with :mod:`atexit` so it runs on interpreter
+    shutdown even if the caller never calls it explicitly.
+    """
+    global _http_session
+    if _http_session is not None:
+        _http_session.close()
+        _http_session = None
+
+
+# Register cleanup to run on interpreter exit — BUG 1 fix (resource leak)
+atexit.register(_close_http_session)
 
 
 class ImageInputType(Enum):
@@ -643,4 +664,5 @@ __all__ = [
     "build_vision_content",
     "validate_image_inputs",
     "_is_safe_url",
+    "_close_http_session",
 ]

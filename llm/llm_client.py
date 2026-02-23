@@ -156,6 +156,42 @@ class LLMClient:
         self._native_mcp_supported: Optional[bool] = None
         self._native_mcp_checked_at: float = 0.0
 
+    # ------------------------------------------------------------------
+    # Resource management — BUG 1 fix (resource leak)
+    # ------------------------------------------------------------------
+
+    def close(self) -> None:
+        """Close the HTTP session and release connection pool resources.
+
+        Safe to call multiple times (idempotent). After the first call
+        ``self.session`` is set to ``None`` so subsequent calls are no-ops.
+        """
+        if self.session is not None:
+            self.session.close()
+            self.session = None
+            logger.debug("LLMClient HTTP session closed")
+
+    def __del__(self) -> None:
+        """Ensure session is closed on garbage collection (safety net)."""
+        try:
+            self.close()
+        except Exception:
+            pass
+
+    def __enter__(self) -> "LLMClient":
+        """Support usage as a context manager."""
+        return self
+
+    def __exit__(
+        self,
+        exc_type: object,
+        exc_val: object,
+        exc_tb: object,
+    ) -> bool:
+        """Close session on context manager exit; never suppress exceptions."""
+        self.close()
+        return False
+
     def _get_endpoint(self, path: str) -> str:
         """Get full URL for an endpoint.
 
