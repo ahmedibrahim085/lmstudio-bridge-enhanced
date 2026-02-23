@@ -9,7 +9,7 @@ running in LM Studio, not specific to any particular model.
 import json
 import logging
 import time
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, NoReturn, Optional, Union
 
 import requests
 from requests.adapters import HTTPAdapter
@@ -74,7 +74,7 @@ DEFAULT_RETRY_DELAY = 1.0  # Initial delay in seconds
 DEFAULT_RETRY_BACKOFF = 2.0  # Exponential backoff multiplier
 
 
-def _handle_request_exception(e: Exception, operation: str = "LLM request") -> None:
+def _handle_request_exception(e: Exception, operation: str = "LLM request") -> NoReturn:
     """Convert requests exceptions to our custom exception hierarchy.
 
     Args:
