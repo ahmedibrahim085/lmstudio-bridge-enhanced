@@ -11,6 +11,7 @@ This module handles all configuration settings including:
 
 import os
 import logging
+import threading
 from typing import Optional, Dict, Any, List
 from pydantic import BaseModel, Field, field_validator
 
@@ -294,6 +295,7 @@ class Config:
 
 # Global configuration instance (loaded lazily)
 _config: Optional[Config] = None
+_config_lock = threading.Lock()
 
 
 def get_config() -> Config:
@@ -304,14 +306,17 @@ def get_config() -> Config:
     """
     global _config
     if _config is None:
-        _config = Config.from_env()
+        with _config_lock:
+            if _config is None:
+                _config = Config.from_env()
     return _config
 
 
 def reset_config() -> None:
     """Reset global configuration (useful for testing)."""
     global _config
-    _config = None
+    with _config_lock:
+        _config = None
 
 
 __all__ = [

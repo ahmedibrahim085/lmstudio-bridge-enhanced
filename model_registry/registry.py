@@ -14,6 +14,7 @@ Features:
 
 import asyncio
 import logging
+import threading
 from datetime import datetime
 from typing import Dict, List, Optional, Any
 
@@ -506,6 +507,7 @@ class ModelRegistry:
 
 # Singleton instance for convenience
 _registry: Optional[ModelRegistry] = None
+_registry_lock = threading.Lock()
 
 
 def get_registry(
@@ -524,14 +526,17 @@ def get_registry(
     """
     global _registry
     if _registry is None:
-        _registry = ModelRegistry(
-            cache_path=cache_path,
-            web_search_enabled=web_search_enabled
-        )
+        with _registry_lock:
+            if _registry is None:
+                _registry = ModelRegistry(
+                    cache_path=cache_path,
+                    web_search_enabled=web_search_enabled
+                )
     return _registry
 
 
 def reset_registry() -> None:
     """Reset the global registry instance."""
     global _registry
-    _registry = None
+    with _registry_lock:
+        _registry = None
