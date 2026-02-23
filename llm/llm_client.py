@@ -1199,7 +1199,12 @@ class LLMClient:
         try:
             response = self.session.get(f"{base_url}/api/v1/models")
             response.raise_for_status()
-            raw_list = response.json()
+            raw_data = response.json()
+            # Handle both list and dict-wrapped responses ({"models": [...]})
+            if isinstance(raw_data, dict):
+                raw_list = raw_data.get("models", raw_data.get("data", []))
+            else:
+                raw_list = raw_data
             if isinstance(raw_list, list) and raw_list:
                 return [
                     {

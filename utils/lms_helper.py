@@ -34,6 +34,7 @@ from typing import Optional, Dict, List, Any
 from pathlib import Path
 
 from config.constants import MODEL_REACTIVATION_DELAY, MODEL_LOADING_DELAY, LMS_REST_MODELS_CACHE_TTL
+from llm.exceptions import LLMError
 from utils.retry import run_with_retry
 from utils.validation import validate_model_name, ValidationError
 
@@ -850,13 +851,13 @@ ALTERNATIVE:
 
         logger.info(f"Loading model '{model_name}'...")
         if not cls.load_model(model_name, keep_loaded=True, ttl=ttl):
-            raise Exception(f"Failed to load model '{model_name}'")
+            raise LLMError(f"Failed to load model '{model_name}'")
 
         # Give LM Studio time to fully load the model
         time.sleep(MODEL_LOADING_DELAY)
 
         if not cls.verify_model_loaded(model_name):
-            raise Exception(
+            raise LLMError(
                 f"Model '{model_name}' reported loaded but verification failed. "
                 "This usually means LM Studio is under memory pressure."
             )
