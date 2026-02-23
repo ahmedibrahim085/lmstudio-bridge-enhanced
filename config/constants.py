@@ -383,3 +383,23 @@ SELECTION_FALLBACK_SORT_KEY = "model_id"
 # Used in: model_registry/selection_tool.py
 SELECTION_ERROR_NO_MODELS = "no_models_available"
 SELECTION_ERROR_INTERNAL = "selection_error"
+
+# ==============================================================================
+# OPP-12: SSE STREAMING CONFIGURATION
+# ==============================================================================
+
+# Sentinel value that signals the end of an SSE stream
+# When the data field equals this value, streaming is complete
+# Used in: llm/sse_parser.py, llm/llm_client.py streaming methods
+SSE_DONE_SENTINEL = "[DONE]"
+
+# Prefix used by SSE protocol for data lines
+# Every SSE data line begins with this prefix followed by the payload
+# Used in: llm/sse_parser.py (parse_sse_stream)
+SSE_DATA_PREFIX = "data: "
+
+# Timeout for streaming responses (seconds)
+# Long streams (e.g. large code generation) can take several minutes
+# This is separate from DEFAULT_LLM_TIMEOUT which is for non-streaming calls
+# Used in: llm/llm_client.py streaming methods
+STREAM_READ_TIMEOUT = 300.0

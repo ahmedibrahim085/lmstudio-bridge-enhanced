@@ -24,13 +24,15 @@ from llm.exceptions import (
 from utils.error_handling import retry_with_backoff
 from utils.lms_helper import LMSHelper
 from config.constants import (
+    ANTHROPIC_MESSAGES_ENDPOINT,
+    DEFAULT_ANTHROPIC_API_VERSION,
+    DEFAULT_ANTHROPIC_MAX_TOKENS,
+    DEFAULT_MAX_RETRIES,
     JIT_TTL_DEFAULT,
     JIT_TTL_EMBEDDING,
-    ANTHROPIC_MESSAGES_ENDPOINT,
-    DEFAULT_ANTHROPIC_MAX_TOKENS,
-    DEFAULT_ANTHROPIC_API_VERSION,
-    DEFAULT_MAX_RETRIES,
+    STREAM_READ_TIMEOUT,
 )
+from llm.sse_parser import parse_sse_stream
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -859,6 +861,236 @@ class LLMClient:
 
         except Exception as e:
             _handle_request_exception(e, "Anthropic messages")
+
+    def stream_chat_completion(
+        self,
+        messages: List[Dict[str, Any]],
+        temperature: float = 0.7,
+        max_tokens: int = DEFAULT_MAX_TOKENS,
+        tools: Optional[List[Dict[str, Any]]] = None,
+        tool_choice: str = "auto",
+        timeout: float = STREAM_READ_TIMEOUT,
+        response_format: Optional[Dict[str, Any]] = None,
+        model: Optional[str] = None,
+    ):
+        """Stream a chat completion from the local LLM via SSE.
+
+        This is the streaming counterpart to ``chat_completion()``.  It opens
+        a streaming connection to ``/v1/chat/completions`` and yields each
+        parsed SSE event as a dict.  The ``[DONE]`` sentinel is consumed
+        internally and never yielded.
+
+        Args:
+            messages: List of message dicts with ``role`` and ``content``.
+            temperature: Controls randomness (0.0 to 1.0).
+            max_tokens: Maximum tokens to generate.
+            tools: Optional list of tools in OpenAI format.
+            tool_choice: Tool selection strategy (``"auto"``, ``"none"``, etc.).
+            timeout: Read timeout in seconds (default ``STREAM_READ_TIMEOUT``).
+            response_format: Optional structured output format dict.
+            model: Optional per-request model override.
+
+        Yields:
+            dict: Parsed SSE event payload, or ``{"error": "..."}`` on
+            network/parse failures.
+
+        Raises:
+            LLMTimeoutError: If the connection times out.
+            LLMConnectionError: If LM Studio cannot be reached.
+            LLMRateLimitError: If HTTP 429 is returned.
+            LLMResponseError: If LM Studio returns another HTTP error.
+        """
+        target_model = model if model is not None else self.model
+        self._ensure_model_loaded(target_model, ttl=JIT_TTL_DEFAULT)
+
+        payload: Dict[str, Any] = {
+            "messages": messages,
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+            "stream": True,
+        }
+
+        if target_model and target_model != "default":
+            payload["model"] = target_model
+
+        if tools:
+            payload["tools"] = tools
+            payload["tool_choice"] = tool_choice
+
+        if response_format is not None:
+            payload["response_format"] = response_format
+
+        try:
+            response = self.session.post(
+                self._get_endpoint("chat/completions"),
+                json=payload,
+                stream=True,
+                timeout=timeout,
+            )
+            response.raise_for_status()
+        except Exception as e:
+            _handle_request_exception(e, "Stream chat completion")
+
+        yield from parse_sse_stream(response)
+
+    def stream_create_response(
+        self,
+        input_text: str,
+        tools: Optional[List[Dict[str, Any]]] = None,
+        previous_response_id: Optional[str] = None,
+        model: Optional[str] = None,
+        max_tokens: Optional[int] = None,
+        tool_choice: Optional[str] = None,
+        temperature: Optional[float] = None,
+        ttl: Optional[int] = None,
+        timeout: float = STREAM_READ_TIMEOUT,
+        draft_model: Optional[str] = None,
+    ):
+        """Stream a stateful response via SSE from ``/v1/responses``.
+
+        This is the streaming counterpart to ``create_response()``.  It
+        always sets ``stream=True`` in the payload and yields each parsed
+        SSE event.
+
+        Args:
+            input_text: User input text.
+            tools: Optional list of tools in OpenAI format.
+            previous_response_id: Optional previous response ID for continuity.
+            model: Optional per-request model override.
+            max_tokens: Maximum tokens to generate.
+            tool_choice: Tool selection strategy.
+            temperature: Sampling temperature.
+            ttl: JIT model loading TTL in seconds.
+            timeout: Read timeout in seconds.
+            draft_model: Optional draft model for speculative decoding.
+
+        Yields:
+            dict: Parsed SSE event payload, or ``{"error": "..."}`` on failure.
+
+        Raises:
+            LLMTimeoutError: If the connection times out.
+            LLMConnectionError: If LM Studio cannot be reached.
+            LLMRateLimitError: If HTTP 429 is returned.
+            LLMResponseError: If LM Studio returns another HTTP error.
+        """
+        model_to_use = self.model if model == "default" or model is None else model
+        resolved_ttl = ttl if ttl is not None else JIT_TTL_DEFAULT
+        self._ensure_model_loaded(model_to_use, ttl=resolved_ttl)
+
+        payload: Dict[str, Any] = {
+            "input": input_text,
+            "model": model_to_use,
+            "stream": True,
+            "ttl": resolved_ttl,
+        }
+
+        if max_tokens is not None:
+            payload["max_tokens"] = max_tokens
+
+        if previous_response_id:
+            payload["previous_response_id"] = previous_response_id
+
+        if tools:
+            payload["tools"] = self.convert_tools_to_responses_format(tools)
+            if tool_choice:
+                payload["tool_choice"] = tool_choice
+
+        if temperature is not None:
+            payload["temperature"] = temperature
+
+        if draft_model is not None:
+            payload["draft_model"] = draft_model
+
+        try:
+            response = self.session.post(
+                self._get_endpoint("responses"),
+                json=payload,
+                stream=True,
+                timeout=timeout,
+            )
+            response.raise_for_status()
+        except Exception as e:
+            _handle_request_exception(e, "Stream create response")
+
+        yield from parse_sse_stream(response)
+
+    def stream_anthropic_messages(
+        self,
+        messages: List[Dict[str, Any]],
+        system: str = "",
+        max_tokens: int = DEFAULT_ANTHROPIC_MAX_TOKENS,
+        temperature: float = 0.7,
+        tools: Optional[List[Dict[str, Any]]] = None,
+        tool_choice: Optional[Dict[str, Any]] = None,
+        model: Optional[str] = None,
+        timeout: float = STREAM_READ_TIMEOUT,
+    ):
+        """Stream an Anthropic-compatible messages response via SSE.
+
+        This is the streaming counterpart to ``anthropic_messages()``.  It
+        targets ``/v1/messages`` and always sets ``stream=True``.  System-role
+        messages are filtered from the array (same rule as the non-streaming
+        method).
+
+        Args:
+            messages: List of message dicts (no ``system`` role).
+            system: Top-level system prompt in Anthropic format.
+            max_tokens: Maximum tokens to generate.
+            temperature: Sampling temperature.
+            tools: Optional tools in Anthropic format.
+            tool_choice: Optional tool selection strategy dict.
+            model: Optional per-request model override.
+            timeout: Read timeout in seconds.
+
+        Yields:
+            dict: Parsed SSE event payload, or ``{"error": "..."}`` on failure.
+
+        Raises:
+            LLMTimeoutError: If the connection times out.
+            LLMConnectionError: If LM Studio cannot be reached.
+            LLMRateLimitError: If HTTP 429 is returned.
+            LLMResponseError: If LM Studio returns another HTTP error.
+        """
+        target_model = model if model is not None else self.model
+        self._ensure_model_loaded(target_model, ttl=JIT_TTL_DEFAULT)
+
+        filtered_messages = [m for m in messages if m.get("role") != "system"]
+
+        payload: Dict[str, Any] = {
+            "messages": filtered_messages,
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+            "stream": True,
+        }
+
+        if target_model and target_model != "default":
+            payload["model"] = target_model
+
+        if system:
+            payload["system"] = system
+
+        if tools:
+            payload["tools"] = tools
+        if tool_choice is not None:
+            payload["tool_choice"] = tool_choice
+
+        headers = {
+            "anthropic-version": DEFAULT_ANTHROPIC_API_VERSION,
+        }
+
+        try:
+            response = self.session.post(
+                self._get_endpoint(ANTHROPIC_MESSAGES_ENDPOINT),
+                json=payload,
+                headers=headers,
+                stream=True,
+                timeout=timeout,
+            )
+            response.raise_for_status()
+        except Exception as e:
+            _handle_request_exception(e, "Stream anthropic messages")
+
+        yield from parse_sse_stream(response)
 
     def supports_native_mcp(self) -> bool:
         """Check if LM Studio supports native MCP in API requests.
