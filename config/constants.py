@@ -50,6 +50,11 @@ JIT_TTL_AUTONOMOUS = 10800   # 3 hours for autonomous tasks (long-running)
 DEFAULT_REQUEST_TIMEOUT = 120.0
 DEFAULT_CONNECTION_TIMEOUT = 10.0
 DEFAULT_READ_TIMEOUT = 300.0
+# Default timeout for LLM API calls via LLMClient
+# Set to 58s to accommodate slower models (Magistral: 45-46s response time)
+# Still safely under Claude Code's 60-second MCP timeout limit
+# See: https://github.com/anthropics/claude-code/issues/7575
+DEFAULT_LLM_TIMEOUT = 58
 
 # Retry Configuration
 DEFAULT_MAX_RETRIES = 3

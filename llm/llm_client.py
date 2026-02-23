@@ -20,8 +20,11 @@ from config.constants import (
     ANTHROPIC_MESSAGES_ENDPOINT,
     DEFAULT_ANTHROPIC_API_VERSION,
     DEFAULT_ANTHROPIC_MAX_TOKENS,
+    DEFAULT_LLM_TIMEOUT,
     DEFAULT_MAX_RETRIES,
+    DEFAULT_MAX_TOKENS,
     DEFAULT_THINKING_BUDGET_TOKENS,
+    HEALTH_CHECK_TIMEOUT,
     JIT_TTL_DEFAULT,
     JIT_TTL_EMBEDDING,
     MAX_THINKING_BUDGET_TOKENS,
@@ -48,24 +51,11 @@ from utils.lms_helper import LMSHelper
 # Configure logging
 logger = logging.getLogger(__name__)
 
-# Default timeout for all LLM API calls
-# Set to 58 seconds to accommodate slower models like Magistral (45-46s response time)
-# Still safely under Claude Code's 60-second MCP timeout limit
-# See: https://github.com/anthropics/claude-code/issues/7575
-DEFAULT_LLM_TIMEOUT = 58
-
-# Health check timeout - fast check for API availability
-# Health checks should be quick, so we use a shorter timeout
-HEALTH_CHECK_TIMEOUT = 5
+# DEFAULT_LLM_TIMEOUT, DEFAULT_MAX_TOKENS, HEALTH_CHECK_TIMEOUT imported from config.constants
 
 # Default max rounds for AutonomousLLMClient
 # For consistency with main autonomous tools (10000 rounds default)
 DEFAULT_AUTONOMOUS_ROUNDS = 10000
-
-# Default max tokens for LLM responses
-# Based on Claude Code's 30K character limit for tool responses
-# 8192 tokens ≈ 24K-32K chars, safely under the limit
-DEFAULT_MAX_TOKENS = 8192
 
 # Retry configuration for transient errors
 # Based on investigation findings: HTTP 500 errors are rare and transient
