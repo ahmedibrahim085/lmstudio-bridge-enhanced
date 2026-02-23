@@ -28,7 +28,9 @@ from config.constants import (
     ANTHROPIC_AUTONOMOUS_SYSTEM_TEMPLATE,
     DEFAULT_AUTONOMOUS_FORMAT,
     DEFAULT_MAX_ROUNDS,
+    DEFAULT_MAX_TOKENS,
     DEFAULT_TEMPERATURE,
+    DEFAULT_VISION_DETAIL,
     FORMAT_ANTHROPIC,
     MAX_CONSECUTIVE_ERRORS,
 )
@@ -533,6 +535,76 @@ class DynamicAutonomousAgent:
             max_rounds=max_rounds,
             max_tokens=max_tokens,
             model=model
+        )
+
+    async def autonomous_with_images(
+        self,
+        mcp_name: str,
+        task: str,
+        images: List[str],
+        max_rounds: int = DEFAULT_MAX_ROUNDS,
+        max_tokens: int = DEFAULT_MAX_TOKENS,
+        model: Optional[str] = None,
+        detail: str = DEFAULT_VISION_DETAIL,
+        **kwargs: Any,
+    ) -> str:
+        """Run the autonomous loop with image inputs included in the first task.
+
+        Wraps :meth:`autonomous_with_mcp` and prepends a multi-modal
+        description of the provided images to the task string so that the
+        LLM receives both the task text and image metadata in round 0.
+
+        Images are processed via :class:`~llm.multimodal_input.MultiModalInput`
+        which reuses the existing ``utils/image_utils`` infrastructure for
+        automatic format detection (file path, URL, or base64).
+
+        Any image processing errors are reported in the task context so the
+        LLM can continue rather than silently losing image data.
+
+        Args:
+            mcp_name: Name of the MCP to use (resolved from ``.mcp.json``).
+            task: Task description for the local LLM.
+            images: List of image inputs (file paths, URLs, or base64 strings).
+            max_rounds: Maximum autonomous loop iterations.
+            max_tokens: Maximum tokens per LLM response.
+            model: Optional model name override.
+            detail: Vision detail level passed to image processing.
+            **kwargs: Additional keyword arguments forwarded to
+                :meth:`autonomous_with_mcp`.
+
+        Returns:
+            Final answer from the local LLM.
+        """
+        # Import here to avoid circular dependency at module load time
+        from llm.multimodal_input import MultiModalInput  # noqa: PLC0415
+
+        multimodal = MultiModalInput(text=task, images=images if images else None)
+
+        if multimodal.has_images:
+            # Surface any processing errors so the LLM is aware
+            errors = multimodal.image_errors
+            valid_count = len([i for i in multimodal.processed_images if i.is_valid])
+
+            # Build an augmented task that informs the LLM about attached images
+            image_summary_parts = [
+                f"[{valid_count} image(s) attached for this task]",
+            ]
+            if errors:
+                image_summary_parts.append(
+                    f"[Image processing warnings: {'; '.join(errors)}]"
+                )
+            image_summary = "\n".join(image_summary_parts)
+            augmented_task = f"{image_summary}\n\n{task}"
+        else:
+            augmented_task = task
+
+        return await self.autonomous_with_mcp(
+            mcp_name=mcp_name,
+            task=augmented_task,
+            max_rounds=max_rounds,
+            max_tokens=max_tokens,
+            model=model,
+            **kwargs,
         )
 
     @staticmethod

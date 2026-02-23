@@ -453,6 +453,19 @@ ANTHROPIC_AUTONOMOUS_SYSTEM_TEMPLATE = (
 )
 
 # ==============================================================================
+# OPP-09: MULTI-MODAL AUTONOMOUS LOOPS
+# ==============================================================================
+
+# Maximum number of images allowed per autonomous loop input
+# Used in: llm/multimodal_input.py (MultiModalInput)
+MAX_IMAGES_PER_AUTONOMOUS_INPUT = 5
+
+# Default detail level for images in autonomous loop inputs
+# Reuses DEFAULT_VISION_DETAIL — "auto" lets the model decide
+# Used in: llm/multimodal_input.py (MultiModalInput.to_chat_messages)
+MULTIMODAL_DETAIL_DEFAULT = DEFAULT_VISION_DETAIL  # "auto"
+
+# ==============================================================================
 # OPP-15: CONVERSATION BRANCHING
 # ==============================================================================
 
