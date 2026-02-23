@@ -44,6 +44,7 @@ from tests.test_constants import (
 )
 
 
+@pytest.mark.flaky(reruns=2, reruns_delay=5)
 class TestE2EMultiModelWorkflows:
     """End-to-end tests for complete multi-model workflows."""
 

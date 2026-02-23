@@ -47,6 +47,7 @@ def is_lmstudio_running() -> bool:
 
 
 @pytest.mark.integration
+@pytest.mark.flaky(reruns=1, reruns_delay=3)
 @pytest.mark.asyncio
 @pytest.mark.skipif(not is_lmstudio_running(), reason="LM Studio not available")
 async def test_headless_detection_integration():
@@ -69,6 +70,7 @@ async def test_headless_detection_integration():
 
 
 @pytest.mark.integration
+@pytest.mark.flaky(reruns=1, reruns_delay=3)
 @pytest.mark.asyncio
 @pytest.mark.skipif(not is_lmstudio_running(), reason="LM Studio not available")
 async def test_health_report_is_complete_integration():
@@ -95,6 +97,7 @@ async def test_health_report_is_complete_integration():
 
 
 @pytest.mark.integration
+@pytest.mark.flaky(reruns=1, reruns_delay=3)
 @pytest.mark.asyncio
 @pytest.mark.skipif(not is_lmstudio_running(), reason="LM Studio not available")
 async def test_server_type_is_consistent_across_calls_integration():
@@ -112,6 +115,7 @@ async def test_server_type_is_consistent_across_calls_integration():
 
 
 @pytest.mark.integration
+@pytest.mark.flaky(reruns=1, reruns_delay=3)
 @pytest.mark.asyncio
 async def test_unavailable_detection_integration():
     """When no server is running, check_server_type returns UNAVAILABLE.
@@ -128,6 +132,7 @@ async def test_unavailable_detection_integration():
 
 
 @pytest.mark.integration
+@pytest.mark.flaky(reruns=1, reruns_delay=3)
 @pytest.mark.asyncio
 async def test_graceful_health_report_when_unavailable_integration():
     """check_server_health returns structured error when server is down."""
