@@ -1051,11 +1051,14 @@ Continue with the task based on these results."""
                     return (
                         f"Task aborted: {self.consecutive_error_count} consecutive errors. Last: {e}"
                     )
-                # Inject error hint and retry next round
-                messages.append({
-                    "role": "user",
-                    "content": f"Previous LLM call failed: {e}. Please try again.",
-                })
+                # Inject error hint only if it won't create consecutive user messages.
+                # Anthropic API requires strictly alternating user/assistant roles.
+                if messages and messages[-1].get("role") != "user":
+                    messages.append({
+                        "role": "user",
+                        "content": f"Previous LLM call failed: {e}. Please try again.",
+                    })
+                # Otherwise just retry with existing context (error is already logged)
                 continue
 
             # Reset error count on success

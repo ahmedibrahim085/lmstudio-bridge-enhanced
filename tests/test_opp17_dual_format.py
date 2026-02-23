@@ -456,6 +456,46 @@ class TestAnthropicLoopErrorHandling(unittest.TestCase):
         self.assertIsInstance(result, str)
         self.assertGreater(len(result), 0)
 
+    def test_no_consecutive_user_messages_on_error(self):
+        """H-1 regression: error injection must not create consecutive user messages.
+
+        Anthropic API requires strictly alternating user/assistant roles.
+        If the first LLM call fails, injecting a user error hint after the
+        initial user message would create two consecutive user messages,
+        causing cascading 400 errors.
+        """
+        from config.constants import MAX_CONSECUTIVE_ERRORS
+
+        agent = _make_agent()
+        captured_messages = []
+
+        def fail_and_capture(**kwargs):
+            messages = kwargs.get("messages", [])
+            captured_messages.append([m.get("role") for m in messages])
+            raise RuntimeError("simulated failure")
+
+        agent.llm.anthropic_messages = MagicMock(side_effect=fail_and_capture)
+        dispatcher = _make_dispatcher()
+
+        _run(
+            agent._autonomous_loop_anthropic(
+                dispatcher=dispatcher,
+                openai_tools=[],
+                task="test task",
+                max_rounds=MAX_CONSECUTIVE_ERRORS + 5,
+                max_tokens=1024,
+            )
+        )
+
+        # Every call's messages list must never have consecutive 'user' roles
+        for call_idx, roles in enumerate(captured_messages):
+            for i in range(1, len(roles)):
+                self.assertFalse(
+                    roles[i] == "user" and roles[i - 1] == "user",
+                    f"Call {call_idx}: consecutive user messages at positions "
+                    f"{i - 1},{i}: {roles}",
+                )
+
 
 # ---------------------------------------------------------------------------
 # Group 5: _autonomous_loop_anthropic — max rounds
