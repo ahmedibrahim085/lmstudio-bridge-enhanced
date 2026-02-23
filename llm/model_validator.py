@@ -4,18 +4,20 @@ This module provides validation of model names against LM Studio's available mod
 It includes caching to minimize API calls and clear error messages when models
 are not found.
 
-The validator uses a 60-second cache TTL to balance freshness with performance.
+Uses a single class-level cache (MODELS_FETCH_CACHE_TTL seconds) shared across
+all ModelValidator instances to avoid repeated /v1/models polling.
 """
 
-import asyncio
-from typing import List, Optional
-from datetime import datetime, timedelta, UTC
+import time
+from typing import Optional
 import logging
+
 import httpx
 
 from llm.exceptions import ModelNotFoundError, LLMConnectionError
 from utils.error_handling import retry_with_backoff
 from config import get_config
+from config.constants import MODELS_FETCH_CACHE_TTL
 
 logger = logging.getLogger(__name__)
 
@@ -24,15 +26,20 @@ class ModelValidator:
     """Validates model availability against LM Studio API.
 
     This class fetches the list of available models from LM Studio and
-    validates requested model names against that list. It uses caching
-    to minimize API calls.
+    validates requested model names against that list. Uses a single
+    class-level cache (MODELS_FETCH_CACHE_TTL seconds, monotonic clock)
+    shared across all instances.
 
     Attributes:
         api_base: Base URL for LM Studio API (e.g., "http://localhost:1234")
-        _cache: Cached list of available model IDs
-        _cache_timestamp: When the cache was last updated
-        _cache_ttl: How long cache is valid (60 seconds)
     """
+
+    # Class-level cache shared across all instances.
+    # Prevents repeated /v1/models polling when new ModelValidator instances
+    # are created per-request.
+    # Uses time.monotonic() — immune to NTP jumps.
+    _class_cache: Optional[list[str]] = None
+    _class_cache_time: float = 0.0
 
     def __init__(self, api_base: Optional[str] = None):
         """Initialize model validator.
@@ -43,30 +50,39 @@ class ModelValidator:
         config = get_config()
         self.api_base = api_base or config.lmstudio.api_base
 
-        # Cache to minimize API calls
-        self._cache: Optional[List[str]] = None
-        self._cache_timestamp: Optional[datetime] = None
-        self._cache_ttl = timedelta(seconds=60)  # 60-second cache
-
         logger.debug(f"ModelValidator initialized with api_base: {self.api_base}")
 
     @retry_with_backoff(max_retries=3, base_delay=1.0, exceptions=(httpx.HTTPError,))
-    async def _fetch_models(self) -> List[str]:
+    async def _fetch_models(self, force_refresh: bool = False) -> list[str]:
         """Fetch available models from LM Studio API.
 
-        This method makes an HTTP request to LM Studio's /v1/models endpoint
-        to get the list of currently available models. It uses retry logic
-        to handle transient failures.
+        Uses a class-level TTL cache (MODELS_FETCH_CACHE_TTL seconds) so
+        repeated calls across multiple ModelValidator instances reuse the
+        model list without hitting /v1/models each time.
+
+        Args:
+            force_refresh: If True, bypass class cache and hit the network.
+                Used when get_available_models(use_cache=False) is called.
 
         Returns:
             List of available model IDs
 
         Raises:
             LLMConnectionError: If unable to connect to LM Studio API
-
-        Example:
-            ["qwen/qwen3-coder-30b", "mistralai/magistral-small-2509"]
         """
+        # Check class-level cache first (shared across all instances)
+        now = time.monotonic()
+        if (
+            not force_refresh
+            and ModelValidator._class_cache is not None
+            and (now - ModelValidator._class_cache_time) < MODELS_FETCH_CACHE_TTL
+        ):
+            logger.debug(
+                f"Using class-level model cache "
+                f"(age: {now - ModelValidator._class_cache_time:.1f}s)"
+            )
+            return ModelValidator._class_cache
+
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
                 # Try native /api/v1/models first (richer data)
@@ -81,6 +97,8 @@ class ModelValidator:
                         models = [m["key"] for m in native_data if "key" in m]
                         if models:
                             logger.info(f"Fetched {len(models)} models via native API")
+                            ModelValidator._class_cache = models
+                            ModelValidator._class_cache_time = now
                             return models
                 except Exception:
                     logger.debug("Native API unavailable, falling back to /v1/models")
@@ -99,6 +117,8 @@ class ModelValidator:
                 if models:
                     logger.debug(f"Available models: {', '.join(models)}")
 
+                ModelValidator._class_cache = models
+                ModelValidator._class_cache_time = now
                 return models
 
         except httpx.HTTPError as e:
@@ -109,14 +129,16 @@ class ModelValidator:
                 original_exception=e
             )
 
-    async def get_available_models(self, use_cache: bool = True) -> List[str]:
+    async def get_available_models(self, use_cache: bool = True) -> list[str]:
         """Get list of available models.
 
-        This method returns the list of available models, using the cache
-        if it's still valid.
+        Delegates to _fetch_models() which manages the class-level cache.
+        When use_cache=False, forces a fresh network fetch bypassing ALL
+        cache layers (both class-level TTL cache and any warm data).
 
         Args:
-            use_cache: Whether to use cached model list (default: True)
+            use_cache: Whether to use cached model list (default: True).
+                False forces a fresh fetch from LM Studio API.
 
         Returns:
             List of available model IDs
@@ -127,26 +149,7 @@ class ModelValidator:
             >>> print(models)
             ['qwen/qwen3-coder-30b', 'mistralai/magistral-small-2509']
         """
-        now = datetime.now(UTC)
-
-        # Check if cache is valid
-        if use_cache and self._cache is not None and self._cache_timestamp is not None:
-            cache_age = now - self._cache_timestamp
-            if cache_age < self._cache_ttl:
-                logger.debug(
-                    f"Using cached model list (age: {cache_age.total_seconds():.1f}s)"
-                )
-                return self._cache
-
-        # Fetch fresh model list
-        logger.debug("Cache miss or expired, fetching fresh model list")
-        models = await self._fetch_models()
-
-        # Update cache
-        self._cache = models
-        self._cache_timestamp = now
-
-        return models
+        return await self._fetch_models(force_refresh=not use_cache)
 
     async def validate_model(self, model_name: Optional[str]) -> bool:
         """Validate if model exists in LM Studio.
@@ -190,7 +193,7 @@ class ModelValidator:
         return True
 
     def clear_cache(self):
-        """Clear the model cache.
+        """Clear the class-level model cache.
 
         This forces the next get_available_models() call to fetch fresh data
         from the API. Useful for testing or when you know models have changed.
@@ -199,8 +202,8 @@ class ModelValidator:
             >>> validator = ModelValidator()
             >>> validator.clear_cache()  # Force refresh on next call
         """
-        self._cache = None
-        self._cache_timestamp = None
+        ModelValidator._class_cache = None
+        ModelValidator._class_cache_time = 0.0
         logger.debug("Model cache cleared")
 
 

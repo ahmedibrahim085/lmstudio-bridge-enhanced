@@ -10,6 +10,7 @@ This provides pytest fixtures and decorators to:
 3. Show clear error messages with log excerpts
 """
 
+import logging
 import pytest
 import pytest_asyncio
 import asyncio
@@ -25,6 +26,30 @@ from utils.mcp_health_check import (
     check_filesystem_mcp,
     check_memory_mcp,
 )
+from tests.fixtures.model_discovery import DiscoveredModels, discover_models
+from tests.fixtures.model_lifecycle import ModelLifecycleManager
+from llm.model_validator import ModelValidator
+
+logger = logging.getLogger(__name__)
+
+
+@pytest.fixture(autouse=True)
+def _reset_model_validator_class_cache():
+    """Clear ModelValidator class-level cache between tests.
+
+    The class-level cache in _fetch_models() persists across tests, which
+    can cause test-ordering failures when different tests mock _fetch_models
+    differently. Reset before each test for isolation.
+
+    IMPORTANT: discover_models() and ModelLifecycleManager must NEVER call
+    ModelValidator internally — they use LMSHelper only. This ensures the
+    session-scoped discovery fixtures are not affected by this per-test reset.
+    """
+    ModelValidator._class_cache = None
+    ModelValidator._class_cache_time = 0.0
+    yield
+    ModelValidator._class_cache = None
+    ModelValidator._class_cache_time = 0.0
 
 
 # ============================================================================
@@ -121,6 +146,18 @@ def pytest_configure(config):
         "markers",
         "requires_mcps: mark test as requiring specific MCPs (list in marker)"
     )
+    config.addinivalue_line(
+        "markers",
+        "flaky: mark test as flaky (eligible for targeted reruns)"
+    )
+    config.addinivalue_line(
+        "markers",
+        "model_required: mark test as requiring a specific model loaded"
+    )
+    config.addinivalue_line(
+        "markers",
+        "unit: mark test as pure unit test (no external dependencies)"
+    )
 
 
 def _check_lmstudio_available():
@@ -202,6 +239,117 @@ def pytest_runtest_setup(item):
             f"3. Restart MCP servers\n"
             f"4. Run: python3 utils/mcp_health_check.py to verify"
         )
+
+
+# ============================================================================
+# Session-Level Model Management Fixtures
+# ============================================================================
+
+@pytest.fixture(scope="session")
+def discovered_models():
+    """Discover available models once at session start.
+
+    Returns DiscoveredModels with loaded_ids, downloaded_ids, roles.
+    Safe when LM Studio is unavailable (returns empty DiscoveredModels).
+    """
+    result = discover_models()
+    if result.lmstudio_available:
+        logger.info(
+            f"Session discovery: {len(result.loaded_ids)} loaded, "
+            f"{len(result.roles)} roles"
+        )
+    else:
+        logger.info("Session discovery: LM Studio not available")
+    return result
+
+
+@pytest.fixture(scope="session")
+def model_lifecycle(discovered_models):
+    """Session-scoped model lifecycle manager.
+
+    Cleans up duplicate model instances at session start.
+    Unloads models we loaded at session end.
+    """
+    mgr = ModelLifecycleManager()
+
+    if discovered_models.lmstudio_available:
+        cleaned = mgr.cleanup_duplicates()
+        if cleaned:
+            logger.info(f"Session start: cleaned {cleaned} duplicate model(s)")
+
+    yield mgr
+
+    if discovered_models.lmstudio_available:
+        unloaded = mgr.unload_models_we_loaded()
+        if unloaded:
+            logger.info(f"Session teardown: unloaded {unloaded} model(s)")
+
+
+@pytest.fixture(scope="session")
+def lmstudio_available(discovered_models):
+    """Boolean: whether LM Studio was reachable at session start."""
+    return discovered_models.lmstudio_available
+
+
+# ============================================================================
+# Test Requirement Fixtures
+# ============================================================================
+
+@pytest.fixture
+def require_lmstudio(lmstudio_available):
+    """Skip test if LM Studio is not running."""
+    if not lmstudio_available:
+        pytest.skip("LM Studio not available")
+
+
+@pytest.fixture
+def require_chat_model(discovered_models):
+    """Skip if no chat model available. Returns the model name."""
+    model = discovered_models.chat_model
+    if not model:
+        pytest.skip("No chat model available")
+    return model
+
+
+@pytest.fixture
+def require_multiple_models(discovered_models):
+    """Skip if fewer than 2 models are loaded."""
+    if len(discovered_models.loaded_ids) < 2:
+        pytest.skip(
+            f"Need 2+ loaded models, have {len(discovered_models.loaded_ids)}"
+        )
+    return discovered_models.loaded_ids
+
+
+# ============================================================================
+# Test Phase Ordering
+# ============================================================================
+
+def pytest_collection_modifyitems(config, items):
+    """Reorder tests: unit first, integration second, e2e last.
+
+    This ensures fast unit tests run before slower integration/e2e tests,
+    giving faster feedback on basic correctness before hitting external deps.
+    """
+    unit_tests = []
+    integration_tests = []
+    e2e_tests = []
+    other_tests = []
+
+    for item in items:
+        markers = {m.name for m in item.iter_markers()}
+        if "e2e" in markers:
+            e2e_tests.append(item)
+        elif "integration" in markers:
+            integration_tests.append(item)
+        elif "unit" in markers:
+            unit_tests.append(item)
+        else:
+            # Unmarked tests treated as unit-level (fastest first)
+            other_tests.append(item)
+
+    # Reorder: unit/unmarked → integration → e2e
+    items[:] = unit_tests + other_tests + integration_tests + e2e_tests
 
 
 # ============================================================================
