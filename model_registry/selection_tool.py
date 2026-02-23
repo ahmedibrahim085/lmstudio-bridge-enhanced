@@ -164,3 +164,41 @@ TOOL_SCHEMA = {
         "required": ["task_type"],
     },
 }
+
+
+# ---------------------------------------------------------------------------
+# Register with FastMCP
+# ---------------------------------------------------------------------------
+
+
+def register_model_registry_tools(mcp) -> None:
+    """Register model registry tools with FastMCP server.
+
+    Args:
+        mcp: FastMCP server instance
+    """
+
+    @mcp.tool()
+    def select_best_model(
+        task_type: str,
+        max_vram_gb: Optional[float] = None,
+    ) -> dict[str, Any]:
+        """Select the best loaded model for a given task type.
+
+        Scores all currently loaded LM Studio models against the
+        capabilities required by the task and returns the best match.
+
+        Supported task types: code_generation, code_review, summarization,
+        reasoning, analysis, tool_use, agents, vision, image_analysis.
+
+        Args:
+            task_type: The kind of task you need a model for.
+            max_vram_gb: Optional VRAM budget in GB (models exceeding this are excluded).
+
+        Returns:
+            Dict with success, model_id (on success), or error/error_code (on failure).
+        """
+        return select_best_model_tool(
+            task_type=task_type,
+            max_vram_gb=max_vram_gb,
+        )

@@ -996,6 +996,61 @@ class TestAutonomousWithImages(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
+# Group 15: autonomous_with_images registered as MCP tool (C-1 fix)
+# ---------------------------------------------------------------------------
+
+
+class TestAutonomousWithImagesRegistered(unittest.TestCase):
+    """C-1 regression: autonomous_with_images must be exposed as MCP tool."""
+
+    def _make_mock_mcp(self):
+        """Create a mock MCP server that collects registered tool names."""
+        mock_mcp = MagicMock()
+        registered = []
+
+        def fake_tool_decorator():
+            def decorator(fn):
+                registered.append(fn.__name__)
+                return fn
+            return decorator
+
+        mock_mcp.tool = fake_tool_decorator
+        mock_mcp._registered = registered
+        return mock_mcp
+
+    def test_register_includes_autonomous_with_images(self):
+        """register_dynamic_autonomous_tools must register autonomous_with_images."""
+        from tools.dynamic_autonomous_register import register_dynamic_autonomous_tools
+
+        mock_mcp = self._make_mock_mcp()
+        register_dynamic_autonomous_tools(mock_mcp, llm_client=MagicMock())
+        self.assertIn(
+            "autonomous_with_images",
+            mock_mcp._registered,
+            "autonomous_with_images not registered as MCP tool",
+        )
+
+    def test_register_includes_all_five_autonomous_tools(self):
+        """register_dynamic_autonomous_tools must register 5 tools (4 existing + images)."""
+        from tools.dynamic_autonomous_register import register_dynamic_autonomous_tools
+
+        mock_mcp = self._make_mock_mcp()
+        register_dynamic_autonomous_tools(mock_mcp, llm_client=MagicMock())
+        expected = {
+            "autonomous_with_mcp",
+            "autonomous_with_multiple_mcps",
+            "autonomous_discover_and_execute",
+            "list_available_mcps",
+            "autonomous_with_images",
+        }
+        self.assertEqual(
+            set(mock_mcp._registered),
+            expected,
+            f"Expected 5 tools, got: {mock_mcp._registered}",
+        )
+
+
+# ---------------------------------------------------------------------------
 # Run
 # ---------------------------------------------------------------------------
 

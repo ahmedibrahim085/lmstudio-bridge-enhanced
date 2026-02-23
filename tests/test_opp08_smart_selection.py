@@ -573,3 +573,54 @@ class TestScoringInternals:
         selector = SmartModelSelector(loaded_models={})
         score = selector._score_model(model, "coding")
         assert score == 0.0
+
+
+# ---------------------------------------------------------------------------
+# Group 8 — select_best_model registered as MCP tool (C-1 fix)
+# ---------------------------------------------------------------------------
+
+
+class TestSelectBestModelRegistered:
+    """C-1 regression: select_best_model must be exposed as MCP tool via register function."""
+
+    @staticmethod
+    def _make_mock_mcp():
+        """Create a mock MCP server that collects registered tool names."""
+        mock_mcp = MagicMock()
+        registered = []
+
+        def fake_tool_decorator():
+            def decorator(fn):
+                registered.append(fn.__name__)
+                return fn
+            return decorator
+
+        mock_mcp.tool = fake_tool_decorator
+        mock_mcp._registered = registered
+        return mock_mcp
+
+    def test_register_function_exists(self):
+        """model_registry must have a register_model_registry_tools function."""
+        from model_registry.selection_tool import register_model_registry_tools
+
+        assert callable(register_model_registry_tools)
+
+    def test_register_includes_select_best_model(self):
+        """register_model_registry_tools must register select_best_model tool."""
+        from model_registry.selection_tool import register_model_registry_tools
+
+        mock_mcp = self._make_mock_mcp()
+        register_model_registry_tools(mock_mcp)
+        assert "select_best_model" in mock_mcp._registered, (
+            "select_best_model not registered as MCP tool"
+        )
+
+    def test_main_calls_register_model_registry_tools(self):
+        """main.py must import and call register_model_registry_tools."""
+        import inspect
+        import main
+
+        source = inspect.getsource(main)
+        assert "register_model_registry_tools" in source, (
+            "main.py must call register_model_registry_tools"
+        )
