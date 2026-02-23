@@ -21,25 +21,26 @@ These two worlds MUST NOT cross:
 - discover_models() and ModelLifecycleManager delegate to LMSHelper only
 """
 
+import asyncio
 import logging
+import os
+import sys
+
 import pytest
 import pytest_asyncio
-import asyncio
-import sys
-import os
 
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
+from llm.model_validator import ModelValidator
+from tests.fixtures.model_discovery import discover_models
+from tests.fixtures.model_lifecycle import ModelLifecycleManager
 from utils.mcp_health_check import (
     MCPHealthChecker,
-    check_required_mcps,
     check_filesystem_mcp,
     check_memory_mcp,
+    check_required_mcps,
 )
-from tests.fixtures.model_discovery import DiscoveredModels, discover_models
-from tests.fixtures.model_lifecycle import ModelLifecycleManager
-from llm.model_validator import ModelValidator
 
 logger = logging.getLogger(__name__)
 
@@ -174,6 +175,7 @@ def pytest_configure(config):
 def _check_lmstudio_available():
     """Check if LM Studio is running and available."""
     import httpx
+
     from config.constants import DEFAULT_LMSTUDIO_BASE_URL, MODELS_ENDPOINT
     try:
         response = httpx.get(

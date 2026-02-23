@@ -10,7 +10,6 @@ Manages model loading/unloading during test sessions:
 from __future__ import annotations
 
 import logging
-from typing import Dict, FrozenSet, List, Optional, Set
 
 from config.constants import TEST_MAX_LOADED_MODELS, TEST_MODEL_TTL
 from utils.lms_helper import LMSHelper
@@ -26,7 +25,7 @@ class ModelLifecycleManager:
     """
 
     def __init__(self) -> None:
-        self._loaded_by_us: Set[str] = set()
+        self._loaded_by_us: set[str] = set()
 
     def cleanup_duplicates(self) -> int:
         """Detect and unload duplicate model instances.
@@ -43,7 +42,7 @@ class ModelLifecycleManager:
             return 0
 
         # Group by base model name
-        instances: Dict[str, List[Dict]] = {}
+        instances: dict[str, list[dict]] = {}
         for model in loaded:
             identifier = model.get("identifier") or model.get("modelKey") or ""
             base_name = LMSHelper._get_base_model_name(identifier)
@@ -91,7 +90,7 @@ class ModelLifecycleManager:
     def ensure_model_for_phase(
         self,
         model_name: str,
-        ttl: Optional[int] = None,
+        ttl: int | None = None,
     ) -> bool:
         """Load a model for a test phase, tracking it for teardown.
 
@@ -165,6 +164,6 @@ class ModelLifecycleManager:
         return unloaded
 
     @property
-    def models_we_loaded(self) -> FrozenSet[str]:
+    def models_we_loaded(self) -> frozenset[str]:
         """Read-only view of models loaded by this session."""
         return frozenset(self._loaded_by_us)
