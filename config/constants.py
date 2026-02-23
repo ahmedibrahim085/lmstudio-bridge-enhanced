@@ -361,6 +361,18 @@ IMAGE_URL_PATTERNS = [
 # Used in: utils/image_utils.py (base64 detection)
 BASE64_DATA_URI_PREFIX = "data:image/"
 
+# SSRF protection — allowed schemes and blocked IP ranges for image URL fetching
+# Used in: utils/image_utils.py (_is_safe_url validation)
+ALLOWED_URL_SCHEMES = ("http", "https")
+BLOCKED_IP_PREFIXES = (
+    "127.", "10.", "0.", "169.254.",
+    "192.168.",
+)
+BLOCKED_IP_RANGES_172 = range(16, 32)  # 172.16.0.0 - 172.31.255.255
+BLOCKED_HOSTNAMES = ("localhost", "localhost.localdomain", "::1")
+ERROR_SSRF_BLOCKED_SCHEME = "URL scheme '{scheme}' not allowed. Only HTTP/HTTPS URLs are accepted for image fetching."
+ERROR_SSRF_BLOCKED_HOST = "URL host '{host}' is blocked. Private/internal network addresses are not allowed for image fetching."
+
 # Warning message for models that may not support vision
 VISION_MODEL_WARNING = (
     "Note: Not all models support vision/image input. "

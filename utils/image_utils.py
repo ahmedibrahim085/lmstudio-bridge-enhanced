@@ -29,6 +29,7 @@ from pathlib import Path
 from typing import Dict, Any, List, Optional, Union, Tuple
 from dataclasses import dataclass, field
 from enum import Enum
+from urllib.parse import urlparse
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
@@ -40,7 +41,13 @@ from config.constants import (
     MAX_IMAGE_DIMENSION,
     DEFAULT_VISION_DETAIL,
     IMAGE_URL_PATTERNS,
-    BASE64_DATA_URI_PREFIX
+    BASE64_DATA_URI_PREFIX,
+    ALLOWED_URL_SCHEMES,
+    BLOCKED_IP_PREFIXES,
+    BLOCKED_IP_RANGES_172,
+    BLOCKED_HOSTNAMES,
+    ERROR_SSRF_BLOCKED_SCHEME,
+    ERROR_SSRF_BLOCKED_HOST,
 )
 
 # Module-level HTTP session with connection pooling for image downloads
@@ -302,6 +309,54 @@ def _process_file_path(file_path: str, detail: str) -> ImageInput:
         )
 
 
+def _is_safe_url(url: str) -> bool:
+    """Validate URL for SSRF safety.
+
+    Checks that:
+    - Scheme is http or https only
+    - Host is not a private/internal IP address
+    - Host is not localhost or loopback
+
+    Args:
+        url: The URL to validate
+
+    Returns:
+        True if URL is safe to fetch, False otherwise
+    """
+    try:
+        parsed = urlparse(url)
+    except Exception:
+        return False
+
+    # Check scheme
+    if parsed.scheme not in ALLOWED_URL_SCHEMES:
+        return False
+
+    hostname = (parsed.hostname or "").lower()
+
+    # Check blocked hostnames
+    if hostname in BLOCKED_HOSTNAMES:
+        return False
+
+    # Check blocked IP prefixes (127.x, 10.x, 0.x, 169.254.x, 192.168.x)
+    for prefix in BLOCKED_IP_PREFIXES:
+        if hostname.startswith(prefix):
+            return False
+
+    # Check 172.16.0.0 - 172.31.255.255 (private range)
+    if hostname.startswith("172."):
+        parts = hostname.split(".")
+        if len(parts) >= 2:
+            try:
+                second_octet = int(parts[1])
+                if second_octet in BLOCKED_IP_RANGES_172:
+                    return False
+            except ValueError:
+                pass
+
+    return True
+
+
 def _process_url(url: str, detail: str) -> ImageInput:
     """Process an image URL by fetching and converting to base64.
 
@@ -315,6 +370,21 @@ def _process_url(url: str, detail: str) -> ImageInput:
     Returns:
         ImageInput with base64 data URI (not the original URL)
     """
+    # SSRF protection: validate URL before any network access
+    if not _is_safe_url(url):
+        parsed = urlparse(url)
+        if parsed.scheme not in ALLOWED_URL_SCHEMES:
+            error_msg = ERROR_SSRF_BLOCKED_SCHEME.format(scheme=parsed.scheme)
+        else:
+            error_msg = ERROR_SSRF_BLOCKED_HOST.format(host=parsed.hostname or url)
+        return ImageInput(
+            input_type=ImageInputType.URL,
+            url="",
+            original_input=url,
+            detail=detail,
+            errors=[error_msg]
+        )
+
     warnings = []
 
     # Try to infer MIME type from URL extension
@@ -571,5 +641,6 @@ __all__ = [
     "detect_input_type",
     "process_image_input",
     "build_vision_content",
-    "validate_image_inputs"
+    "validate_image_inputs",
+    "_is_safe_url",
 ]
