@@ -560,6 +560,23 @@ TEST_MAX_LOADED_MODELS = 3
 # Prevents repeated /v1/models polling across multiple ModelValidator instances
 MODELS_FETCH_CACHE_TTL = 30  # seconds
 
+# Env var overrides for explicit model selection in tests (D-13)
+LMS_TEST_ENV_VAR_PREFIX = "LMS_TEST"
+LMS_TEST_ENV_VARS: dict[str, str] = {
+    "chat": "LMS_TEST_CHAT_MODEL",
+    "thinking": "LMS_TEST_THINKING_MODEL",
+    "coding": "LMS_TEST_CODING_MODEL",
+    "vision": "LMS_TEST_VISION_MODEL",
+    "embedding": "LMS_TEST_EMBEDDING_MODEL",
+}
+
+# TTL cache for LMSRestClient.list_all_models() (RC-3)
+LMS_REST_MODELS_CACHE_TTL = 30  # seconds
+
+# Wake-up ping constants (D-5)
+WAKE_UP_PING_MAX_TOKENS = 1
+WAKE_UP_PING_TIMEOUT = 10  # seconds
+
 # Maximum depth of conversation tree (prevent runaway branching)
 MAX_BRANCH_DEPTH = 50
 

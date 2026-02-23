@@ -500,3 +500,110 @@ class TestConfigConstantsCommit1:
             assert kw in keywords, (
                 f"Pre-existing keyword {kw!r} missing from coding: {keywords!r}"
             )
+
+
+# ---------------------------------------------------------------------------
+# Section 5: config/constants.py — new env-var and cache constants (Commit 2)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestConfigConstantsCommit2:
+    """Tests for new constants added in Commit 2.
+
+    These tests will FAIL (RED) until the constants are added to config/constants.py.
+    """
+
+    def test_lms_test_env_var_prefix_exists(self):
+        """LMS_TEST_ENV_VAR_PREFIX must be importable from config.constants."""
+        from config import constants as cc
+        assert hasattr(cc, "LMS_TEST_ENV_VAR_PREFIX"), (
+            "LMS_TEST_ENV_VAR_PREFIX not found in config.constants"
+        )
+
+    def test_lms_test_env_var_prefix_value(self):
+        """LMS_TEST_ENV_VAR_PREFIX must equal 'LMS_TEST'."""
+        from config.constants import LMS_TEST_ENV_VAR_PREFIX
+        assert LMS_TEST_ENV_VAR_PREFIX == "LMS_TEST", (
+            f"Expected 'LMS_TEST', got {LMS_TEST_ENV_VAR_PREFIX!r}"
+        )
+
+    def test_lms_test_env_vars_exists(self):
+        """LMS_TEST_ENV_VARS must be importable from config.constants."""
+        from config import constants as cc
+        assert hasattr(cc, "LMS_TEST_ENV_VARS"), (
+            "LMS_TEST_ENV_VARS not found in config.constants"
+        )
+
+    def test_lms_test_env_vars_is_dict(self):
+        """LMS_TEST_ENV_VARS must be a dict."""
+        from config.constants import LMS_TEST_ENV_VARS
+        assert isinstance(LMS_TEST_ENV_VARS, dict), (
+            f"Expected dict, got {type(LMS_TEST_ENV_VARS)!r}"
+        )
+
+    def test_lms_test_env_vars_has_all_five_roles(self):
+        """LMS_TEST_ENV_VARS must map all 5 roles: chat, thinking, coding, vision, embedding."""
+        from config.constants import LMS_TEST_ENV_VARS
+        expected_roles = {"chat", "thinking", "coding", "vision", "embedding"}
+        assert set(LMS_TEST_ENV_VARS.keys()) == expected_roles, (
+            f"Role keys mismatch.\nExpected: {sorted(expected_roles)}\n"
+            f"Got:      {sorted(LMS_TEST_ENV_VARS.keys())}"
+        )
+
+    def test_lms_test_env_vars_values_correct(self):
+        """LMS_TEST_ENV_VARS values must match the LMS_TEST_<ROLE>_MODEL pattern."""
+        from config.constants import LMS_TEST_ENV_VARS
+        expected = {
+            "chat": "LMS_TEST_CHAT_MODEL",
+            "thinking": "LMS_TEST_THINKING_MODEL",
+            "coding": "LMS_TEST_CODING_MODEL",
+            "vision": "LMS_TEST_VISION_MODEL",
+            "embedding": "LMS_TEST_EMBEDDING_MODEL",
+        }
+        for role, var_name in expected.items():
+            assert LMS_TEST_ENV_VARS.get(role) == var_name, (
+                f"Role {role!r}: expected {var_name!r}, got {LMS_TEST_ENV_VARS.get(role)!r}"
+            )
+
+    def test_lms_rest_models_cache_ttl_exists(self):
+        """LMS_REST_MODELS_CACHE_TTL must be importable from config.constants."""
+        from config import constants as cc
+        assert hasattr(cc, "LMS_REST_MODELS_CACHE_TTL"), (
+            "LMS_REST_MODELS_CACHE_TTL not found in config.constants"
+        )
+
+    def test_lms_rest_models_cache_ttl_value(self):
+        """LMS_REST_MODELS_CACHE_TTL must be 30 (seconds)."""
+        from config.constants import LMS_REST_MODELS_CACHE_TTL
+        assert LMS_REST_MODELS_CACHE_TTL == 30, (
+            f"Expected 30, got {LMS_REST_MODELS_CACHE_TTL!r}"
+        )
+
+    def test_wake_up_ping_max_tokens_exists(self):
+        """WAKE_UP_PING_MAX_TOKENS must be importable from config.constants."""
+        from config import constants as cc
+        assert hasattr(cc, "WAKE_UP_PING_MAX_TOKENS"), (
+            "WAKE_UP_PING_MAX_TOKENS not found in config.constants"
+        )
+
+    def test_wake_up_ping_max_tokens_value(self):
+        """WAKE_UP_PING_MAX_TOKENS must be 1."""
+        from config.constants import WAKE_UP_PING_MAX_TOKENS
+        assert WAKE_UP_PING_MAX_TOKENS == 1, (
+            f"Expected 1, got {WAKE_UP_PING_MAX_TOKENS!r}"
+        )
+
+    def test_wake_up_ping_timeout_exists(self):
+        """WAKE_UP_PING_TIMEOUT must be importable from config.constants."""
+        from config import constants as cc
+        assert hasattr(cc, "WAKE_UP_PING_TIMEOUT"), (
+            "WAKE_UP_PING_TIMEOUT not found in config.constants"
+        )
+
+    def test_wake_up_ping_timeout_value(self):
+        """WAKE_UP_PING_TIMEOUT must be 10 (seconds)."""
+        from config.constants import WAKE_UP_PING_TIMEOUT
+        assert WAKE_UP_PING_TIMEOUT == 10, (
+            f"Expected 10, got {WAKE_UP_PING_TIMEOUT!r}"
+        )
