@@ -8,6 +8,17 @@ This provides pytest fixtures and decorators to:
 1. Check MCP health before running tests
 2. Skip tests gracefully if MCPs unavailable
 3. Show clear error messages with log excerpts
+
+Architecture Boundary — Test Fixtures vs Production Code
+=========================================================
+Test fixtures (model_discovery, model_lifecycle, model_management) use
+LMSHelper exclusively for LM Studio interaction. Production code uses
+ModelValidator for model validation with its own class-level cache.
+
+These two worlds MUST NOT cross:
+- Test fixtures NEVER call ModelValidator (prevents cache pollution)
+- ModelValidator's class cache is reset per-test via autouse fixture below
+- discover_models() and ModelLifecycleManager delegate to LMSHelper only
 """
 
 import logging
@@ -162,9 +173,12 @@ def pytest_configure(config):
 
 def _check_lmstudio_available():
     """Check if LM Studio is running and available."""
-    import requests
+    import httpx
+    from config.constants import DEFAULT_LMSTUDIO_BASE_URL, MODELS_ENDPOINT
     try:
-        response = requests.get("http://localhost:1234/v1/models", timeout=2)
+        response = httpx.get(
+            f"{DEFAULT_LMSTUDIO_BASE_URL}{MODELS_ENDPOINT}", timeout=2.0
+        )
         return response.status_code == 200
     except Exception:
         return False
