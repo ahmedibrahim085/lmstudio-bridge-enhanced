@@ -179,7 +179,7 @@ ENV_MCP_FILESYSTEM_ROOT = "MCP_FILESYSTEM_ROOT"
 
 # Default fallback model when no model is specified in API calls
 # Used in: lmstudio_bridge.py:296 (fallback when model resolution fails)
-DEFAULT_FALLBACK_MODEL = "qwen/qwen3-coder-30b"
+DEFAULT_FALLBACK_MODEL = "qwen/qwen3-coder-next"
 
 # Default model for autonomous execution tasks (coding, analysis, implementation)
 # Used in: lmstudio_bridge.py:423, tools/dynamic_autonomous.py:129,261,430
@@ -200,7 +200,7 @@ DEFAULT_SMALL_MODEL = "ibm/granite-4-h-tiny"
 
 # Default model for vision/multimodal tasks
 # Used in: tests/test_constants.py (VISION_MODEL fallback)
-DEFAULT_VISION_MODEL = "qwen/qwen-vl-7b"
+DEFAULT_VISION_MODEL = "qwen/qwen3-vl-8b"
 
 # Example model name for documentation and docstrings
 # Used in: tools/lms_cli_tools.py docstrings, examples
@@ -541,8 +541,8 @@ MULTIMODAL_DETAIL_DEFAULT = DEFAULT_VISION_DETAIL  # "auto"
 # Maps role name → list of substring patterns to match against model identifiers
 MODEL_ROLE_KEYWORDS: dict[str, list[str]] = {
     "chat": ["chat", "instruct", "-it-", "-it"],
-    "reasoning": ["magistral", "deepseek-r1", "reasoning"],
-    "coding": ["coder", "codestral", "starcoder", "deepseek-coder"],
+    "reasoning": ["magistral", "deepseek-r1", "reasoning", "r1"],
+    "coding": ["coder", "codestral", "starcoder", "deepseek-coder", "devstral"],
     "thinking": ["thinking", "qwq", "thought"],
     "small": ["tiny", "mini", "small", "1b-", "3b-", "4b-"],
     "vision": ["-vl-", "-vl", "vision", "llava", "multimodal"],

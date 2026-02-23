@@ -38,6 +38,7 @@ from config.constants import (
     DEFAULT_SMALL_MODEL,
     DEFAULT_THINKING_MODEL,
     DEFAULT_VISION_MODEL,
+    MODEL_ROLE_KEYWORDS,
 )
 
 
@@ -444,3 +445,58 @@ class TestStaticConstants:
             f"Expected: {sorted(expected)}\n"
             f"Got:      {sorted(tc._MODEL_ATTR_MAP.keys())}"
         )
+
+
+# ---------------------------------------------------------------------------
+# Section 4: config/constants.py — model names and role keywords (Commit 1)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestConfigConstantsCommit1:
+    """Tests for updated model names and role keywords in config/constants.py.
+
+    These tests will FAIL (RED) until the constants are updated.
+    """
+
+    def test_default_fallback_model_is_updated(self):
+        """DEFAULT_FALLBACK_MODEL must be 'qwen/qwen3-coder-next'."""
+        assert DEFAULT_FALLBACK_MODEL == "qwen/qwen3-coder-next", (
+            f"Expected 'qwen/qwen3-coder-next', got {DEFAULT_FALLBACK_MODEL!r}"
+        )
+
+    def test_default_vision_model_is_updated(self):
+        """DEFAULT_VISION_MODEL must be 'qwen/qwen3-vl-8b'."""
+        assert DEFAULT_VISION_MODEL == "qwen/qwen3-vl-8b", (
+            f"Expected 'qwen/qwen3-vl-8b', got {DEFAULT_VISION_MODEL!r}"
+        )
+
+    def test_r1_in_reasoning_keywords(self):
+        """'r1' must be present in MODEL_ROLE_KEYWORDS['reasoning']."""
+        keywords = MODEL_ROLE_KEYWORDS.get("reasoning", [])
+        assert "r1" in keywords, (
+            f"'r1' not found in reasoning keywords: {keywords!r}"
+        )
+
+    def test_devstral_in_coding_keywords(self):
+        """'devstral' must be present in MODEL_ROLE_KEYWORDS['coding']."""
+        keywords = MODEL_ROLE_KEYWORDS.get("coding", [])
+        assert "devstral" in keywords, (
+            f"'devstral' not found in coding keywords: {keywords!r}"
+        )
+
+    def test_reasoning_keywords_preserves_existing(self):
+        """Existing reasoning keywords must still be present after adding 'r1'."""
+        keywords = MODEL_ROLE_KEYWORDS.get("reasoning", [])
+        for kw in ("magistral", "deepseek-r1", "reasoning"):
+            assert kw in keywords, (
+                f"Pre-existing keyword {kw!r} missing from reasoning: {keywords!r}"
+            )
+
+    def test_coding_keywords_preserves_existing(self):
+        """Existing coding keywords must still be present after adding 'devstral'."""
+        keywords = MODEL_ROLE_KEYWORDS.get("coding", [])
+        for kw in ("coder", "codestral", "starcoder", "deepseek-coder"):
+            assert kw in keywords, (
+                f"Pre-existing keyword {kw!r} missing from coding: {keywords!r}"
+            )
