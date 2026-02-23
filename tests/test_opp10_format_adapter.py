@@ -701,3 +701,107 @@ class TestConstantsValidation:
         assert FORMAT_OPENAI == APIFormat.OPENAI
         assert FORMAT_ANTHROPIC == APIFormat.ANTHROPIC
         assert FORMAT_RESPONSES == APIFormat.RESPONSES
+
+
+# ==============================================================================
+# Group 16: Coverage gap — passthrough for non-function tools
+# ==============================================================================
+
+
+class TestToolPassthrough:
+    """Tools without type='function' are passed through unchanged."""
+
+    def test_openai_to_anthropic_passthrough_non_function_tool(self):
+        tools = [{"type": "custom", "name": "special"}]
+        result = FormatAdapter.openai_tools_to_anthropic(tools)
+        assert result == [{"type": "custom", "name": "special"}]
+
+    def test_responses_to_openai_passthrough_non_function_tool(self):
+        tools = [{"type": "custom", "name": "special"}]
+        result = FormatAdapter.responses_tools_to_openai(tools)
+        assert result == [{"type": "custom", "name": "special"}]
+
+
+# ==============================================================================
+# Group 17: Coverage gap — adapt_messages
+# ==============================================================================
+
+
+class TestAdaptMessages:
+    """Test the adapt_messages master router."""
+
+    def test_same_format_returns_unchanged(self):
+        msgs = [{"role": "user", "content": "Hi"}]
+        result = FormatAdapter.adapt_messages(msgs, "openai", "openai")
+        assert result is msgs
+
+    def test_openai_to_anthropic_messages(self):
+        msgs = [
+            {"role": "system", "content": "You are helpful."},
+            {"role": "user", "content": "Hello"},
+        ]
+        filtered, system = FormatAdapter.adapt_messages(msgs, "openai", "anthropic")
+        assert system == "You are helpful."
+        assert len(filtered) == 1
+        assert filtered[0]["role"] == "user"
+
+    def test_anthropic_to_openai_messages(self):
+        msgs = [{"role": "user", "content": "Hello"}]
+        result = FormatAdapter.adapt_messages(
+            msgs, "anthropic", "openai", system="Be nice"
+        )
+        assert result[0]["role"] == "system"
+        assert result[0]["content"] == "Be nice"
+
+    def test_invalid_format_raises(self):
+        with pytest.raises(ValueError, match="Unsupported format"):
+            FormatAdapter.adapt_messages([], "invalid", "openai")
+
+    def test_unimplemented_pair_raises(self):
+        with pytest.raises(ValueError, match="not implemented"):
+            FormatAdapter.adapt_messages([], "openai", "responses")
+
+
+# ==============================================================================
+# Group 18: Coverage gap — response conversion error paths
+# ==============================================================================
+
+
+class TestResponseConversionErrors:
+    """Test error paths in response conversion methods."""
+
+    def test_openai_to_anthropic_malformed_json_arguments(self):
+        response = {
+            "choices": [{
+                "message": {
+                    "role": "assistant",
+                    "tool_calls": [{
+                        "id": "tc1",
+                        "function": {
+                            "name": "test",
+                            "arguments": "not-valid-json{{"
+                        }
+                    }]
+                },
+                "finish_reason": "tool_calls"
+            }]
+        }
+        result = FormatAdapter.openai_response_to_anthropic(response)
+        tool_use = [b for b in result["content"] if b["type"] == "tool_use"]
+        assert len(tool_use) == 1
+        assert tool_use[0]["input"] == {}  # fallback for bad JSON
+
+    def test_openai_to_anthropic_missing_choices_key(self):
+        response = {}
+        result = FormatAdapter.openai_response_to_anthropic(response)
+        assert "content" in result
+
+    def test_anthropic_to_openai_missing_content_key(self):
+        response = {}
+        result = FormatAdapter.anthropic_response_to_openai(response)
+        assert "choices" in result
+
+    def test_anthropic_to_openai_type_error_in_content(self):
+        response = {"content": None}
+        result = FormatAdapter.anthropic_response_to_openai(response)
+        assert "choices" in result
