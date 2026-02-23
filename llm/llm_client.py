@@ -22,7 +22,9 @@ from config.constants import (
     DEFAULT_ANTHROPIC_MAX_TOKENS,
     DEFAULT_LLM_TIMEOUT,
     DEFAULT_MAX_RETRIES,
+    DEFAULT_MAX_ROUNDS,
     DEFAULT_MAX_TOKENS,
+    DEFAULT_RETRY_BASE_DELAY,
     DEFAULT_THINKING_BUDGET_TOKENS,
     HEALTH_CHECK_TIMEOUT,
     JIT_TTL_DEFAULT,
@@ -51,17 +53,10 @@ from utils.lms_helper import LMSHelper
 # Configure logging
 logger = logging.getLogger(__name__)
 
-# DEFAULT_LLM_TIMEOUT, DEFAULT_MAX_TOKENS, HEALTH_CHECK_TIMEOUT imported from config.constants
-
-# Default max rounds for AutonomousLLMClient
-# For consistency with main autonomous tools (10000 rounds default)
-DEFAULT_AUTONOMOUS_ROUNDS = 10000
-
-# Retry configuration for transient errors
-# Based on investigation findings: HTTP 500 errors are rare and transient
-# DEFAULT_MAX_RETRIES is imported from config.constants (value=3 = total attempts for retry_with_backoff)
-DEFAULT_RETRY_DELAY = 1.0  # Initial delay in seconds
-DEFAULT_RETRY_BACKOFF = 2.0  # Exponential backoff multiplier
+# All constants imported from config.constants — single source of truth.
+# DEFAULT_MAX_ROUNDS replaces former DEFAULT_MAX_ROUNDS.
+# DEFAULT_RETRY_BASE_DELAY replaces former DEFAULT_RETRY_BASE_DELAY.
+# Former DEFAULT_RETRY_BACKOFF removed (was dead — retry_with_backoff has no backoff param).
 
 
 def _handle_request_exception(e: Exception, operation: str = "LLM request") -> NoReturn:
@@ -217,7 +212,7 @@ class LLMClient:
 
     @retry_with_backoff(
         max_retries=DEFAULT_MAX_RETRIES,  # +1 for initial attempt = 3 total
-        base_delay=DEFAULT_RETRY_DELAY,
+        base_delay=DEFAULT_RETRY_BASE_DELAY,
         exceptions=(LLMResponseError, LLMTimeoutError)  # Only retry these
     )
     def chat_completion(
@@ -320,7 +315,7 @@ class LLMClient:
 
     @retry_with_backoff(
         max_retries=DEFAULT_MAX_RETRIES,
-        base_delay=DEFAULT_RETRY_DELAY,
+        base_delay=DEFAULT_RETRY_BASE_DELAY,
         exceptions=(LLMResponseError, LLMTimeoutError)
     )
     def text_completion(
@@ -458,7 +453,7 @@ class LLMClient:
 
     @retry_with_backoff(
         max_retries=DEFAULT_MAX_RETRIES,
-        base_delay=DEFAULT_RETRY_DELAY,
+        base_delay=DEFAULT_RETRY_BASE_DELAY,
         exceptions=(LLMResponseError, LLMTimeoutError)
     )
     def generate_embeddings(
@@ -522,7 +517,7 @@ class LLMClient:
 
     @retry_with_backoff(
         max_retries=DEFAULT_MAX_RETRIES,
-        base_delay=DEFAULT_RETRY_DELAY,
+        base_delay=DEFAULT_RETRY_BASE_DELAY,
         exceptions=(LLMResponseError, LLMTimeoutError)
     )
     def create_response(
@@ -737,7 +732,7 @@ class LLMClient:
 
     @retry_with_backoff(
         max_retries=DEFAULT_MAX_RETRIES,
-        base_delay=DEFAULT_RETRY_DELAY,
+        base_delay=DEFAULT_RETRY_BASE_DELAY,
         exceptions=(LLMResponseError, LLMTimeoutError)
     )
     def anthropic_messages(
@@ -1472,7 +1467,7 @@ class AutonomousLLMClient:
     def __init__(
         self,
         llm_client: Optional[LLMClient] = None,
-        max_rounds: int = DEFAULT_AUTONOMOUS_ROUNDS
+        max_rounds: int = DEFAULT_MAX_ROUNDS
     ):
         """Initialize autonomous LLM client.
 
