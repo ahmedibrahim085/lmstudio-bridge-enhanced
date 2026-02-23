@@ -299,6 +299,36 @@ DEFAULT_VISION_DETAIL = "auto"
 # Used in: utils/image_utils.py (input format detection)
 VISION_INPUT_TYPES = ["file_path", "url", "base64"]
 
+# ==============================================================================
+# OPP-18: HEADLESS DEPLOYMENT (llmster) — Health Check Configuration
+# ==============================================================================
+
+# Timeout for health-check HTTP calls (seconds)
+# Short by design — this is a liveness probe, not a data fetch
+HEALTH_CHECK_TIMEOUT = 5.0
+
+# LM Studio diagnostics endpoint (available in 0.4.x headless/GUI)
+# Returns server type, version, uptime
+DIAGNOSTICS_ENDPOINT = "/api/v1/diagnostics"
+
+# LM Studio system status endpoint (fallback if diagnostics not available)
+SYSTEM_STATUS_ENDPOINT = "/api/v1/system/status"
+
+# HTTP response header that identifies the LM Studio server variant
+# Value is "gui" or "headless" when present
+SERVER_TYPE_HEADER = "x-lmstudio-server-type"
+
+# Process name used by the llmster headless daemon
+# Used as a last-resort process-name fallback for type detection
+LLMSTER_PROCESS_NAME = "llmster"
+
+# How often (seconds) to re-check server health in long-running contexts
+HEALTH_CHECK_INTERVAL = 30.0
+
+# Known server type string values returned by the diagnostics endpoint
+SERVER_TYPE_GUI = "gui"
+SERVER_TYPE_HEADLESS = "headless"
+
 # URL patterns for detecting image URLs
 # Used in: utils/image_utils.py (URL detection)
 IMAGE_URL_PATTERNS = [
@@ -316,3 +346,40 @@ VISION_MODEL_WARNING = (
     "Requires multimodal models like LLaVA, GPT-4V compatible, or Qwen-VL. "
     "Text-only models will return an error when given image input."
 )
+
+# ==============================================================================
+# OPP-08: SMART MODEL SELECTION — Task-to-capability mapping and scoring weights
+# ==============================================================================
+
+# Maps task_type strings → ModelCapabilities attribute names
+# Used in: model_registry/selector.py (SmartModelSelector._classify_task)
+TASK_CAPABILITY_MAP: dict[str, str] = {
+    "code_generation": "coding",
+    "code_review": "coding",
+    "coding": "coding",
+    "summarization": "long_context",
+    "long_document": "long_context",
+    "reasoning": "reasoning",
+    "analysis": "reasoning",
+    "math": "reasoning",
+    "tool_use": "tool_calling",
+    "agents": "tool_calling",
+    "function_calling": "tool_calling",
+    "vision": "vision",
+    "image_analysis": "vision",
+    "multimodal": "vision",
+}
+
+# Scoring weights for smart model selection
+# Used in: model_registry/selector.py (SmartModelSelector._score_model)
+SELECTION_WEIGHT_CAPABILITY = 1.0   # Weight for the primary capability score
+SELECTION_WEIGHT_CONFIDENCE = 1.0   # Weight for the confidence multiplier
+
+# Fallback sort key when scores are tied
+# Used in: model_registry/selector.py (SmartModelSelector.select)
+SELECTION_FALLBACK_SORT_KEY = "model_id"
+
+# Error code constants for MCP tool responses
+# Used in: model_registry/selection_tool.py
+SELECTION_ERROR_NO_MODELS = "no_models_available"
+SELECTION_ERROR_INTERNAL = "selection_error"
