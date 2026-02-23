@@ -27,7 +27,7 @@ COMPLETIONS_ENDPOINT = "/v1/completions"
 EMBEDDINGS_ENDPOINT = "/v1/embeddings"
 RESPONSES_ENDPOINT = "/v1/responses"
 NATIVE_MODELS_ENDPOINT = "/api/v1/models"  # LM Studio native REST API (richer than /v1/models)
-ANTHROPIC_MESSAGES_ENDPOINT = "/v1/messages"  # LM Studio Anthropic-compat endpoint (0.4.x+)
+ANTHROPIC_MESSAGES_ENDPOINT = "messages"  # Path segment for _get_endpoint (api_base already has /v1)
 
 # Anthropic API Defaults
 DEFAULT_ANTHROPIC_MAX_TOKENS = 4096  # Anthropic requires max_tokens (no default in protocol)

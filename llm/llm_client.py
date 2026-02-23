@@ -1066,8 +1066,11 @@ class LLMClient:
             return self._native_mcp_supported
 
         try:
+            # Native REST API lives at /api/v1/*, NOT under the OpenAI-compat /v1 prefix.
+            # Bypass _get_endpoint which prepends api_base (includes /v1).
+            base_url = self.api_base.rsplit("/v1", 1)[0]
             resp = self.session.get(
-                self._get_endpoint("api/v1/server/info"),
+                f"{base_url}/api/v1/server/info",
                 timeout=HEALTH_CHECK_TIMEOUT,
             )
             resp.raise_for_status()
@@ -1129,7 +1132,7 @@ class LLMClient:
 
         try:
             response = self.session.post(
-                self._get_endpoint("v1/chat/completions"),
+                self._get_endpoint("chat/completions"),
                 json=payload,
                 timeout=timeout,
             )

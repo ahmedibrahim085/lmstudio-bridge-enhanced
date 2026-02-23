@@ -141,7 +141,7 @@ class TestRoundAInvariants:
     def test_anthropic_constants_defined(self):
         """OPP-11: ANTHROPIC_MESSAGES_ENDPOINT in constants."""
         from config.constants import ANTHROPIC_MESSAGES_ENDPOINT
-        assert ANTHROPIC_MESSAGES_ENDPOINT == "/v1/messages"
+        assert ANTHROPIC_MESSAGES_ENDPOINT == "messages"
 
     def test_anthropic_tool_converters_exist(self):
         """OPP-13: 3 Anthropic tool static methods on LLMClient."""
