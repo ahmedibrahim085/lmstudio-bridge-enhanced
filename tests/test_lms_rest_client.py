@@ -58,20 +58,24 @@ class TestLMSRestClientListStatus:
             {"key": "mistral/mistral-7b", "loaded_instances": []},
         ]
 
-        with patch("httpx.get", return_value=mock_response) as mock_get:
+        mock_http = MagicMock()
+        mock_http.get.return_value = mock_response
+        with patch.object(client, "_get_client", return_value=mock_http):
             result = client.list_all_models()
 
         assert result is not None
         assert len(result) == 2
         assert result[0]["key"] == "qwen/qwen3-coder-30b"
-        mock_get.assert_called_once()
+        mock_http.get.assert_called_once()
 
     def test_list_all_models_connection_error_returns_none(self):
         """ConnectionError → returns None (not raises)."""
         import httpx
         client = self._make_client()
 
-        with patch("httpx.get", side_effect=httpx.ConnectError("refused")):
+        mock_http = MagicMock()
+        mock_http.get.side_effect = httpx.ConnectError("refused")
+        with patch.object(client, "_get_client", return_value=mock_http):
             result = client.list_all_models()
 
         assert result is None
@@ -81,7 +85,9 @@ class TestLMSRestClientListStatus:
         import httpx
         client = self._make_client()
 
-        with patch("httpx.get", side_effect=httpx.TimeoutException("timed out")):
+        mock_http = MagicMock()
+        mock_http.get.side_effect = httpx.TimeoutException("timed out")
+        with patch.object(client, "_get_client", return_value=mock_http):
             result = client.list_all_models()
 
         assert result is None
@@ -141,7 +147,9 @@ class TestLMSRestClientListStatus:
         mock_response = MagicMock()
         mock_response.status_code = 200
 
-        with patch("httpx.get", return_value=mock_response):
+        mock_http = MagicMock()
+        mock_http.get.return_value = mock_response
+        with patch.object(client, "_get_client", return_value=mock_http):
             result = client.is_server_available()
 
         assert result is True
@@ -151,7 +159,9 @@ class TestLMSRestClientListStatus:
         import httpx
         client = self._make_client()
 
-        with patch("httpx.get", side_effect=httpx.ConnectError("refused")):
+        mock_http = MagicMock()
+        mock_http.get.side_effect = httpx.ConnectError("refused")
+        with patch.object(client, "_get_client", return_value=mock_http):
             result = client.is_server_available()
 
         assert result is False
@@ -176,8 +186,10 @@ class TestLMSRestClientLoadUnload:
         mock_response.status_code = 200
         mock_response.json.return_value = {"instance_id": "inst-abc"}
 
+        mock_http = MagicMock()
+        mock_http.post.return_value = mock_response
         with patch.object(client, "is_model_loaded", return_value=False):
-            with patch("httpx.post", return_value=mock_response):
+            with patch.object(client, "_get_client", return_value=mock_http):
                 result = client.load_model("qwen/qwen3-coder-30b")
 
         assert result["success"] is True
@@ -189,13 +201,14 @@ class TestLMSRestClientLoadUnload:
         """is_model_loaded=True → no POST made, returns already_loaded=True."""
         client = self._make_client()
 
+        mock_http = MagicMock()
         with patch.object(client, "is_model_loaded", return_value=True):
-            with patch("httpx.post") as mock_post:
+            with patch.object(client, "_get_client", return_value=mock_http):
                 result = client.load_model("qwen/qwen3-coder-30b")
 
         assert result["success"] is True
         assert result["already_loaded"] is True
-        mock_post.assert_not_called()
+        mock_http.post.assert_not_called()
 
     def test_load_model_memory_error(self):
         """POST 400 with 'insufficient memory' text → memory_error=True."""
@@ -205,8 +218,10 @@ class TestLMSRestClientLoadUnload:
         mock_response.status_code = 400
         mock_response.text = "Insufficient memory: model requires 24GB VRAM"
 
+        mock_http = MagicMock()
+        mock_http.post.return_value = mock_response
         with patch.object(client, "is_model_loaded", return_value=False):
-            with patch("httpx.post", return_value=mock_response):
+            with patch.object(client, "_get_client", return_value=mock_http):
                 result = client.load_model("big/model")
 
         assert result["success"] is False
@@ -217,8 +232,10 @@ class TestLMSRestClientLoadUnload:
         import httpx
         client = self._make_client()
 
+        mock_http = MagicMock()
+        mock_http.post.side_effect = httpx.ConnectError("refused")
         with patch.object(client, "is_model_loaded", return_value=False):
-            with patch("httpx.post", side_effect=httpx.ConnectError("refused")):
+            with patch.object(client, "_get_client", return_value=mock_http):
                 result = client.load_model("qwen/qwen3-coder-30b")
 
         assert result["success"] is False
@@ -233,12 +250,14 @@ class TestLMSRestClientLoadUnload:
         mock_response.status_code = 200
         mock_response.json.return_value = {"instance_id": "inst-xyz"}
 
+        mock_http = MagicMock()
+        mock_http.post.return_value = mock_response
         with patch.object(client, "is_model_loaded", return_value=False):
-            with patch("httpx.post", return_value=mock_response) as mock_post:
+            with patch.object(client, "_get_client", return_value=mock_http):
                 client.load_model("qwen/qwen3-coder-30b", context_length=8192)
 
-        call_kwargs = mock_post.call_args
-        body = call_kwargs[1]["json"] if call_kwargs[1] else call_kwargs[0][1]
+        call_kwargs = mock_http.post.call_args
+        body = call_kwargs[1]["json"]
         assert body["context_length"] == 8192
         assert body["model"] == "qwen/qwen3-coder-30b"
 
@@ -249,7 +268,9 @@ class TestLMSRestClientLoadUnload:
         mock_response = MagicMock()
         mock_response.status_code = 200
 
-        with patch("httpx.post", return_value=mock_response):
+        mock_http = MagicMock()
+        mock_http.post.return_value = mock_response
+        with patch.object(client, "_get_client", return_value=mock_http):
             result = client.unload_model("inst-abc")
 
         assert result is True
@@ -261,7 +282,9 @@ class TestLMSRestClientLoadUnload:
         mock_response = MagicMock()
         mock_response.status_code = 404
 
-        with patch("httpx.post", return_value=mock_response):
+        mock_http = MagicMock()
+        mock_http.post.return_value = mock_response
+        with patch.object(client, "_get_client", return_value=mock_http):
             result = client.unload_model("inst-nonexistent")
 
         assert result is False

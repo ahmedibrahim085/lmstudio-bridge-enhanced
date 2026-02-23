@@ -39,7 +39,10 @@ TEMP_MODEL_TTL = 300     # 5 minutes for temporary models
 
 
 class LMSRestClient:
-    """REST client for LM Studio native API (v0.4.x+)."""
+    """REST client for LM Studio native API (v0.4.x+).
+
+    Uses a shared httpx.Client for connection pooling across all requests.
+    """
 
     def __init__(self, base_url=None):
         from config.constants import (  # noqa: PLC0415
@@ -56,12 +59,19 @@ class LMSRestClient:
         self._unload_endpoint = LMS_UNLOAD_MODEL_ENDPOINT
         self._load_timeout = LMS_REST_LOAD_TIMEOUT
         self._default_timeout = LMS_REST_DEFAULT_TIMEOUT
+        self._client: "httpx.Client | None" = None
+
+    def _get_client(self) -> "httpx.Client":
+        """Get or create the shared httpx.Client for connection pooling."""
+        if self._client is None:
+            import httpx
+            self._client = httpx.Client(timeout=self._default_timeout)
+        return self._client
 
     def list_all_models(self) -> Optional[List[Dict[str, Any]]]:
         """GET /api/v1/models — returns models[] or None on error."""
         try:
-            import httpx
-            response = httpx.get(
+            response = self._get_client().get(
                 f"{self.base_url}{self._models_endpoint}",
                 timeout=self._default_timeout
             )
@@ -90,8 +100,7 @@ class LMSRestClient:
     def is_server_available(self) -> bool:
         """Check if LM Studio REST API is reachable."""
         try:
-            import httpx
-            response = httpx.get(
+            response = self._get_client().get(
                 f"{self.base_url}{self._models_endpoint}",
                 timeout=self._default_timeout
             )
@@ -117,14 +126,13 @@ class LMSRestClient:
             }
 
         try:
-            import httpx
             body = {"model": model_key}
             if context_length is not None:
                 body["context_length"] = context_length
             if flash_attention is not None:
                 body["flash_attention"] = flash_attention
 
-            response = httpx.post(
+            response = self._get_client().post(
                 f"{self.base_url}{self._load_endpoint}",
                 json=body,
                 timeout=self._load_timeout
@@ -161,8 +169,7 @@ class LMSRestClient:
     def unload_model(self, instance_id: str) -> bool:
         """Unload model by instance_id. POST /api/v1/models/unload."""
         try:
-            import httpx
-            response = httpx.post(
+            response = self._get_client().post(
                 f"{self.base_url}{self._unload_endpoint}",
                 json={"instance_id": instance_id},
                 timeout=self._default_timeout
