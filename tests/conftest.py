@@ -35,6 +35,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from llm.model_validator import ModelValidator
 from tests.fixtures.model_discovery import discover_models
 from tests.fixtures.model_lifecycle import ModelLifecycleManager
+from utils.lms_helper import LMSHelper
 from utils.mcp_health_check import (
     MCPHealthChecker,
     check_filesystem_mcp,
@@ -296,6 +297,55 @@ def model_lifecycle(discovered_models):
         unloaded = mgr.unload_models_we_loaded()
         if unloaded:
             logger.info(f"Session teardown: unloaded {unloaded} model(s)")
+
+
+def _snapshot_loaded_models() -> set[str]:
+    """Return base names of currently loaded models."""
+    result: set[str] = set()
+    loaded = LMSHelper.list_loaded_models() or []
+    for m in loaded:
+        name = LMSHelper._get_base_model_name(
+            m.get("identifier") or m.get("modelKey") or ""
+        )
+        if name:
+            result.add(name)
+    return result
+
+
+def _unload_new_models(initial_models: set[str]) -> None:
+    """Unload any models not in the initial snapshot."""
+    loaded = LMSHelper.list_loaded_models() or []
+    for m in loaded:
+        name = LMSHelper._get_base_model_name(
+            m.get("identifier") or m.get("modelKey") or ""
+        )
+        if name and name not in initial_models:
+            try:
+                LMSHelper.unload_model(name)
+                logger.info(f"Session safety net: unloaded '{name}'")
+            except Exception as e:
+                logger.warning(f"Session safety net: failed to unload '{name}': {e}")
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _session_model_cleanup():
+    """Defense-in-depth: unload models added during this test session.
+
+    Primary cleanup is via ModelLifecycleManager (model_lifecycle fixture).
+    This is the safety net for any models loaded outside the lifecycle system.
+    """
+    try:
+        initial_models = _snapshot_loaded_models()
+    except Exception:
+        yield
+        return
+
+    yield
+
+    try:
+        _unload_new_models(initial_models)
+    except Exception:
+        pass
 
 
 @pytest.fixture(scope="session")
