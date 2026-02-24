@@ -760,3 +760,8 @@ MAX_BRANCHES_PER_TREE = 100
 
 # Default branch name prefix
 DEFAULT_BRANCH_PREFIX = "branch"
+
+# Testing mode — env var to skip HTTP auto-detection in get_config()
+# Used in: config_main.py:from_env() to prevent real HTTP calls during pytest
+LMSTUDIO_TESTING_ENV_VAR = "LMSTUDIO_TESTING"
+LMSTUDIO_TESTING_DEFAULT_MODEL = "default"

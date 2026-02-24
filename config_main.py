@@ -19,6 +19,8 @@ from pydantic import BaseModel, Field, field_validator
 from config.constants import (
     DEFAULT_LMSTUDIO_HOST,
     DEFAULT_LMSTUDIO_PORT,
+    LMSTUDIO_TESTING_ENV_VAR,
+    LMSTUDIO_TESTING_DEFAULT_MODEL,
 )
 
 logger = logging.getLogger(__name__)
@@ -76,9 +78,14 @@ class LMStudioConfig(BaseModel):
             default_model = os.getenv("DEFAULT_MODEL")
 
             if not default_model:
-                # Auto-detect: fetch available models and use first non-embedding one
-                default_model = cls._get_first_available_model(api_base)
-                logger.info(f"Auto-detected default model: {default_model}")
+                # Check testing mode — skip HTTP auto-detection
+                if os.environ.get(LMSTUDIO_TESTING_ENV_VAR):
+                    default_model = LMSTUDIO_TESTING_DEFAULT_MODEL
+                    logger.debug("Testing mode: using default model (skipped auto-detection)")
+                else:
+                    # Auto-detect: fetch available models and use first non-embedding one
+                    default_model = cls._get_first_available_model(api_base)
+                    logger.info(f"Auto-detected default model: {default_model}")
 
             return cls(
                 host=host,
