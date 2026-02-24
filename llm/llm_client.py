@@ -131,26 +131,38 @@ class LLMClient:
     This client works with ANY model loaded in LM Studio.
     """
 
-    def __init__(self, api_base: Optional[str] = None, model: Optional[str] = None):
+    def __init__(
+        self,
+        api_base: Optional[str] = None,
+        model: Optional[str] = None,
+        session: Optional["requests.Session"] = None,
+    ):
         """Initialize LLM client.
 
         Args:
             api_base: Optional API base URL (uses config if None)
             model: Optional model name (uses currently loaded model if None)
+            session: Optional pre-configured requests.Session (uses new session if None).
+                     When provided, LLMClient does NOT own the session lifecycle.
         """
         config = get_config()
         self.api_base = api_base or config.lmstudio.api_base
         self.model = model or config.lmstudio.default_model
 
-        # HTTP connection pooling for better performance
-        self.session = requests.Session()
-        adapter = HTTPAdapter(
-            pool_connections=10,
-            pool_maxsize=20,
-            max_retries=Retry(total=3, backoff_factor=0.3)
-        )
-        self.session.mount('http://', adapter)
-        self.session.mount('https://', adapter)
+        if session is not None:
+            self.session = session
+            self._owns_session = False
+        else:
+            # HTTP connection pooling for better performance
+            self.session = requests.Session()
+            self._owns_session = True
+            adapter = HTTPAdapter(
+                pool_connections=10,
+                pool_maxsize=20,
+                max_retries=Retry(total=3, backoff_factor=0.3)
+            )
+            self.session.mount('http://', adapter)
+            self.session.mount('https://', adapter)
 
         # Native MCP support cache (OPP-16)
         self._native_mcp_supported: Optional[bool] = None
@@ -163,10 +175,11 @@ class LLMClient:
     def close(self) -> None:
         """Close the HTTP session and release connection pool resources.
 
-        Safe to call multiple times (idempotent). After the first call
-        ``self.session`` is set to ``None`` so subsequent calls are no-ops.
+        Only closes the session if this LLMClient created it (_owns_session=True).
+        Injected sessions are the caller's responsibility to close.
+        Safe to call multiple times (idempotent).
         """
-        if self.session is not None:
+        if self.session is not None and self._owns_session:
             self.session.close()
             self.session = None
             logger.debug("LLMClient HTTP session closed")
