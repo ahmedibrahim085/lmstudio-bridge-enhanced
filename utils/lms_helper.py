@@ -568,7 +568,7 @@ ALTERNATIVE:
                                 "identifier": m.get("key", ""),
                                 "modelKey": m.get("key", ""),
                                 "status": "loaded",
-                                "instance_id": inst.get("instance_id", ""),
+                                "instance_id": inst.get("id", ""),
                             })
                 return loaded
         # Fall back to subprocess

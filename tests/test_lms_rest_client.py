@@ -504,7 +504,7 @@ class TestLMSHelperDispatch:
         mock_rest.list_all_models.return_value = [
             {
                 "key": "qwen/qwen3-coder-30b",
-                "loaded_instances": [{"instance_id": "inst-1"}],
+                "loaded_instances": [{"id": "inst-1"}],
             }
         ]
 

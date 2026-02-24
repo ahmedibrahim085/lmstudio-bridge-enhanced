@@ -281,7 +281,7 @@ def discovered_models():
 def model_lifecycle(discovered_models):
     """Session-scoped model lifecycle manager.
 
-    Cleans up duplicate model instances at session start.
+    Cleans up duplicate model instances at session start AND end.
     Unloads models we loaded at session end.
     """
     mgr = ModelLifecycleManager()
@@ -297,6 +297,9 @@ def model_lifecycle(discovered_models):
         unloaded = mgr.unload_models_we_loaded()
         if unloaded:
             logger.info(f"Session teardown: unloaded {unloaded} model(s)")
+        cleaned = mgr.cleanup_duplicates()
+        if cleaned:
+            logger.info(f"Session teardown: cleaned {cleaned} duplicate(s)")
 
 
 def _snapshot_loaded_models() -> set[str]:
@@ -332,7 +335,9 @@ def _session_model_cleanup():
     """Defense-in-depth: unload models added during this test session.
 
     Primary cleanup is via ModelLifecycleManager (model_lifecycle fixture).
-    This is the safety net for any models loaded outside the lifecycle system.
+    This safety net:
+    1. Unloads models loaded outside the lifecycle system
+    2. Cleans up duplicate instances (e.g., model:2, model:3)
     """
     try:
         initial_models = _snapshot_loaded_models()
@@ -344,6 +349,15 @@ def _session_model_cleanup():
 
     try:
         _unload_new_models(initial_models)
+    except Exception:
+        pass
+
+    # Always clean duplicates — even if they were in the initial snapshot
+    try:
+        mgr = ModelLifecycleManager()
+        cleaned = mgr.cleanup_duplicates()
+        if cleaned:
+            logger.info(f"Session safety net: cleaned {cleaned} duplicate(s)")
     except Exception:
         pass
 

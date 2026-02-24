@@ -11,6 +11,7 @@ from __future__ import annotations
 from unittest.mock import patch
 
 from tests.conftest import _snapshot_loaded_models, _unload_new_models
+from tests.fixtures.model_lifecycle import ModelLifecycleManager
 from utils.lms_helper import LMSHelper
 
 
@@ -114,3 +115,45 @@ class TestSessionModelCleanup:
                 _unload_new_models(initial)
 
             mock_unload.assert_called_once_with("model-new")
+
+    def test_cleanup_removes_duplicates_at_teardown(self):
+        """Duplicate instances (model:2, model:3) are cleaned at teardown."""
+        mgr = ModelLifecycleManager()
+
+        # Simulate 3 instances of one model
+        loaded = [
+            {
+                "identifier": "test/model",
+                "modelKey": "test/model",
+                "status": "loaded",
+                "instance_id": "inst-1",
+            },
+            {
+                "identifier": "test/model",
+                "modelKey": "test/model",
+                "status": "loaded",
+                "instance_id": "inst-2",
+            },
+            {
+                "identifier": "test/model",
+                "modelKey": "test/model",
+                "status": "loaded",
+                "instance_id": "inst-3",
+            },
+        ]
+
+        mock_rest = type("MockRest", (), {"unload_model": None})()
+
+        with (
+            patch.object(LMSHelper, "list_loaded_models", return_value=loaded),
+            patch.object(
+                LMSHelper, "_get_base_model_name", return_value="test/model"
+            ),
+            patch.object(LMSHelper, "_get_rest_client", return_value=mock_rest),
+            patch.object(mock_rest, "unload_model") as mock_unload,
+        ):
+            cleaned = mgr.cleanup_duplicates()
+
+        # Should unload 2 duplicates (keep first, remove inst-2 and inst-3)
+        assert cleaned == 2
+        assert mock_unload.call_count == 2
