@@ -216,15 +216,20 @@ def _wake_up_loaded_role_models(
                 pinged.add(model_key)
 
 
-def discover_models() -> DiscoveredModels:
+def discover_models(rest_client=None) -> DiscoveredModels:
     """Discover available models by querying LM Studio.
+
+    Args:
+        rest_client: Optional pre-configured LMSRestClient. When provided,
+                     uses this instead of creating a new one. Enables DI for testing.
 
     Uses REST API first (native metadata with capabilities),
     falls back to LMSHelper CLI if REST unavailable.
     Safe to call when LM Studio is not running.
     """
     # Try REST API first (richer metadata)
-    rest_client = LMSRestClient()
+    if rest_client is None:
+        rest_client = LMSRestClient()
     if rest_client.is_server_available():
         try:
             raw_models = rest_client.list_all_models()
