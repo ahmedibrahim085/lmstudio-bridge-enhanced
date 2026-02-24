@@ -34,6 +34,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from llm.model_validator import ModelValidator
 from tests.fixtures.model_discovery import discover_models
+from tests.fixtures.model_inventory import ModelLoadInventory
 from tests.fixtures.model_lifecycle import ModelLifecycleManager
 from utils.lms_helper import LMSHelper
 from utils.mcp_health_check import (
@@ -278,13 +279,39 @@ def discovered_models():
 
 
 @pytest.fixture(scope="session")
-def model_lifecycle(discovered_models):
+def model_inventory():
+    """Session-scoped model loading inventory with JSON persistence.
+
+    Tracks every model load/unload with full audit trail.
+    Saves to JSON at session teardown for post-mortem debugging.
+    """
+    inv = ModelLoadInventory()
+    yield inv
+
+    # Persist audit trail before unloading
+    try:
+        inv.save()
+    except Exception as e:
+        logger.warning(f"Inventory: failed to save audit trail: {e}")
+
+    # Final sweep: unload any models still tracked by inventory
+    try:
+        count = inv.unload_all()
+        if count:
+            logger.info(f"Inventory teardown: unloaded {count} tracked model(s)")
+    except Exception as e:
+        logger.warning(f"Inventory teardown: failed to unload: {e}")
+
+
+@pytest.fixture(scope="session")
+def model_lifecycle(discovered_models, model_inventory):
     """Session-scoped model lifecycle manager.
 
     Cleans up duplicate model instances at session start AND end.
     Unloads models we loaded at session end.
+    Wired to model_inventory for audit trail tracking.
     """
-    mgr = ModelLifecycleManager()
+    mgr = ModelLifecycleManager(inventory=model_inventory)
 
     if discovered_models.lmstudio_available:
         cleaned = mgr.cleanup_duplicates()
