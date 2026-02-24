@@ -41,6 +41,7 @@ LONG_TIMEOUT = 300
 DEFAULT_MAX_ROUNDS = 20
 SHORT_MAX_ROUNDS = 10  # Increased from 5: gives LLM more attempts to discover correct paths
 LONG_MAX_ROUNDS = 50
+E2E_TEST_MAX_ROUNDS = 5  # Budget: 5 × DEFAULT_LLM_TIMEOUT(58s) = 290s < LONG_TEST_TIMEOUT(300s)
 
 # Performance targets
 CACHE_VALIDATION_TARGET_MS = 0.1  # < 0.1ms
