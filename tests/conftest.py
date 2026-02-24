@@ -32,6 +32,12 @@ import pytest_asyncio
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
+# D-1: Activate testing mode BEFORE any production imports that could trigger
+# get_config() → LMStudioConfig.from_env() → HTTP auto-detection.
+# Capability added in R-2 (config_main.py:82-83), activated here.
+from config.constants import LMSTUDIO_TESTING_ENV_VAR  # noqa: I001 — must precede production imports
+os.environ.setdefault(LMSTUDIO_TESTING_ENV_VAR, "1")
+
 from llm.model_validator import ModelValidator
 from tests.fixtures.model_discovery import discover_models
 from tests.fixtures.model_inventory import ModelLoadInventory
