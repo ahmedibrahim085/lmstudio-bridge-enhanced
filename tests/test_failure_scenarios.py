@@ -6,35 +6,24 @@ Tests all failure modes, edge cases, and error handling to ensure
 production-ready robustness (Qwen requirement: 20+ tests).
 """
 
-import pytest
-import asyncio
-import time
-from unittest import mock
-from unittest.mock import MagicMock, patch
+import os
 import subprocess
 
 # Import modules to test
 import sys
-import os
+import time
+from unittest.mock import MagicMock, patch
+
+import pytest
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from utils.lms_helper import LMSHelper
 from utils.retry_logic import (
-    retry_with_exponential_backoff,
+    CircuitBreakerOpenError,
     LMSCircuitBreaker,
-    CircuitBreakerOpenError
+    retry_with_exponential_backoff,
 )
-
-
-@pytest.fixture(autouse=True)
-def _prevent_rest_api_leaks():
-    """Prevent ALL failure scenario tests from hitting LM Studio REST API.
-
-    Without this, tests that mock subprocess.run but NOT _get_rest_client()
-    leak real HTTP requests to LM Studio (load_model tries REST first).
-    """
-    with patch.object(LMSHelper, '_get_rest_client', return_value=None):
-        yield
 
 
 class TestModelLoadingFailures:
@@ -222,7 +211,7 @@ class TestEdgeCases:
             # None model name should fail gracefully
             try:
                 LMSHelper.load_model(None)
-                assert False, "Should have raised exception"
+                raise AssertionError("Should have raised exception")
             except (TypeError, AttributeError, ValueError):
                 pass  # Expected
 
@@ -417,7 +406,6 @@ class TestTTLConfiguration:
 # Test summary
 def test_suite_completeness():
     """Meta-test: Verify we have 20+ tests as required by Qwen."""
-    import inspect
 
     test_classes = [
         TestModelLoadingFailures,

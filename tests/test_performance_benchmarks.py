@@ -5,31 +5,18 @@ Performance Benchmarks for LM Studio Bridge Enhanced.
 Measures latency, throughput, memory usage, and validates production SLAs.
 """
 
-import pytest
-import time
-import asyncio
-from unittest import mock
-from unittest.mock import MagicMock, patch
-import psutil
 import os
 import sys
+import time
+from unittest.mock import MagicMock, patch
+
+import psutil
+import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from utils.lms_helper import LMSHelper
 from utils.retry_logic import retry_with_exponential_backoff
-
-
-@pytest.fixture(autouse=True)
-def _prevent_rest_api_leaks():
-    """Prevent ALL benchmark tests from hitting LM Studio REST API.
-
-    Without this, tests that mock subprocess.run but NOT _get_rest_client()
-    leak real HTTP requests to LM Studio (load_model tries REST first).
-    This caused 486+ 'model-0..49 not found' errors in 10 seconds.
-    """
-    with patch.object(LMSHelper, '_get_rest_client', return_value=None):
-        yield
 
 
 class TestLatencyBenchmarks:
