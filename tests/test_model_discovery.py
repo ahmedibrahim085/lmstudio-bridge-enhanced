@@ -603,3 +603,92 @@ class TestDiscoverModelsV2:
             discover_models()
 
         mock_ping.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# discover_models() DI tests (R-3) — rest_client injection
+# ---------------------------------------------------------------------------
+
+
+class TestDiscoverModelsDI:
+    """Tests for optional rest_client parameter in discover_models() (R-3)."""
+
+    @pytest.mark.unit
+    def test_discover_models_uses_injected_client(self):
+        """When rest_client is provided, its methods are called instead of creating a new one."""
+        mock_client = MagicMock()
+        mock_client.is_server_available.return_value = True
+        mock_client.list_all_models.return_value = [
+            {"key": "test-model-7b", "loaded_instances": [{}]},
+        ]
+        mock_client.base_url = "http://localhost:1234"
+
+        with patch("tests.fixtures.model_discovery.LMSRestClient") as mock_cls, \
+             patch("tests.fixtures.model_discovery.LMSHelper") as mock_lms, \
+             patch("tests.fixtures.model_discovery._wake_up_loaded_role_models"):
+            mock_lms._get_base_model_name.side_effect = lambda k: k
+            result = discover_models(rest_client=mock_client)
+            # LMSRestClient() constructor should NOT be called — we injected our own
+            mock_cls.assert_not_called()
+            # The injected client's methods should be called
+            mock_client.is_server_available.assert_called_once()
+            mock_client.list_all_models.assert_called_once()
+
+    @pytest.mark.unit
+    def test_discover_models_none_creates_default(self):
+        """When rest_client=None (default), a new LMSRestClient is created."""
+        with patch("tests.fixtures.model_discovery.LMSRestClient") as mock_cls, \
+             patch("tests.fixtures.model_discovery.LMSHelper") as mock_lms:
+            mock_instance = MagicMock()
+            mock_instance.is_server_available.return_value = False
+            mock_cls.return_value = mock_instance
+            mock_lms.is_installed.return_value = False
+
+            result = discover_models(rest_client=None)
+            # LMSRestClient() constructor SHOULD be called
+            mock_cls.assert_called_once()
+
+    @pytest.mark.unit
+    def test_discover_models_injected_client_not_available(self):
+        """When injected client reports server unavailable, falls back to CLI."""
+        mock_client = MagicMock()
+        mock_client.is_server_available.return_value = False
+
+        with patch("tests.fixtures.model_discovery.LMSHelper") as mock_lms:
+            mock_lms.is_installed.return_value = False
+            result = discover_models(rest_client=mock_client)
+
+        assert result.lmstudio_available is False
+        assert result.loaded_ids == []
+
+    @pytest.mark.unit
+    def test_discover_models_injected_client_raises(self):
+        """When injected client raises an exception, falls back to CLI path."""
+        mock_client = MagicMock()
+        mock_client.is_server_available.return_value = True
+        mock_client.list_all_models.side_effect = ConnectionError("boom")
+
+        with patch("tests.fixtures.model_discovery.LMSHelper") as mock_lms:
+            mock_lms.is_installed.return_value = False
+            result = discover_models(rest_client=mock_client)
+
+        # Should gracefully fall back to CLI (which also fails → empty result)
+        assert isinstance(result, DiscoveredModels)
+        assert result.lmstudio_available is False
+
+    @pytest.mark.unit
+    def test_discover_models_default_call_unchanged(self):
+        """Calling discover_models() without arguments still works (backward compat)."""
+        with _make_rest_unavailable(), \
+             patch("tests.fixtures.model_discovery.LMSHelper") as mock_lms:
+            mock_lms.is_installed.return_value = True
+            mock_lms.list_loaded_models.return_value = [
+                {"modelKey": "compat-model", "identifier": "compat-model"},
+            ]
+            mock_lms.list_downloaded_models.return_value = []
+            mock_lms._get_base_model_name.side_effect = lambda k: k
+
+            result = discover_models()
+
+        assert result.lmstudio_available is True
+        assert "compat-model" in result.loaded_ids
