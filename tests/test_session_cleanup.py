@@ -10,7 +10,13 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
+from config.constants import (
+    MODEL_INVENTORY_REASON_LIFECYCLE,
+    MODEL_INVENTORY_SCOPE_MODULE,
+    MODEL_INVENTORY_SCOPE_SESSION,
+)
 from tests.conftest import _snapshot_loaded_models, _unload_new_models
+from tests.fixtures.model_inventory import ModelLoadInventory
 from tests.fixtures.model_lifecycle import ModelLifecycleManager
 from utils.lms_helper import LMSHelper
 
@@ -157,3 +163,64 @@ class TestSessionModelCleanup:
         # Should unload 2 duplicates (keep first, remove inst-2 and inst-3)
         assert cleaned == 2
         assert mock_unload.call_count == 2
+
+
+class TestInventoryIntegration:
+    """Verify inventory integrates with session cleanup and lifecycle manager.
+
+    ADDITIVE: These tests supplement the 7 existing defense-in-depth tests above.
+    """
+
+    def test_inventory_cleanup_unloads_all_at_session_end(self):
+        """inventory.unload_all() is called at session teardown."""
+        inv = ModelLoadInventory()
+        inv.record_load(
+            "teardown-model",
+            MODEL_INVENTORY_REASON_LIFECYCLE,
+            "test::teardown",
+            MODEL_INVENTORY_SCOPE_SESSION,
+            "unit",
+        )
+
+        with patch.object(LMSHelper, "unload_model") as mock_unload:
+            count = inv.unload_all()
+
+        assert count == 1
+        mock_unload.assert_called_once_with("teardown-model")
+
+    def test_module_cleanup_unloads_module_scope(self):
+        """Module-scoped fixture calls inventory.unload_scope('module')."""
+        inv = ModelLoadInventory()
+        inv.record_load("mod-model", MODEL_INVENTORY_REASON_LIFECYCLE, "t1", MODEL_INVENTORY_SCOPE_MODULE, "unit")
+        inv.record_load("sess-model", MODEL_INVENTORY_REASON_LIFECYCLE, "t2", MODEL_INVENTORY_SCOPE_SESSION, "unit")
+
+        with patch.object(LMSHelper, "unload_model") as mock_unload:
+            count = inv.unload_scope(MODEL_INVENTORY_SCOPE_MODULE)
+
+        # Only module-scoped model unloaded
+        assert count == 1
+        mock_unload.assert_called_once_with("mod-model")
+
+        # Session model still active
+        active = inv.get_active_for_scope(MODEL_INVENTORY_SCOPE_SESSION)
+        assert "sess-model" in active
+
+    def test_lifecycle_records_to_inventory(self):
+        """ensure_model_for_phase() calls inventory.record_load() with metadata."""
+        inv = ModelLoadInventory()
+        mgr = ModelLifecycleManager(inventory=inv)
+
+        with (
+            patch.object(LMSHelper, "list_loaded_models", return_value=[]),
+            patch.object(LMSHelper, "is_model_loaded", return_value=False),
+            patch.object(LMSHelper, "load_model", return_value=True),
+        ):
+            mgr.ensure_model_for_phase(
+                "test/model-inv",
+                test_id="tests/test_x.py::test_y",
+                scope=MODEL_INVENTORY_SCOPE_SESSION,
+            )
+
+        # Verify inventory has the record
+        active = inv.get_active_for_scope(MODEL_INVENTORY_SCOPE_SESSION)
+        assert "test/model-inv" in active

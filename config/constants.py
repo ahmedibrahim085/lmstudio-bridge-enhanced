@@ -148,6 +148,14 @@ __all__ = [
     "MIN_TEMPERATURE",
     "MIN_THINKING_BUDGET_TOKENS",
     "MODEL_CACHE_TTL_SECONDS",
+    "MODEL_INVENTORY_DIR",
+    "MODEL_INVENTORY_REASON_DIRECT",
+    "MODEL_INVENTORY_REASON_FIXTURE",
+    "MODEL_INVENTORY_REASON_LIFECYCLE",
+    "MODEL_INVENTORY_SCOPE_CLASS",
+    "MODEL_INVENTORY_SCOPE_FUNCTION",
+    "MODEL_INVENTORY_SCOPE_MODULE",
+    "MODEL_INVENTORY_SCOPE_SESSION",
     "MODEL_LIST_TIMEOUT",
     "MODEL_LOADING_DELAY",
     "MODEL_REACTIVATION_DELAY",
@@ -731,6 +739,17 @@ MODEL_ROLE_KEYWORDS: dict[str, list[str]] = {
     "small": ["tiny", "mini", "small", "1b-", "3b-", "4b-"],
     "vision": ["-vl-", "-vl", "vision", "llava", "multimodal"],
 }
+
+# Model Loading Inventory — tracks every model load/unload with audit trail
+# Used in: tests/fixtures/model_inventory.py
+MODEL_INVENTORY_DIR = ".omc/model-inventory"
+MODEL_INVENTORY_SCOPE_SESSION = "session"
+MODEL_INVENTORY_SCOPE_MODULE = "module"
+MODEL_INVENTORY_SCOPE_CLASS = "class"
+MODEL_INVENTORY_SCOPE_FUNCTION = "function"
+MODEL_INVENTORY_REASON_FIXTURE = "fixture"
+MODEL_INVENTORY_REASON_LIFECYCLE = "ensure_model_for_phase"
+MODEL_INVENTORY_REASON_DIRECT = "direct"
 
 # TTL (seconds) for models loaded by the test session
 # Models auto-unload after this idle time; prevents VRAM leak across sessions
