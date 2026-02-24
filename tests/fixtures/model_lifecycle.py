@@ -10,9 +10,17 @@ Manages model loading/unloading during test sessions:
 from __future__ import annotations
 
 import logging
+from typing import TYPE_CHECKING
 
-from config.constants import TEST_MAX_LOADED_MODELS, TEST_MODEL_TTL
+from config.constants import (
+    MODEL_INVENTORY_REASON_LIFECYCLE,
+    TEST_MAX_LOADED_MODELS,
+    TEST_MODEL_TTL,
+)
 from utils.lms_helper import LMSHelper
+
+if TYPE_CHECKING:
+    from tests.fixtures.model_inventory import ModelLoadInventory
 
 logger = logging.getLogger(__name__)
 
@@ -24,8 +32,9 @@ class ModelLifecycleManager:
     only unloads what we loaded (doesn't touch user's models).
     """
 
-    def __init__(self) -> None:
+    def __init__(self, inventory: ModelLoadInventory | None = None) -> None:
         self._loaded_by_us: set[str] = set()
+        self._inventory = inventory
 
     def cleanup_duplicates(self) -> int:
         """Detect and unload duplicate model instances.
@@ -91,12 +100,16 @@ class ModelLifecycleManager:
         self,
         model_name: str,
         ttl: int | None = None,
+        test_id: str = "",
+        scope: str = "",
     ) -> bool:
         """Load a model for a test phase, tracking it for teardown.
 
         Args:
             model_name: Model identifier to load.
             ttl: TTL in seconds (defaults to TEST_MODEL_TTL).
+            test_id: Pytest node ID for inventory tracking.
+            scope: Fixture scope for inventory tracking (session, module, class, function).
 
         Returns:
             True if model is available (loaded or already was).
@@ -132,6 +145,14 @@ class ModelLifecycleManager:
             success = LMSHelper.load_model(model_name, ttl=actual_ttl)
             if success:
                 self._loaded_by_us.add(model_name)
+                if self._inventory is not None:
+                    self._inventory.record_load(
+                        model_name=model_name,
+                        reason=MODEL_INVENTORY_REASON_LIFECYCLE,
+                        test_id=test_id,
+                        scope=scope,
+                        phase="test",
+                    )
                 logger.info(f"Loaded '{model_name}' for test phase (TTL={actual_ttl}s)")
             return success
         except Exception as e:
