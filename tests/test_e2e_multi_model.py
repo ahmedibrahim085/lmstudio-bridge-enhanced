@@ -258,16 +258,17 @@ class TestE2EMultiModelWorkflows:
         if 'memory' not in available_mcps:
             pytest.skip("Memory MCP not configured")
 
-        # Use model loading fixture to ensure model is actually loaded
-        # This handles memory errors properly rather than just picking small models
-        from tests.fixtures.model_management import ensure_model_loaded
+        # Use lifecycle manager for tracked loading (models auto-unload at teardown)
         from llm.exceptions import ModelMemoryError
+        from tests.fixtures.model_lifecycle import ModelLifecycleManager
+
+        lifecycle = ModelLifecycleManager()
 
         # Try models in order until one loads successfully
         test_model = None
         for model in models:
             try:
-                if ensure_model_loaded(model):
+                if lifecycle.ensure_model_for_phase(model):
                     test_model = model
                     break
             except ModelMemoryError as e:
