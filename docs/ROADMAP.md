@@ -1,6 +1,6 @@
 # LM Studio Bridge Enhanced — OPP Roadmap
 
-> Updated: 2026-02-23 | LM Studio target: 0.4.3+ | Baseline: ~1405 tests passing, 89% coverage
+> Updated: 2026-02-24 | LM Studio target: 0.4.4+ | Baseline: ~1455 tests passing, 91% coverage
 
 ---
 
@@ -13,6 +13,10 @@
 | Round A (Phases 2+3 parallel) | OPP-11, 16, 13, 05, 06, 07 | **DONE** | PR #6 + #7 | 107 |
 | Round B (Phase 4) | OPP-12, 10, 08, 14, 18 | **DONE** | v3.4.0 | ~80 |
 | Round C (Phase 5) | OPP-17, 09, 15 | **DONE** | v4.0.0 | ~30 |
+| Error Audit | 10 bug fixes | **DONE** | v4.0.1-error-audit | ~50 |
+| Round D (Quick Wins) | OPP-21, 22, 23, 26, 30 | **PROPOSED** | v4.1.0 | — |
+| Round E (Medium Lift) | OPP-24, 27, 28, 29 | **PROPOSED** | v4.2.0 | — |
+| Round F (Major Features) | OPP-19, 25 | **PROPOSED** | v5.0.0 | — |
 
 ---
 
@@ -99,11 +103,29 @@ Changes from original:
 | — | OPP-17 | Dual-Format Autonomous | 7 | 6 | 1.0 | 3 | 14 | C | DONE |
 | — | OPP-09 | Multi-Modal Loops | 6 | 6 | 1.0 | 3 | 12 | C | DONE |
 | — | OPP-15 | Conversation Branching | 5 | 5 | **0.8** | 5 | **4** | C | DONE |
+| 1 | OPP-19 | Native Chat API (`/api/v1/chat`) | 8 | 10 | 0.8 | 4 | **16** | F | PROPOSED |
+| 2 | OPP-21 | Native Reasoning Parameter | 9 | 8 | 0.9 | 1 | **64.8** | D | PROPOSED |
+| 3 | OPP-22 | Single-Model Lookup | 8 | 7 | 1.0 | 1 | **56** | D | PROPOSED |
+| 4 | OPP-23 | Streaming Usage Tracking | 7 | 7 | 0.9 | 1 | **44.1** | D | PROPOSED |
+| 5 | OPP-24 | Model Auto-Download (REST) | 6 | 7 | 0.8 | 2 | **16.8** | E | PROPOSED |
+| 6 | OPP-25 | Ephemeral MCP Servers | 5 | 9 | 0.7 | 4 | **7.9** | F | PROPOSED |
+| 7 | OPP-26 | Advanced Sampling (min_p, top_k) | 4 | 5 | 1.0 | 1 | **20** | D | PROPOSED |
+| 8 | OPP-27 | Advanced Model Load Params | 5 | 6 | 0.9 | 1 | **27** | E | PROPOSED |
+| 9 | OPP-28 | API Authentication | 4 | 6 | 0.8 | 1 | **19.2** | E | PROPOSED |
+| 10 | OPP-29 | Log-Probabilities | 5 | 6 | 0.8 | 1 | **24** | E | PROPOSED |
+| 11 | OPP-30 | Echo Load Config | 4 | 5 | 0.9 | 1 | **18** | D | PROPOSED |
 
-**Round totals**:
+**Completed round totals**:
 - Round A (Phases 2+3 parallel): **309.6** — 6 OPPs — **DONE**
 - Round B (Phase 4): **85.9** — 5 OPPs — **DONE**
 - Round C (Phase 5): **30** — 3 OPPs — **DONE**
+
+**Proposed round totals**:
+- Round D (Quick Wins): **202.9** — 5 OPPs — OPP-21, 22, 23, 26, 30
+- Round E (Medium Lift): **87** — 4 OPPs — OPP-24, 27, 28, 29
+- Round F (Major Features): **23.9** — 2 OPPs — OPP-19, 25
+
+**Note**: ~~OPP-20~~ (Structured Output / JSON Schema) removed — already implemented in v3.2.0.
 
 ---
 
@@ -197,6 +219,62 @@ Round C — Phase 5 — DONE:
 
 ---
 
+## OPP Type Classification (Round D/E/F)
+
+| OPP | Name | Type | Evolves From | Backward Compat |
+|-----|------|------|-------------|-----------------|
+| OPP-19 | Native Chat API | EVOLUTION | OPP-12 + OPP-16 | No — replaces OpenAI-compat streaming |
+| OPP-21 | Native Reasoning | EVOLUTION | OPP-14 | No — replaces `thinking_budget` |
+| OPP-22 | Single-Model Lookup | EVOLUTION | OPP-04 | Yes — additive endpoint |
+| OPP-23 | Streaming Usage | EVOLUTION | OPP-12 | Yes — additive parameter |
+| OPP-24 | Model Auto-Download | EVOLUTION | OPP-04 | Yes — REST replaces CLI |
+| OPP-25 | Ephemeral MCP | EVOLUTION | OPP-16 | No — restructures MCP config |
+| OPP-26 | Advanced Sampling | NEW | None | Yes — new parameters |
+| OPP-27 | Advanced Load Params | EVOLUTION | OPP-04 | Yes — additive parameters |
+| OPP-28 | API Authentication | NEW | None | Yes — additive header |
+| OPP-29 | Log-Probabilities | NEW | None | Yes — additive parameter |
+| OPP-30 | Echo Load Config | EVOLUTION | OPP-04 | Yes — additive response field |
+
+**Summary**: 8 evolutions, 3 new features, 1 removed (OPP-20 already exists). 8 backward compatible, 3 breaking.
+
+---
+
+## Proposed Execution Diagram (Round D/E/F)
+
+```
+                    ┌─ OPP-21 (reasoning) ← OPP-14 ✅
+                    ├─ OPP-22 (single lookup) ← OPP-04 ✅
+Round D (v4.1.0) ──┤  OPP-23 (streaming usage) ← OPP-12 ✅     ALL PARALLEL
+                    ├─ OPP-26 (sampling params) ← none
+                    └─ OPP-30 (echo config) ← OPP-04 ✅
+                         │
+                         ▼
+Round E (v4.2.0) ──┐
+                    ├─ OPP-27 (adv load) → OPP-24 (auto-download)  SEQUENTIAL
+                    ├─ OPP-28 (auth) ═══╗ PARALLEL
+                    └─ OPP-29 (logprobs) ═══╝
+                         │
+                         ▼
+Round F (v5.0.0) ──┐
+                    ├─ OPP-19 (native chat) ← OPP-12 ✅, OPP-16 ✅
+                    └─ OPP-25 (ephemeral MCP) ← OPP-19
+```
+
+---
+
+## API Combination Opportunities
+
+| Combo | Name | APIs Combined | Impact | Evolves |
+|-------|------|--------------|--------|---------|
+| COMBO-A | Intelligent Streaming | OPP-19 + 23 + 21 | TRANSFORMATIVE | OPP-12 → rich event stream |
+| COMBO-B | Self-Provisioning Bridge | OPP-24 + 27 + 22 + 08 | GAME-CHANGER | OPP-04+08 → zero manual model mgmt |
+| COMBO-C | Secure Multi-Tenant | OPP-28 + 25 + 19 | NEW MARKET | None → team/shared deployments |
+| COMBO-D | Confidence-Scored Output | OPP-29 + structured output + 21 | HIGH VALUE | OPP-02 → confidence-gated loops |
+| COMBO-E | Observable Autonomous Loop | OPP-19 + 07 + 23 + 21 | HIGH VALUE | OPP-07 → real-time observability |
+| COMBO-F | Zero-Config Model Router | OPP-22 + 30 + 08 + 27 | MEDIUM | OPP-08 → self-tuning selection |
+
+---
+
 ## Completed Work Summary
 
 | Round | OPPs | RICE Total | Tests Added |
@@ -206,6 +284,16 @@ Round C — Phase 5 — DONE:
 | Round A (Phase 2+3) | OPP-11, 16, 13, 05, 06, 07 | 309.6 | ~107 |
 | Round B (Phase 4) | OPP-12, 10, 08, 14, 18 | 85.9 | ~80 |
 | Round C (Phase 5) | OPP-17, 09, 15 | 30 | ~30 |
-| **TOTAL** | **18 OPPs** | **638** | **~375** |
+| Error Audit | 10 bug fixes | — | ~50 |
+| **TOTAL DONE** | **18 OPPs + 10 fixes** | **638** | **~425** |
 
-Final state: ~1405 tests, 89% coverage, VERSION 4.0.0.
+Final completed state: ~1455 tests, 91% coverage, VERSION 4.0.0.
+
+**Proposed totals**:
+
+| Round | OPPs | RICE Total |
+|-------|------|-----------|
+| Round D (Quick Wins) | OPP-21, 22, 23, 26, 30 | 202.9 |
+| Round E (Medium Lift) | OPP-24, 27, 28, 29 | 87 |
+| Round F (Major Features) | OPP-19, 25 | 23.9 |
+| **TOTAL PROPOSED** | **11 OPPs** | **313.8** |

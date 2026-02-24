@@ -1,24 +1,77 @@
-# LM Studio Bridge Enhanced v3.2.0
+# LM Studio Bridge Enhanced v4.0.0
 
-MCP server that connects Claude Code (or any MCP client) to local LLMs via LM Studio.
+An autonomous middleware agent that lets any MCP client delegate tasks to local LLMs, which can then use any MCP tool — translating between all 3 API formats in real-time.
 
 **Based on**: [LMStudio-MCP](https://github.com/infinitimeless/LMStudio-MCP) by infinitimeless
 
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![LM Studio](https://img.shields.io/badge/LM%20Studio-0.3.32+-green.svg)](https://lmstudio.ai/)
-[![Tests](https://img.shields.io/badge/tests-331%20passing-brightgreen.svg)](#testing)
+[![LM Studio](https://img.shields.io/badge/LM%20Studio-0.4.4+-green.svg)](https://lmstudio.ai/)
+[![Tests](https://img.shields.io/badge/tests-1455%20passing-brightgreen.svg)](#testing)
+[![Coverage](https://img.shields.io/badge/coverage-91%25-brightgreen.svg)](#testing)
 
 ---
 
-## What It Does
+## The 5 Pillars
 
-Bridges LM Studio (local LLMs) to MCP servers so your local models can:
+This project is not just a bridge — it's a **3-way autonomous middleware agent** built on 5 pillars:
 
-- Use MCP tools (filesystem, database, web, git, etc.)
-- Switch models per task with validation
-- Display reasoning process (for supported models)
-- Work with any MCP server via dynamic discovery
+```
+     Claude Code                         Other MCPs
+     (any MCP client)                    (filesystem, memory, git, fetch...)
+          |                                   ^
+          | MCP Protocol                      | MCP Protocol
+          v                                   |
+    +---------------------------------------------+
+    |          PILLAR 1: MCP SERVER                |
+    |          (FastMCP, 30+ tools)                |
+    |                                              |
+    |    +--------------------------------------+  |
+    |    |   PILLAR 4: AUTONOMOUS AGENT         |  |
+    |    |   (self-correcting loops, parallel   |  |
+    |    |    tool exec, metrics, branching)    |  |
+    |    +--------+-----------------+-----------+  |
+    |             |                 |               |
+    |    +--------v------+  +------v-----------+   |
+    |    | PILLAR 2:     |  | PILLAR 3:        |   |
+    |    | LLM CLIENT    |  | MCP CLIENT       |   |
+    |    | (14 endpoints |  | (dynamic         |   |
+    |    |  3 API        |  |  discovery,      |   |
+    |    |  surfaces)    |  |  hot reload)     |   |
+    |    +--------+------+  +------+-----------+   |
+    |             |                 |               |
+    |    +--------v-----------------v-----------+   |
+    |    |     PILLAR 5: FORMAT TRANSLATOR      |   |
+    |    |     (OpenAI <-> Anthropic <->        |   |
+    |    |      Responses, bidirectional)       |   |
+    |    +--------------------------------------+   |
+    +---------------------------------------------+
+          |                                   |
+          | HTTP (3 API surfaces)             | stdio/SSE
+          v                                   v
+     LM Studio                           MCP Servers
+     (local LLMs)                        (any from .mcp.json)
+```
+
+| Pillar | Role | What Sees It As |
+|--------|------|-----------------|
+| **1. MCP Server** | Serves 30+ tools via FastMCP | Claude Code sees an MCP with tools |
+| **2. LLM Client** | Calls LM Studio across 14 endpoints, 3 API surfaces | LM Studio sees an HTTP client |
+| **3. MCP Client** | Connects to other MCPs dynamically from `.mcp.json` | Other MCPs see an MCP client |
+| **4. Autonomous Agent** | Runs LLM-tool loops independently — multi-round, self-correcting, parallel | The orchestrator that ties everything together |
+| **5. Format Translator** | Bidirectional 3-way translation: OpenAI, Anthropic, Responses | The universal glue between competing standards |
+
+## What Makes It Different
+
+| # | Differentiation | Description |
+|---|----------------|-------------|
+| **D-1** | 3-way MCP topology | Acts as MCP Server AND MCP Client AND LLM Client simultaneously — a 3-way node in the MCP graph |
+| **D-2** | Autonomous agent loops | Claude delegates a task, the bridge runs a full LLM-tool loop and returns only the result |
+| **D-3** | Universal format translation | OpenAI, Anthropic, Responses — all 3 formats, bidirectional, for tools + messages + streaming |
+| **D-4** | Dynamic MCP discovery | Hot-reload from `.mcp.json` — add a new MCP, it's instantly available. Zero code changes |
+| **D-5** | Smart model routing | Scores all loaded models by capability and picks the best one for each task |
+| **D-6** | JIT model lifecycle | Model not loaded? Bridge loads it. Wrong model? Bridge swaps it. All transparent |
+| **D-7** | Conversation branching | Fork conversations at any point, explore alternatives, merge results — tree-based history |
 
 ---
 
@@ -27,7 +80,7 @@ Bridges LM Studio (local LLMs) to MCP servers so your local models can:
 ### 1. Prerequisites
 
 - Python 3.9+
-- [LM Studio](https://lmstudio.ai/) v0.3.29+ with a model loaded
+- [LM Studio](https://lmstudio.ai/) v0.4.4+ with a model loaded
 - MCP-compatible client (e.g., Claude Code)
 
 ### 2. Install
@@ -349,21 +402,21 @@ autonomous_discover_and_execute("Complete this task")
 
 ## Architecture
 
+The bridge occupies a unique position in the MCP ecosystem — it's simultaneously a server, client, and autonomous agent:
+
 ```
-Claude Code (MCP Client)
-    ↓
-lmstudio-bridge (MCP Server)
-    ↓
-LM Studio API (localhost:1234)
-    ↓
-Local LLM
-    ↓
-Other MCP Servers (filesystem, memory, etc.)
+Claude Code ──MCP──> [MCP Server] ──> [Autonomous Agent] ──> [LLM Client] ──HTTP──> LM Studio
+                                            |
+                                            +──> [MCP Client] ──MCP──> filesystem, memory, git...
+                                            |
+                                      [Format Translator]
+                                    OpenAI <-> Anthropic <-> Responses
 ```
 
-The bridge acts as both:
-- MCP server to Claude Code
-- MCP client to other MCPs
+**API Surfaces** (3 simultaneous):
+- OpenAI-compatible: `/v1/chat/completions`, `/v1/completions`, `/v1/models`, `/v1/embeddings`, `/v1/responses`
+- Anthropic-compatible: `/v1/messages`
+- Native LM Studio: `/api/v1/models`, `/api/v1/models/load`, `/api/v1/models/unload`, `/api/v1/diagnostics`
 
 ---
 
@@ -448,15 +501,19 @@ cd lmstudio-bridge-enhanced
 python3 -m pytest tests/ -v
 ```
 
-**Test Results**: 331 tests passing (100%)
+**Test Results**: ~1455 tests passing, 91% coverage
 
 Test coverage includes:
-- Structured output (51 tests)
-- Vision/multimodal (50 tests)
-- Type coercion (16 tests)
-- Model registry (18 tests)
-- Retry logic (8 tests)
-- E2E multi-model workflows
+- Format adapter 3-way translation (200+ tests)
+- Autonomous agent loops — OpenAI and Anthropic formats (100+ tests)
+- Streaming — SSE parser, thinking parser (80+ tests)
+- Structured output and JSON schema (51 tests)
+- Vision/multimodal (50+ tests)
+- Model registry, selection, discovery (150+ tests)
+- Model lifecycle — load, unload, JIT, validation (100+ tests)
+- Conversation branching (50+ tests)
+- Thread safety, resource cleanup, error handling (80+ tests)
+- Architecture guards, version consistency (20+ tests)
 
 ---
 
@@ -498,32 +555,35 @@ See [Troubleshooting Guide](docs/TROUBLESHOOTING.md) for more.
 
 ## Version History
 
-### v3.2.0 (November 23, 2025) - Current
-- **Structured JSON Output** - Force valid JSON with schema validation
-- **Vision/Multimodal Support** - 6 new tools for image analysis
-- **Model Capability Registry** - BFCL scores, VRAM estimation, fallback
-- **Autonomous Agent Improvements** - Type coercion, tool_choice=required
-- **Resilience** - Retry logic with exponential backoff, API timeouts
-- 331 tests (up from 171), 100% pass rate
-- 44 commits, 10 new MCP tools
+### v4.0.0 (February 2026) - Current
+- **18 OPPs implemented** across 5 rounds (Phase 1 through Round C)
+- **3-way format adapter** — OpenAI, Anthropic, Responses (bidirectional)
+- **Dual-format autonomous loops** — OpenAI and Anthropic tool-calling
+- **Streaming infrastructure** — SSE parser for all 3 API surfaces
+- **Extended thinking** — reasoning budget control for thinking models
+- **Multi-modal loops** — vision support in autonomous agent
+- **Conversation branching** — fork/merge tree navigation
+- **Smart model selection** — capability-scored model routing
+- **Native MCP via API** — MCP servers configured in API requests
+- **Test infrastructure overhaul** — 1455 tests, 91% coverage
+- **10 server bug fixes** — resource leaks, thread safety, silent failures
 
-### v3.1.1 (November 4, 2025)
-- Ultra-prominent model parameter documentation
-- MCP selection decision tree
-- Anti-patterns documentation
+### v3.4.0 (February 2026)
+- Streaming (OPP-12), Extended Thinking (OPP-14), Format Adapter 3-way (OPP-10)
+- Smart Model Selection (OPP-08), Headless Deployment (OPP-18)
+- ~80% coverage, ~1100 tests
 
-### v3.1.0 (November 2, 2025)
-- Multi-model support with validation
-- Model validation layer (async, cached)
-- 7 custom exception classes
-- Critical IDLE state bug fix
+### v3.2.0 (November 2025)
+- Structured JSON Output, Vision/Multimodal, Model Capability Registry
+- 331 tests, 44 commits, 10 new MCP tools
+
+### v3.1.0 (November 2025)
+- Multi-model support, model validation, 7 exception classes
 
 ### v3.0.0 (October 2025)
-- Reasoning display enhancements
-- Evidence-based safety features
-- Type safety improvements
+- Reasoning display, evidence-based safety, type safety
 
-See [RELEASE_NOTES_v3.2.0.md](RELEASE_NOTES_v3.2.0.md) for complete details.
+See [docs/release-notes/](docs/release-notes/) for complete details.
 
 ---
 
