@@ -25,6 +25,7 @@ import asyncio
 import logging
 import os
 import sys
+from unittest.mock import patch
 
 import pytest
 import pytest_asyncio
@@ -67,6 +68,31 @@ def reset_model_validator_cache():
     ModelValidator.reset_cache()
     yield
     ModelValidator.reset_cache()
+
+
+# ============================================================================
+# D-4/S-1: Global REST API Leak Prevention
+# ============================================================================
+
+@pytest.fixture(autouse=True)
+def _prevent_rest_api_leaks(request):
+    """Block LMSHelper REST API calls in all non-e2e tests.
+
+    Patches _get_rest_client() → None so load_model(), list_loaded_models(),
+    etc. fall back to CLI instead of making real HTTP requests to LM Studio.
+
+    E2e tests (marked @pytest.mark.e2e) are exempt — they need real API access.
+
+    This replaces per-file _prevent_rest_api_leaks fixtures that only covered
+    2 of 20+ test files (test_failure_scenarios.py, test_performance_benchmarks.py).
+    """
+    markers = {m.name for m in request.node.iter_markers()}
+    if "e2e" in markers:
+        yield
+        return
+
+    with patch.object(LMSHelper, '_get_rest_client', return_value=None):
+        yield
 
 
 # ============================================================================
