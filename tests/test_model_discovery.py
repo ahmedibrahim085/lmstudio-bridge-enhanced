@@ -627,7 +627,7 @@ class TestDiscoverModelsDI:
              patch("tests.fixtures.model_discovery.LMSHelper") as mock_lms, \
              patch("tests.fixtures.model_discovery._wake_up_loaded_role_models"):
             mock_lms._get_base_model_name.side_effect = lambda k: k
-            result = discover_models(rest_client=mock_client)
+            discover_models(rest_client=mock_client)
             # LMSRestClient() constructor should NOT be called — we injected our own
             mock_cls.assert_not_called()
             # The injected client's methods should be called
@@ -644,7 +644,7 @@ class TestDiscoverModelsDI:
             mock_cls.return_value = mock_instance
             mock_lms.is_installed.return_value = False
 
-            result = discover_models(rest_client=None)
+            discover_models(rest_client=None)
             # LMSRestClient() constructor SHOULD be called
             mock_cls.assert_called_once()
 
