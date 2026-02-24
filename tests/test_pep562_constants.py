@@ -38,6 +38,7 @@ from config.constants import (
     DEFAULT_SMALL_MODEL,
     DEFAULT_THINKING_MODEL,
     DEFAULT_VISION_MODEL,
+    LMSTUDIO_TESTING_ENV_VAR,
     MODEL_ROLE_KEYWORDS,
 )
 
@@ -356,6 +357,84 @@ class TestEnsureDiscovery:
         assert tc._resolved_cache.get("DEFAULT_TEST_MODEL") == first_value, (
             "Cache was modified on second _ensure_discovery() call — should be no-op"
         )
+
+    def test_ensure_discovery_skips_http_when_lmstudio_testing_set(self):
+        """S-2: When LMSTUDIO_TESTING env var is set, discover_models() must NOT be called.
+
+        This prevents HTTP calls to LM Studio during pytest sessions.
+        The env var is activated by D-1 in conftest.py.
+        """
+        mock_discover = MagicMock(
+            return_value=_make_discovered({"chat": "should-not-use"})
+        )
+
+        with patch.dict(os.environ, {LMSTUDIO_TESTING_ENV_VAR: "1"}):
+            with patch(_DISCOVERY_TARGET, mock_discover):
+                tc._ensure_discovery()
+
+        assert mock_discover.call_count == 0, (
+            "discover_models() was called despite LMSTUDIO_TESTING being set — "
+            "S-2 requires skipping HTTP discovery in testing mode"
+        )
+
+    def test_ensure_discovery_uses_fallbacks_when_lmstudio_testing_set(self):
+        """S-2: With LMSTUDIO_TESTING set, all dynamic attrs resolve to static fallbacks.
+
+        Same fallback path as when discover_models() raises an exception,
+        but triggered proactively by the env var check.
+        We prove it by mocking discover_models to return NON-fallback values —
+        if fallbacks are used, discover_models was correctly skipped.
+        """
+        non_fallback_roles = {
+            "chat": "http-discovered-chat",
+            "reasoning": "http-discovered-reasoning",
+            "coding": "http-discovered-coding",
+            "thinking": "http-discovered-thinking",
+            "small": "http-discovered-small",
+            "vision": "http-discovered-vision",
+        }
+
+        with patch.dict(os.environ, {LMSTUDIO_TESTING_ENV_VAR: "1"}):
+            with patch(
+                _DISCOVERY_TARGET,
+                return_value=_make_discovered(non_fallback_roles),
+            ):
+                tc._ensure_discovery()
+
+        # If S-2 is implemented, these should be static fallbacks (NOT http-discovered-*)
+        expected = {
+            "DEFAULT_TEST_MODEL": DEFAULT_FALLBACK_MODEL,
+            "REASONING_MODEL": DEFAULT_REVIEW_MODEL,
+            "CODING_MODEL": DEFAULT_FALLBACK_MODEL,
+            "THINKING_MODEL": DEFAULT_THINKING_MODEL,
+            "SMALL_MODEL": DEFAULT_SMALL_MODEL,
+            "VISION_MODEL": DEFAULT_VISION_MODEL,
+        }
+        for attr, fallback in expected.items():
+            assert tc._resolved_cache.get(attr) == fallback, (
+                f"S-2 fallback mismatch for {attr}: "
+                f"expected {fallback!r}, got {tc._resolved_cache.get(attr)!r}"
+            )
+
+    def test_ensure_discovery_calls_discover_when_lmstudio_testing_unset(self):
+        """S-2 negative: When LMSTUDIO_TESTING is NOT set, discover_models() runs normally.
+
+        Ensures the env var check doesn't accidentally block discovery
+        in non-test contexts.
+        """
+        mock_discover = MagicMock(
+            return_value=_make_discovered({"chat": "real-model"})
+        )
+
+        with patch.dict(os.environ, {LMSTUDIO_TESTING_ENV_VAR: ""}, clear=False):
+            with patch(_DISCOVERY_TARGET, mock_discover):
+                tc._ensure_discovery()
+
+        assert mock_discover.call_count == 1, (
+            "discover_models() was NOT called when LMSTUDIO_TESTING is unset — "
+            "discovery must proceed normally outside testing mode"
+        )
+        assert tc._resolved_cache.get("DEFAULT_TEST_MODEL") == "real-model"
 
 
 # ---------------------------------------------------------------------------
