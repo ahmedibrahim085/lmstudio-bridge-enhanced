@@ -12,7 +12,7 @@
 | Tests | ~1455 passed, 0 failures, 4 skipped |
 | Coverage | **91%** |
 | Coverage target | **80% minimum / 89% goal (exceeded)** |
-| VERSION | 4.0.0 (in constants.py) |
+| VERSION | 3.5.0 (in constants.py) |
 | Completed rounds | Phase 1, Phase 1.5, Round A, Round B, Round C, Polish, Error Audit |
 
 ---
@@ -83,9 +83,9 @@ OPP-04 DONE → OPP-18 DONE
 | OPP-12 | Streaming | Round B | 21.3 | v3.4.0 |
 | OPP-14 | Extended Thinking | Round B | 14.7 | v3.4.0 |
 | OPP-10 | Format Adapter (3-way) | Round B | 16 | v3.4.0 |
-| OPP-17 | Dual-Format Autonomous | Round C | 14 | v4.0.0 |
-| OPP-09 | Multi-Modal Loops | Round C | 12 | v4.0.0 |
-| OPP-15 | Conversation Branching | Round C | 4 | v4.0.0 |
+| OPP-17 | Dual-Format Autonomous | Round C | 14 | v3.5.0 |
+| OPP-09 | Multi-Modal Loops | Round C | 12 | v3.5.0 |
+| OPP-15 | Conversation Branching | Round C | 4 | v3.5.0 |
 
 Phase 1.5 code quality (OPP-05-10 code quality items): PR #4 + PR #5
 
@@ -97,7 +97,7 @@ All 5 OPPs implemented, tested, and merged. Coverage reached ~80%.
 
 ---
 
-## Round C — Phase 5 (DONE — v4.0.0)
+## Round C — Phase 5 (DONE — v3.5.0)
 
 All 3 OPPs implemented, tested, and merged. Coverage reached ~90%.
 
@@ -120,7 +120,7 @@ All 3 OPPs implemented, tested, and merged. Coverage reached ~90%.
 - [x] All tests pass (~1405 total)
 - [x] Full integration test suite passes
 - [x] Architecture guard tests pass
-- [x] VERSION bumped to **v4.0.0**
+- [x] VERSION bumped to **v3.5.0**
 - [x] README updated with final feature list
 
 ### Polish Gate ✅
@@ -147,11 +147,11 @@ Round B ──────────────────────┘ DO
   B-Step 4: OPP-10 ────→
   [Gate: coverage ≥ 75% ✅, VERSION → v3.4.0 ✅]
                         │
-Round C ────────────────┘ DONE (v4.0.0)
+Round C ────────────────┘ DONE (v3.5.0)
   C-Step 1: OPP-17 ═══╗ parallel
             OPP-15 ═══╝
   C-Step 2: OPP-09 ────→
-  [Gate: coverage ≥ 80% ✅, VERSION → v4.0.0 ✅]
+  [Gate: coverage ≥ 80% ✅, VERSION → v3.5.0 ✅]
                         │
 Polish ─────────────────┘ IN PROGRESS
   - Coverage push → 89% ✅
@@ -163,9 +163,9 @@ Polish ─────────────────┘ IN PROGRESS
 
 ---
 
-## Round D — Quick Wins (PROPOSED — v4.1.0)
+## Round D — Quick Wins (PROPOSED — v4.0.0)
 
-Low-effort, high-value additive improvements. All backward compatible. Last v4.x release.
+Low-effort, high-value additive improvements. All backward compatible.
 
 | Step | OPP | Name | Type | Evolves | Backward Compat | Effort | Depends On |
 |------|-----|------|------|---------|-----------------|--------|------------|
@@ -176,7 +176,7 @@ Low-effort, high-value additive improvements. All backward compatible. Last v4.x
 
 **Parallelization**: All 4 OPPs are independent — execute ALL in parallel.
 
-**Gate**: Coverage >= 91%, all tests pass, VERSION → v4.1.0
+**Gate**: Coverage >= 91%, all tests pass, VERSION → v4.0.0
 
 ---
 
@@ -246,18 +246,18 @@ Phase C: Major Features
 
 ---
 
-## New Dependency Chains (v4.1.0 / v5.0.0)
+## New Dependency Chains (v4.0.0 / v5.0.0)
 
 ### Chain E: Streaming Evolution
 ```
-OPP-12 DONE → OPP-23 [v4.1.0] → OPP-19 [v5-C]
+OPP-12 DONE → OPP-23 [v4.0.0] → OPP-19 [v5-C]
 ```
 
 ### Chain F: Model Lifecycle Evolution
 ```
-OPP-04 DONE → OPP-22 [v4.1.0]
+OPP-04 DONE → OPP-22 [v4.0.0]
 OPP-04 DONE → OPP-27 [v5-B] → OPP-24 [v5-B]
-OPP-04 DONE → OPP-30 [v4.1.0]
+OPP-04 DONE → OPP-30 [v4.0.0]
 ```
 
 ### Chain G: Reasoning Evolution
@@ -272,7 +272,7 @@ OPP-16 DONE → OPP-19 [v5-C] → OPP-25 [v5-C]
 
 ### Independent
 ```
-OPP-26 (sampling params) [v4.1.0] — no dependencies
+OPP-26 (sampling params) [v4.0.0] — no dependencies
 OPP-28 (auth) [v5-B] — no dependencies
 OPP-29 (logprobs) [v5-B] — no dependencies
 ```
@@ -359,14 +359,14 @@ These are not individual OPPs — they are **synergy effects** from combining mu
 | 2026-02-23 | Initial backlog created from ROADMAP.md + evidence-based analysis |
 | 2026-02-23 | Phase 0: H-01 (git pull), H-02 (tests verified), H-06 (worktrees cleaned), H-08 (coverage: 69%) |
 | 2026-02-23 | Round B complete: 5 OPPs, v3.4.0, ~80% coverage |
-| 2026-02-23 | Round C complete: 3 OPPs, v4.0.0, ~90% coverage |
+| 2026-02-23 | Round C complete: 3 OPPs, v3.5.0, ~90% coverage |
 | 2026-02-23 | Comprehensive OPP review: 12 fix commits (3 CRITICAL, 8 HIGH, 4 MEDIUM) |
 | 2026-02-23 | Test infrastructure overhaul: 12 commits, coverage 76% → 89%, tests 1355 → ~1405 |
-| 2026-02-23 | Updated backlog to reflect v4.0.0 completion state |
+| 2026-02-23 | Updated backlog to reflect v3.5.0 completion state |
 | 2026-02-24 | Server error audit: 10 bugs fixed (5 commits), tests 1405 → ~1455, coverage 89% → 91% |
 | 2026-02-24 | API gap analysis: 11 new OPPs (OPP-19 to OPP-30, minus OPP-20 already exists) |
 | 2026-02-24 | Added Round D (quick wins), Round E (medium lift), Round F (major features) |
 | 2026-02-24 | Added 6 API combination opportunities (COMBO-A through COMBO-F) |
-| 2026-02-24 | Versioning revision: Round D stays v4.1.0, merged Round E + F + Architecture into v5.0.0 |
+| 2026-02-24 | Versioning revision: Round C → v3.5.0, Round D → v4.0.0, merged Round E + F + Architecture into v5.0.0 |
 | 2026-02-24 | OPP-21 moved from Round D to v5.0.0 Phase B (breaking change bundles with v5) |
 | 2026-02-24 | Added Architecture Refactoring phase (ARCH-1..5) from ARCHITECTURE_REVIEW.md findings |

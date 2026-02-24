@@ -1,4 +1,4 @@
-# LM Studio Bridge Enhanced v4.0.0
+# LM Studio Bridge Enhanced v3.5.0
 
 An autonomous middleware agent that lets any MCP client delegate tasks to local LLMs, which can then use any MCP tool — translating between all 3 API formats in real-time.
 
@@ -555,7 +555,7 @@ See [Troubleshooting Guide](docs/TROUBLESHOOTING.md) for more.
 
 ## Version History
 
-### v4.0.0 (February 2026) - Current
+### v3.5.0 (February 2026) - Current
 - **18 OPPs implemented** across 5 rounds (Phase 1 through Round C)
 - **3-way format adapter** — OpenAI, Anthropic, Responses (bidirectional)
 - **Dual-format autonomous loops** — OpenAI and Anthropic tool-calling

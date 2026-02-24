@@ -12,9 +12,9 @@
 | Phase 1.5 (Code Quality) | OPP-05, 06, 07, 08, 09, 10 | **DONE** | PR #4 + #5 | 86 |
 | Round A (Phases 2+3 parallel) | OPP-11, 16, 13, 05, 06, 07 | **DONE** | PR #6 + #7 | 107 |
 | Round B (Phase 4) | OPP-12, 10, 08, 14, 18 | **DONE** | v3.4.0 | ~80 |
-| Round C (Phase 5) | OPP-17, 09, 15 | **DONE** | v4.0.0 | ~30 |
-| Error Audit | 10 bug fixes | **DONE** | v4.0.1-error-audit | ~50 |
-| Round D (Quick Wins) | OPP-22, 23, 26, 30 | **PROPOSED** | v4.1.0 | — |
+| Round C (Phase 5) | OPP-17, 09, 15 | **DONE** | v3.5.0 | ~30 |
+| Error Audit | 10 bug fixes | **DONE** | v3.5.1-error-audit | ~50 |
+| Round D (Quick Wins) | OPP-22, 23, 26, 30 | **PROPOSED** | v4.0.0 | — |
 | v5.0.0 Phase A (Architecture) | ARCH-1..5 | **PROPOSED** | v5.0.0 | — |
 | v5.0.0 Phase B (Features) | OPP-21, 24, 27, 28, 29 | **PROPOSED** | v5.0.0 | — |
 | v5.0.0 Phase C (Major) | OPP-19, 25 | **PROPOSED** | v5.0.0 | — |
@@ -123,7 +123,7 @@ Changes from original:
 - Round C (Phase 5): **30** — 3 OPPs — **DONE**
 
 **Proposed round totals**:
-- Round D (v4.1.0 — Quick Wins): **138.1** — 4 OPPs — OPP-22, 23, 26, 30
+- Round D (v4.0.0 — Quick Wins): **138.1** — 4 OPPs — OPP-22, 23, 26, 30
 - v5.0.0 Phase A (Architecture): 5 refactoring items (ARCH-1..5) — no RICE score
 - v5.0.0 Phase B (Features): **151.8** — 5 OPPs — OPP-21, 24, 27, 28, 29
 - v5.0.0 Phase C (Major): **23.9** — 2 OPPs — OPP-19, 25
@@ -246,7 +246,7 @@ Round C — Phase 5 — DONE:
 
 ```
                     ┌─ OPP-22 (single lookup) ← OPP-04 ✅
-Round D (v4.1.0) ──┤  OPP-23 (streaming usage) ← OPP-12 ✅     ALL PARALLEL
+Round D (v4.0.0) ──┤  OPP-23 (streaming usage) ← OPP-12 ✅     ALL PARALLEL
                     ├─ OPP-26 (sampling params) ← none
                     └─ OPP-30 (echo config) ← OPP-04 ✅
                          │
@@ -298,13 +298,13 @@ v5.0.0 Phase C ────┐
 | Error Audit | 10 bug fixes | — | ~50 |
 | **TOTAL DONE** | **18 OPPs + 10 fixes** | **638** | **~425** |
 
-Final completed state: ~1455 tests, 91% coverage, VERSION 4.0.0.
+Final completed state: ~1455 tests, 91% coverage, VERSION 3.5.0.
 
 **Proposed totals**:
 
 | Round | OPPs | RICE Total |
 |-------|------|-----------|
-| Round D (v4.1.0 — Quick Wins) | OPP-22, 23, 26, 30 | 138.1 |
+| Round D (v4.0.0 — Quick Wins) | OPP-22, 23, 26, 30 | 138.1 |
 | v5.0.0 Phase A (Architecture) | ARCH-1..5 | — |
 | v5.0.0 Phase B (Features) | OPP-21, 24, 27, 28, 29 | 151.8 |
 | v5.0.0 Phase C (Major) | OPP-19, 25 | 23.9 |

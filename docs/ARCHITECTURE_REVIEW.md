@@ -2,7 +2,7 @@
 
 > Date: 2026-02-24 | Reviewer: opus architect agent | Score: **62/100**
 >
-> Baseline: v4.0.0 | Branch: `fix/server-error-audit` at `bf42a16` | Tests: ~1455 | Coverage: 91%
+> Baseline: v3.5.0 | Branch: `fix/server-error-audit` at `bf42a16` | Tests: ~1455 | Coverage: 91%
 
 ---
 
