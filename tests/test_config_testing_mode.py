@@ -2,7 +2,7 @@
 
 import os
 import sys
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 import pytest
 
@@ -20,7 +20,7 @@ class TestLMStudioTestingMode:
 
         with patch("config_main.LMStudioConfig._get_first_available_model") as mock_detect:
             from config_main import LMStudioConfig
-            config = LMStudioConfig.from_env()
+            LMStudioConfig.from_env()
             mock_detect.assert_not_called()
 
     @pytest.mark.unit
@@ -29,7 +29,7 @@ class TestLMStudioTestingMode:
         monkeypatch.setenv("LMSTUDIO_TESTING", "1")
         monkeypatch.delenv("DEFAULT_MODEL", raising=False)
 
-        with patch("config_main.LMStudioConfig._get_first_available_model") as mock_detect:
+        with patch("config_main.LMStudioConfig._get_first_available_model"):
             from config_main import LMStudioConfig
             config = LMStudioConfig.from_env()
             assert config.default_model == "default"
@@ -40,9 +40,12 @@ class TestLMStudioTestingMode:
         monkeypatch.delenv("LMSTUDIO_TESTING", raising=False)
         monkeypatch.delenv("DEFAULT_MODEL", raising=False)
 
-        with patch("config_main.LMStudioConfig._get_first_available_model", return_value="some-model") as mock_detect:
+        with patch(
+            "config_main.LMStudioConfig._get_first_available_model",
+            return_value="some-model",
+        ) as mock_detect:
             from config_main import LMStudioConfig
-            config = LMStudioConfig.from_env()
+            LMStudioConfig.from_env()
             mock_detect.assert_called_once()
 
     @pytest.mark.unit
@@ -63,9 +66,12 @@ class TestLMStudioTestingMode:
         monkeypatch.setenv("LMSTUDIO_TESTING", "")
         monkeypatch.delenv("DEFAULT_MODEL", raising=False)
 
-        with patch("config_main.LMStudioConfig._get_first_available_model", return_value="detected-model") as mock_detect:
+        with patch(
+            "config_main.LMStudioConfig._get_first_available_model",
+            return_value="detected-model",
+        ) as mock_detect:
             from config_main import LMStudioConfig
-            config = LMStudioConfig.from_env()
+            LMStudioConfig.from_env()
             mock_detect.assert_called_once()
 
     @pytest.mark.unit
@@ -75,9 +81,9 @@ class TestLMStudioTestingMode:
         monkeypatch.delenv("DEFAULT_MODEL", raising=False)
 
         with patch("config_main.LMStudioConfig._get_first_available_model") as mock_detect, \
-             patch("config_main.requests", create=True) as mock_requests:
+             patch("config_main.requests", create=True):
             from config_main import LMStudioConfig
-            config = LMStudioConfig.from_env()
+            LMStudioConfig.from_env()
             mock_detect.assert_not_called()
 
     @pytest.mark.unit

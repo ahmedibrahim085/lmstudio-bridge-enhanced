@@ -48,7 +48,7 @@ class TestLLMClientSessionDI:
         with patch("llm.llm_client.get_config", _mock_config()), \
              patch("llm.llm_client.HTTPAdapter") as mock_adapter:
             from llm.llm_client import LLMClient
-            client = LLMClient(session=mock_session)
+            LLMClient(session=mock_session)
             mock_adapter.assert_not_called()
 
     @pytest.mark.unit
