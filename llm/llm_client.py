@@ -29,6 +29,7 @@ from config.constants import (
     JIT_TTL_EMBEDDING,
     MAX_THINKING_BUDGET_TOKENS,
     MIN_THINKING_BUDGET_TOKENS,
+    MODEL_LIST_TIMEOUT,
     STREAM_READ_TIMEOUT,
 )
 from llm.exceptions import (
@@ -1188,7 +1189,7 @@ class LLMClient:
             LLMError: For other unexpected errors
         """
         try:
-            response = self.session.get(self._get_endpoint("models"))
+            response = self.session.get(self._get_endpoint("models"), timeout=MODEL_LIST_TIMEOUT)
             response.raise_for_status()
             models = response.json().get("data", [])
             return [model["id"] for model in models]
@@ -1210,7 +1211,7 @@ class LLMClient:
             base_url = base_url[:-3]
 
         try:
-            response = self.session.get(f"{base_url}/api/v1/models")
+            response = self.session.get(f"{base_url}/api/v1/models", timeout=MODEL_LIST_TIMEOUT)
             response.raise_for_status()
             raw_data = response.json()
             # Handle both list and dict-wrapped responses ({"models": [...]})
@@ -1261,7 +1262,7 @@ class LLMClient:
             ValueError: If model not found
         """
         try:
-            response = self.session.get(self._get_endpoint("models"))
+            response = self.session.get(self._get_endpoint("models"), timeout=MODEL_LIST_TIMEOUT)
             response.raise_for_status()
             models = response.json().get("data", [])
 

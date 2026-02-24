@@ -147,6 +147,7 @@ __all__ = [
     "MIN_TEMPERATURE",
     "MIN_THINKING_BUDGET_TOKENS",
     "MODEL_CACHE_TTL_SECONDS",
+    "MODEL_LIST_TIMEOUT",
     "MODEL_LOADING_DELAY",
     "MODEL_REACTIVATION_DELAY",
     "MODEL_ROLE_KEYWORDS",
@@ -245,6 +246,10 @@ DEFAULT_RETRY_MAX_DELAY = 60.0
 # Model Validation
 MODEL_CACHE_TTL_SECONDS = 60  # 60-second cache for model validation
 MODEL_VALIDATION_TIMEOUT = 5.0
+
+# Timeout for model listing API calls (list_models, list_models_enriched, get_model_info)
+# Used in: llm/llm_client.py (session.get calls for /models endpoints)
+MODEL_LIST_TIMEOUT = 10
 
 # LLM Generation Defaults
 DEFAULT_MAX_TOKENS = 8192
