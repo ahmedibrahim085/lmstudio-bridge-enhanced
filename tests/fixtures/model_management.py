@@ -77,10 +77,11 @@ def get_default_model() -> str | None:
 
 
 @pytest.fixture
-def require_any_model(discovered_models):
+def require_any_model(discovered_models, model_lifecycle):
     """
     Fixture to ensure ANY model is loaded.
     Uses the session-scoped discovered_models fixture.
+    Routes through model_lifecycle for tracked loading/teardown.
     """
     current_model = get_default_model()
 
@@ -95,7 +96,7 @@ def require_any_model(discovered_models):
         model = discovered_models.roles.get(role)
         if model:
             try:
-                if ensure_model_loaded(model):
+                if model_lifecycle.ensure_model_for_phase(model):
                     return model
             except ModelMemoryError as e:
                 pytest.skip(f"Model requires too much memory: {e.required_memory or 'unknown'}")
@@ -104,13 +105,13 @@ def require_any_model(discovered_models):
 
 
 @pytest.fixture
-def require_model_with_capability(discovered_models):
+def require_model_with_capability(discovered_models, model_lifecycle):
     """Factory fixture: require a model with a specific capability."""
     def _require(capability: str) -> str:
         model = discovered_models.roles.get(capability)
         if not model:
             pytest.skip(f"No model with '{capability}' capability available")
-        if not ensure_model_loaded(model):
+        if not model_lifecycle.ensure_model_for_phase(model):
             pytest.skip(f"Could not load {capability} model '{model}'")
         return model
 
