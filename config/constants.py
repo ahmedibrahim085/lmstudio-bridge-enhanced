@@ -49,6 +49,7 @@ __all__ = [
     "DEFAULT_LOG_DIR",
     "DEFAULT_MAX_RETRIES",
     "DEFAULT_MAX_ROUNDS",
+    "E2E_TEST_MAX_ROUNDS",
     "DEFAULT_MAX_TOKENS",
     "DEFAULT_MCP_CONFIG_PATH",
     "DEFAULT_MCP_NPX_ARGS",
@@ -260,6 +261,7 @@ DEFAULT_PRESENCE_PENALTY = 0.0
 
 # Autonomous Execution
 DEFAULT_MAX_ROUNDS = 10000  # High limit - let LLM work until task complete
+E2E_TEST_MAX_ROUNDS = 5  # Budget: 5 × DEFAULT_LLM_TIMEOUT(58s) = 290s < LONG_TEST_TIMEOUT(300s)
 DEFAULT_AUTONOMOUS_TIMEOUT = 600  # 10 minutes per autonomous task
 MAX_CONSECUTIVE_ERRORS = 3  # Abort autonomous loop after this many consecutive errors
 
