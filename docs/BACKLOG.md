@@ -165,89 +165,116 @@ Polish ─────────────────┘ IN PROGRESS
 
 ## Round D — Quick Wins (PROPOSED — v4.1.0)
 
-Low-effort, high-value additive improvements. All backward compatible.
+Low-effort, high-value additive improvements. All backward compatible. Last v4.x release.
 
 | Step | OPP | Name | Type | Evolves | Backward Compat | Effort | Depends On |
 |------|-----|------|------|---------|-----------------|--------|------------|
-| D-1 | OPP-21 | Native Reasoning Parameter | EVOLUTION | OPP-14 (Extended Thinking) | No — replaces `thinking_budget` | LOW | OPP-14 ✅ |
-| D-2 | OPP-22 | Single-Model Lookup | EVOLUTION | OPP-04 (Model Lifecycle) | Yes — additive | LOW | OPP-04 ✅ |
-| D-3 | OPP-23 | Streaming Usage Tracking | EVOLUTION | OPP-12 (Streaming) | Yes — additive | LOW | OPP-12 ✅ |
-| D-4 | OPP-26 | Advanced Sampling (min_p, top_k) | NEW | None | Yes — additive | LOW | None |
-| D-5 | OPP-30 | Echo Load Config | EVOLUTION | OPP-04 (Model Lifecycle) | Yes — additive | LOW | OPP-04 ✅ |
+| D-1 | OPP-22 | Single-Model Lookup | EVOLUTION | OPP-04 (Model Lifecycle) | Yes — additive | LOW | OPP-04 ✅ |
+| D-2 | OPP-23 | Streaming Usage Tracking | EVOLUTION | OPP-12 (Streaming) | Yes — additive | LOW | OPP-12 ✅ |
+| D-3 | OPP-26 | Advanced Sampling (min_p, top_k) | NEW | None | Yes — additive | LOW | None |
+| D-4 | OPP-30 | Echo Load Config | EVOLUTION | OPP-04 (Model Lifecycle) | Yes — additive | LOW | OPP-04 ✅ |
 
-**Parallelization**: All 5 OPPs are independent — execute ALL in parallel.
+**Parallelization**: All 4 OPPs are independent — execute ALL in parallel.
 
 **Gate**: Coverage >= 91%, all tests pass, VERSION → v4.1.0
 
 ---
 
-## Round E — Medium Lift (PROPOSED — v4.2.0)
+## v5.0.0 — Architecture + Features (PROPOSED)
 
-Medium-effort improvements that extend existing infrastructure.
+Major version combining architecture refactoring, medium-lift features, and breaking changes.
+All breaking changes bundled into one upgrade — v4.x stays a "safe upgrade" guarantee.
 
-| Step | OPP | Name | Type | Evolves | Backward Compat | Effort | Depends On |
-|------|-----|------|------|---------|-----------------|--------|------------|
-| E-1 | OPP-24 | Model Auto-Download (REST API) | EVOLUTION | OPP-04 (Model Lifecycle) | Yes — additive | MEDIUM | OPP-04 ✅ |
-| E-2 | OPP-27 | Advanced Model Load Params | EVOLUTION | OPP-04 (Model Lifecycle) | Yes — additive | LOW | OPP-04 ✅ |
-| E-3 | OPP-28 | API Authentication | NEW | None | Yes — additive header | LOW | None |
-| E-4 | OPP-29 | Log-Probabilities | NEW | None | Yes — additive | LOW | None |
+### Phase A: Architecture Refactoring
 
-**Parallelization**: OPP-24 + OPP-27 share `lms_helper.py` — execute sequentially. OPP-28 + OPP-29 are independent.
+Addresses top findings from `docs/ARCHITECTURE_REVIEW.md` (score: 62/100).
 
-```
-E-Step 1: OPP-27 (advanced load) → OPP-24 (auto-download, builds on load)
-E-Step 2: OPP-28 ═══╗ parallel (zero file overlap)
-          OPP-29 ═══╝
-```
+| Step | Item | Name | Effort | Impact | Source |
+|------|------|------|--------|--------|--------|
+| A-1 | ARCH-1 | Split `LLMClient` into Facade + Protocol | HIGH | HIGH | God class: 1503 lines, 30 methods, 5+ responsibilities |
+| A-2 | ARCH-2 | Break `config/constants.py` into domain packages | LOW | MEDIUM | 172 constants in one flat 762-line file |
+| A-3 | ARCH-3 | Extract metrics helper from `_autonomous_loop` | LOW | MEDIUM | Same 15-line block copy-pasted 4 times |
+| A-4 | ARCH-4 | Fix upward dependency: utils → llm | LOW | MEDIUM | Utils should be leaf-level, imports from llm.exceptions |
+| A-5 | ARCH-5 | Platform-abstract MCP process spawning | LOW | MEDIUM | 85 lines of macOS-only Homebrew paths |
 
-**Gate**: Coverage >= 91%, all tests pass, VERSION → v4.2.0
+**Execution**: A-2 through A-5 in parallel (independent). A-1 after (touches many files).
 
----
-
-## Round F — Major Features (PROPOSED — v5.0.0)
-
-High-effort features that significantly restructure existing systems. Breaking changes expected.
+### Phase B: Round E — Medium-Lift Features
 
 | Step | OPP | Name | Type | Evolves | Backward Compat | Effort | Depends On |
 |------|-----|------|------|---------|-----------------|--------|------------|
-| F-1 | OPP-19 | Native Chat API (`/api/v1/chat`) | EVOLUTION | OPP-12 (Streaming) + OPP-16 (Native MCP) | No — new streaming parser | HIGH | OPP-12 ✅, OPP-16 ✅ |
-| F-2 | OPP-25 | Ephemeral MCP Servers | EVOLUTION | OPP-16 (Native MCP via API) | No — restructures `mcp_servers` | HIGH | OPP-16 ✅, OPP-19 |
+| B-1 | OPP-21 | Native Reasoning Parameter | EVOLUTION | OPP-14 (Extended Thinking) | No — replaces `thinking_budget` | LOW | OPP-14 ✅ |
+| B-2 | OPP-24 | Model Auto-Download (REST API) | EVOLUTION | OPP-04 (Model Lifecycle) | Yes — additive | MEDIUM | OPP-04 ✅ |
+| B-3 | OPP-27 | Advanced Model Load Params | EVOLUTION | OPP-04 (Model Lifecycle) | Yes — additive | LOW | OPP-04 ✅ |
+| B-4 | OPP-28 | API Authentication | NEW | None | Yes — additive header | LOW | None |
+| B-5 | OPP-29 | Log-Probabilities | NEW | None | Yes — additive | LOW | None |
+
+**Parallelization**: OPP-27 → OPP-24 sequential (share `lms_helper.py`). OPP-21 + OPP-28 + OPP-29 independent.
+
+### Phase C: Round F — Major Features
+
+| Step | OPP | Name | Type | Evolves | Backward Compat | Effort | Depends On |
+|------|-----|------|------|---------|-----------------|--------|------------|
+| C-1 | OPP-19 | Native Chat API (`/api/v1/chat`) | EVOLUTION | OPP-12 (Streaming) + OPP-16 (Native MCP) | No — new streaming parser | HIGH | OPP-12 ✅, OPP-16 ✅ |
+| C-2 | OPP-25 | Ephemeral MCP Servers | EVOLUTION | OPP-16 (Native MCP via API) | No — restructures `mcp_servers` | HIGH | OPP-16 ✅, OPP-19 |
 
 **Execution**: Sequential — OPP-19 must land first (OPP-25 uses native chat API).
 
-**Gate**: Coverage >= 90%, all tests pass, VERSION → v5.0.0
+### v5.0.0 Execution Order
+
+```
+Phase A: Architecture (unblocks cleaner Phase B/C implementation)
+  A-2 ═══╗
+  A-3 ═══╣ parallel (independent)
+  A-4 ═══╣
+  A-5 ═══╝
+  A-1 ────→ (after A-2..A-5, touches many files)
+              │
+              ▼
+Phase B: Medium-Lift Features
+  OPP-21 ═══╗
+  OPP-28 ═══╣ parallel (independent)
+  OPP-29 ═══╝
+  OPP-27 → OPP-24  (sequential, shared files)
+              │
+              ▼
+Phase C: Major Features
+  OPP-19 → OPP-25  (sequential, dependency)
+```
+
+**Gate**: Coverage >= 90%, all tests pass, architecture score >= 75/100, VERSION → v5.0.0
 
 ---
 
-## New Dependency Chains (Round D/E/F)
+## New Dependency Chains (v4.1.0 / v5.0.0)
 
 ### Chain E: Streaming Evolution
 ```
-OPP-12 DONE → OPP-23 (usage tracking) → OPP-19 (native chat)
+OPP-12 DONE → OPP-23 [v4.1.0] → OPP-19 [v5-C]
 ```
 
 ### Chain F: Model Lifecycle Evolution
 ```
-OPP-04 DONE → OPP-22 (single lookup)
-OPP-04 DONE → OPP-27 (advanced load) → OPP-24 (auto-download)
-OPP-04 DONE → OPP-30 (echo config)
+OPP-04 DONE → OPP-22 [v4.1.0]
+OPP-04 DONE → OPP-27 [v5-B] → OPP-24 [v5-B]
+OPP-04 DONE → OPP-30 [v4.1.0]
 ```
 
 ### Chain G: Reasoning Evolution
 ```
-OPP-14 DONE → OPP-21 (native reasoning)
+OPP-14 DONE → OPP-21 [v5-B]
 ```
 
 ### Chain H: MCP Evolution
 ```
-OPP-16 DONE → OPP-19 (native chat) → OPP-25 (ephemeral MCP)
+OPP-16 DONE → OPP-19 [v5-C] → OPP-25 [v5-C]
 ```
 
 ### Independent
 ```
-OPP-26 (sampling params) — no dependencies
-OPP-28 (auth) — no dependencies
-OPP-29 (logprobs) — no dependencies
+OPP-26 (sampling params) [v4.1.0] — no dependencies
+OPP-28 (auth) [v5-B] — no dependencies
+OPP-29 (logprobs) [v5-B] — no dependencies
 ```
 
 ---
@@ -266,7 +293,7 @@ OPP-29 (logprobs) — no dependencies
 
 | Compat | Count | OPPs |
 |--------|-------|------|
-| Yes (additive) | 7 | OPP-22, 23, 24, 26, 27, 28, 29, 30 |
+| Yes (additive) | 8 | OPP-22, 23, 24, 26, 27, 28, 29, 30 |
 | No (breaking) | 3 | OPP-19, 21, 25 |
 
 ---
@@ -340,3 +367,6 @@ These are not individual OPPs — they are **synergy effects** from combining mu
 | 2026-02-24 | API gap analysis: 11 new OPPs (OPP-19 to OPP-30, minus OPP-20 already exists) |
 | 2026-02-24 | Added Round D (quick wins), Round E (medium lift), Round F (major features) |
 | 2026-02-24 | Added 6 API combination opportunities (COMBO-A through COMBO-F) |
+| 2026-02-24 | Versioning revision: Round D stays v4.1.0, merged Round E + F + Architecture into v5.0.0 |
+| 2026-02-24 | OPP-21 moved from Round D to v5.0.0 Phase B (breaking change bundles with v5) |
+| 2026-02-24 | Added Architecture Refactoring phase (ARCH-1..5) from ARCHITECTURE_REVIEW.md findings |

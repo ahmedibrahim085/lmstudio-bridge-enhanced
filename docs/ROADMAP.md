@@ -14,9 +14,10 @@
 | Round B (Phase 4) | OPP-12, 10, 08, 14, 18 | **DONE** | v3.4.0 | ~80 |
 | Round C (Phase 5) | OPP-17, 09, 15 | **DONE** | v4.0.0 | ~30 |
 | Error Audit | 10 bug fixes | **DONE** | v4.0.1-error-audit | ~50 |
-| Round D (Quick Wins) | OPP-21, 22, 23, 26, 30 | **PROPOSED** | v4.1.0 | — |
-| Round E (Medium Lift) | OPP-24, 27, 28, 29 | **PROPOSED** | v4.2.0 | — |
-| Round F (Major Features) | OPP-19, 25 | **PROPOSED** | v5.0.0 | — |
+| Round D (Quick Wins) | OPP-22, 23, 26, 30 | **PROPOSED** | v4.1.0 | — |
+| v5.0.0 Phase A (Architecture) | ARCH-1..5 | **PROPOSED** | v5.0.0 | — |
+| v5.0.0 Phase B (Features) | OPP-21, 24, 27, 28, 29 | **PROPOSED** | v5.0.0 | — |
+| v5.0.0 Phase C (Major) | OPP-19, 25 | **PROPOSED** | v5.0.0 | — |
 
 ---
 
@@ -104,16 +105,17 @@ Changes from original:
 | — | OPP-09 | Multi-Modal Loops | 6 | 6 | 1.0 | 3 | 12 | C | DONE |
 | — | OPP-15 | Conversation Branching | 5 | 5 | **0.8** | 5 | **4** | C | DONE |
 | 1 | OPP-19 | Native Chat API (`/api/v1/chat`) | 8 | 10 | 0.8 | 4 | **16** | F | PROPOSED |
-| 2 | OPP-21 | Native Reasoning Parameter | 9 | 8 | 0.9 | 1 | **64.8** | D | PROPOSED |
-| 3 | OPP-22 | Single-Model Lookup | 8 | 7 | 1.0 | 1 | **56** | D | PROPOSED |
-| 4 | OPP-23 | Streaming Usage Tracking | 7 | 7 | 0.9 | 1 | **44.1** | D | PROPOSED |
-| 5 | OPP-24 | Model Auto-Download (REST) | 6 | 7 | 0.8 | 2 | **16.8** | E | PROPOSED |
-| 6 | OPP-25 | Ephemeral MCP Servers | 5 | 9 | 0.7 | 4 | **7.9** | F | PROPOSED |
-| 7 | OPP-26 | Advanced Sampling (min_p, top_k) | 4 | 5 | 1.0 | 1 | **20** | D | PROPOSED |
-| 8 | OPP-27 | Advanced Model Load Params | 5 | 6 | 0.9 | 1 | **27** | E | PROPOSED |
-| 9 | OPP-28 | API Authentication | 4 | 6 | 0.8 | 1 | **19.2** | E | PROPOSED |
-| 10 | OPP-29 | Log-Probabilities | 5 | 6 | 0.8 | 1 | **24** | E | PROPOSED |
-| 11 | OPP-30 | Echo Load Config | 4 | 5 | 0.9 | 1 | **18** | D | PROPOSED |
+| 2 | OPP-22 | Single-Model Lookup | 8 | 7 | 1.0 | 1 | **56** | D | PROPOSED |
+| 3 | OPP-23 | Streaming Usage Tracking | 7 | 7 | 0.9 | 1 | **44.1** | D | PROPOSED |
+| 4 | OPP-26 | Advanced Sampling (min_p, top_k) | 4 | 5 | 1.0 | 1 | **20** | D | PROPOSED |
+| 5 | OPP-30 | Echo Load Config | 4 | 5 | 0.9 | 1 | **18** | D | PROPOSED |
+| 6 | OPP-21 | Native Reasoning Parameter | 9 | 8 | 0.9 | 1 | **64.8** | v5-B | PROPOSED |
+| 7 | OPP-27 | Advanced Model Load Params | 5 | 6 | 0.9 | 1 | **27** | v5-B | PROPOSED |
+| 8 | OPP-29 | Log-Probabilities | 5 | 6 | 0.8 | 1 | **24** | v5-B | PROPOSED |
+| 9 | OPP-28 | API Authentication | 4 | 6 | 0.8 | 1 | **19.2** | v5-B | PROPOSED |
+| 10 | OPP-24 | Model Auto-Download (REST) | 6 | 7 | 0.8 | 2 | **16.8** | v5-B | PROPOSED |
+| 11 | OPP-19 | Native Chat API (`/api/v1/chat`) | 8 | 10 | 0.8 | 4 | **16** | v5-C | PROPOSED |
+| 12 | OPP-25 | Ephemeral MCP Servers | 5 | 9 | 0.7 | 4 | **7.9** | v5-C | PROPOSED |
 
 **Completed round totals**:
 - Round A (Phases 2+3 parallel): **309.6** — 6 OPPs — **DONE**
@@ -121,9 +123,10 @@ Changes from original:
 - Round C (Phase 5): **30** — 3 OPPs — **DONE**
 
 **Proposed round totals**:
-- Round D (Quick Wins): **202.9** — 5 OPPs — OPP-21, 22, 23, 26, 30
-- Round E (Medium Lift): **87** — 4 OPPs — OPP-24, 27, 28, 29
-- Round F (Major Features): **23.9** — 2 OPPs — OPP-19, 25
+- Round D (v4.1.0 — Quick Wins): **138.1** — 4 OPPs — OPP-22, 23, 26, 30
+- v5.0.0 Phase A (Architecture): 5 refactoring items (ARCH-1..5) — no RICE score
+- v5.0.0 Phase B (Features): **151.8** — 5 OPPs — OPP-21, 24, 27, 28, 29
+- v5.0.0 Phase C (Major): **23.9** — 2 OPPs — OPP-19, 25
 
 **Note**: ~~OPP-20~~ (Structured Output / JSON Schema) removed — already implemented in v3.2.0.
 
@@ -242,21 +245,29 @@ Round C — Phase 5 — DONE:
 ## Proposed Execution Diagram (Round D/E/F)
 
 ```
-                    ┌─ OPP-21 (reasoning) ← OPP-14 ✅
-                    ├─ OPP-22 (single lookup) ← OPP-04 ✅
+                    ┌─ OPP-22 (single lookup) ← OPP-04 ✅
 Round D (v4.1.0) ──┤  OPP-23 (streaming usage) ← OPP-12 ✅     ALL PARALLEL
                     ├─ OPP-26 (sampling params) ← none
                     └─ OPP-30 (echo config) ← OPP-04 ✅
                          │
                          ▼
-Round E (v4.2.0) ──┐
-                    ├─ OPP-27 (adv load) → OPP-24 (auto-download)  SEQUENTIAL
-                    ├─ OPP-28 (auth) ═══╗ PARALLEL
-                    └─ OPP-29 (logprobs) ═══╝
+v5.0.0 Phase A ────┐
+  (Architecture)    ├─ ARCH-2 (break constants) ═══╗
+                    ├─ ARCH-3 (extract metrics) ═══╣ PARALLEL
+                    ├─ ARCH-4 (fix utils→llm)  ═══╣
+                    ├─ ARCH-5 (platform MCP)   ═══╝
+                    └─ ARCH-1 (split LLMClient) ────→ (after ARCH-2..5)
                          │
                          ▼
-Round F (v5.0.0) ──┐
-                    ├─ OPP-19 (native chat) ← OPP-12 ✅, OPP-16 ✅
+v5.0.0 Phase B ────┐
+  (Features)        ├─ OPP-21 (reasoning) ═══╗
+                    ├─ OPP-28 (auth)      ═══╣ PARALLEL
+                    ├─ OPP-29 (logprobs)  ═══╝
+                    └─ OPP-27 (adv load) → OPP-24 (auto-download)  SEQUENTIAL
+                         │
+                         ▼
+v5.0.0 Phase C ────┐
+  (Major)           ├─ OPP-19 (native chat) ← OPP-12 ✅, OPP-16 ✅
                     └─ OPP-25 (ephemeral MCP) ← OPP-19
 ```
 
@@ -293,7 +304,8 @@ Final completed state: ~1455 tests, 91% coverage, VERSION 4.0.0.
 
 | Round | OPPs | RICE Total |
 |-------|------|-----------|
-| Round D (Quick Wins) | OPP-21, 22, 23, 26, 30 | 202.9 |
-| Round E (Medium Lift) | OPP-24, 27, 28, 29 | 87 |
-| Round F (Major Features) | OPP-19, 25 | 23.9 |
-| **TOTAL PROPOSED** | **11 OPPs** | **313.8** |
+| Round D (v4.1.0 — Quick Wins) | OPP-22, 23, 26, 30 | 138.1 |
+| v5.0.0 Phase A (Architecture) | ARCH-1..5 | — |
+| v5.0.0 Phase B (Features) | OPP-21, 24, 27, 28, 29 | 151.8 |
+| v5.0.0 Phase C (Major) | OPP-19, 25 | 23.9 |
+| **TOTAL PROPOSED** | **11 OPPs + 5 ARCH** | **313.8** |
