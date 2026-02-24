@@ -11,6 +11,7 @@ Import interface is unchanged:
 """
 
 import logging
+import os
 
 from config.constants import (
     DEFAULT_FALLBACK_MODEL,
@@ -19,6 +20,7 @@ from config.constants import (
     DEFAULT_THINKING_MODEL,
     DEFAULT_VISION_MODEL,
     E2E_TEST_MAX_ROUNDS,  # noqa: F401 — re-exported for test consumers
+    LMSTUDIO_TESTING_ENV_VAR,
 )
 
 logger = logging.getLogger(__name__)
@@ -128,6 +130,16 @@ def _ensure_discovery():
         return
 
     _discovery_done = True
+
+    # S-2: Skip HTTP discovery when LMSTUDIO_TESTING is active.
+    # D-1 sets this env var in conftest.py before any production imports.
+    # Without this guard, PEP 562 __getattr__ triggers discover_models()
+    # which makes HTTP calls to LM Studio during test collection.
+    if os.environ.get(LMSTUDIO_TESTING_ENV_VAR):
+        logger.debug("LMSTUDIO_TESTING active — skipping discover_models(), using static fallbacks")
+        for attr_name, (_role, fallback) in _MODEL_ATTR_MAP.items():
+            _resolved_cache[attr_name] = fallback
+        return
 
     try:
         from tests.fixtures.model_discovery import discover_models

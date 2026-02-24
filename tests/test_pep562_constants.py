@@ -16,9 +16,9 @@ tests are fully isolated regardless of execution order.
 
 import os
 import sys
+from unittest.mock import MagicMock, patch
 
 import pytest
-from unittest.mock import patch, MagicMock
 
 # ---------------------------------------------------------------------------
 # sys.path setup — required so `tests.*` imports resolve from repo root
@@ -42,7 +42,6 @@ from config.constants import (
     MODEL_ROLE_KEYWORDS,
 )
 
-
 # ---------------------------------------------------------------------------
 # Autouse fixture: reset PEP 562 global state before AND after every test
 # ---------------------------------------------------------------------------
@@ -56,11 +55,17 @@ def reset_pep562_state():
     - tc._discovery_done → False
     - tc._resolved_cache → {}
     - Any module-level attr cached by __getattr__ (e.g. DEFAULT_TEST_MODEL)
+    - LMSTUDIO_TESTING env var temporarily cleared so tests exercise the
+      real discovery path by default. S-2-specific tests re-set it explicitly.
     """
     tc._discovery_done = False
     tc._resolved_cache.clear()
     for attr in list(tc._MODEL_ATTR_MAP.keys()):
         tc.__dict__.pop(attr, None)
+
+    # Save and clear LMSTUDIO_TESTING so tests exercise the normal discovery
+    # path. S-2 tests explicitly set it via patch.dict to test the guard.
+    saved_value = os.environ.pop(LMSTUDIO_TESTING_ENV_VAR, None)
 
     yield
 
@@ -68,6 +73,12 @@ def reset_pep562_state():
     tc._resolved_cache.clear()
     for attr in list(tc._MODEL_ATTR_MAP.keys()):
         tc.__dict__.pop(attr, None)
+
+    # Restore LMSTUDIO_TESTING to its original value
+    if saved_value is not None:
+        os.environ[LMSTUDIO_TESTING_ENV_VAR] = saved_value
+    else:
+        os.environ.pop(LMSTUDIO_TESTING_ENV_VAR, None)
 
 
 # ---------------------------------------------------------------------------
