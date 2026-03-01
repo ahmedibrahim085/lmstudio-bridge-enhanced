@@ -135,6 +135,17 @@ class LMSRestClient:
                 return m
         return None
 
+    def _fetch_model_config(self, model_key: str) -> Optional[dict[str, Any]]:
+        """Fetch load config from latest loaded instance after cache invalidation."""
+        self.invalidate_cache()
+        model = self.get_model(model_key)
+        if model is None:
+            return None
+        instances = model.get("loaded_instances", [])
+        if not instances:
+            return None
+        return instances[-1].get("config", {})
+
     def is_server_available(self) -> bool:
         """Check if LM Studio REST API is reachable."""
         try:
@@ -161,7 +172,8 @@ class LMSRestClient:
                 "instance_id": None,
                 "already_loaded": True,
                 "memory_error": False,
-                "message": f"Model '{model_key}' already loaded"
+                "message": f"Model '{model_key}' already loaded",
+                "config": self._fetch_model_config(model_key),
             }
 
         try:
@@ -184,7 +196,8 @@ class LMSRestClient:
                     "instance_id": data.get("instance_id"),
                     "already_loaded": False,
                     "memory_error": False,
-                    "message": f"Model '{model_key}' loaded successfully"
+                    "message": f"Model '{model_key}' loaded successfully",
+                    "config": self._fetch_model_config(model_key),
                 }
             else:
                 body_text = response.text
@@ -194,7 +207,8 @@ class LMSRestClient:
                     "instance_id": None,
                     "already_loaded": False,
                     "memory_error": is_memory,
-                    "message": body_text
+                    "message": body_text,
+                    "config": None,
                 }
         except Exception as e:
             return {
@@ -202,7 +216,8 @@ class LMSRestClient:
                 "instance_id": None,
                 "already_loaded": False,
                 "memory_error": False,
-                "message": str(e)
+                "message": str(e),
+                "config": None,
             }
 
     def unload_model(self, instance_id: str) -> bool:
