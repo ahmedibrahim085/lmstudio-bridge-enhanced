@@ -27,7 +27,7 @@ class TestVersionConsistency:
         setup_version = setup_match.group(1)
 
         assert const_version == setup_version, (
-            f"Version mismatch: config/constants.py has '{const_version}' "
+            f"Version mismatch: config/constants/version.py has '{const_version}' "
             f"but setup.py has '{setup_version}'"
         )
 
