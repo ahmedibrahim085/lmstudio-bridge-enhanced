@@ -15,7 +15,7 @@
 | Round C (Phase 5) | OPP-17, 09, 15 | **DONE** | v3.5.0 | ~30 |
 | Error Audit | 10 bug fixes | **DONE** | v3.5.1-error-audit | ~50 |
 | Code Quality Audit | 12 findings fixed | **DONE** | v4.0.0 | ~75 |
-| Round D (Quick Wins) | OPP-22, 23, 26, 30 | **PROPOSED** | v4.1.0 | — |
+| Round D (Quick Wins) | OPP-22, 23, 26, 30 | **DONE** | v4.0.0 | ~90 |
 | v5.0.0 Phase A (Architecture) | ARCH-1..5 | **PROPOSED** | v5.0.0 | — |
 | v5.0.0 Phase B (Features) | OPP-21, 24, 27, 28, 29 | **PROPOSED** | v5.0.0 | — |
 | v5.0.0 Phase C (Major) | OPP-19, 25 | **PROPOSED** | v5.0.0 | — |
@@ -106,10 +106,10 @@ Changes from original:
 | — | OPP-09 | Multi-Modal Loops | 6 | 6 | 1.0 | 3 | 12 | C | DONE |
 | — | OPP-15 | Conversation Branching | 5 | 5 | **0.8** | 5 | **4** | C | DONE |
 | 1 | OPP-19 | Native Chat API (`/api/v1/chat`) | 8 | 10 | 0.8 | 4 | **16** | F | PROPOSED |
-| 2 | OPP-22 | Single-Model Lookup | 8 | 7 | 1.0 | 1 | **56** | D | PROPOSED |
-| 3 | OPP-23 | Streaming Usage Tracking | 7 | 7 | 0.9 | 1 | **44.1** | D | PROPOSED |
-| 4 | OPP-26 | Advanced Sampling (min_p, top_k) | 4 | 5 | 1.0 | 1 | **20** | D | PROPOSED |
-| 5 | OPP-30 | Echo Load Config | 4 | 5 | 0.9 | 1 | **18** | D | PROPOSED |
+| — | OPP-22 | Single-Model Lookup | 8 | 7 | 1.0 | 1 | **56** | D | DONE |
+| — | OPP-23 | Streaming Usage Tracking | 7 | 7 | 0.9 | 1 | **44.1** | D | DONE |
+| — | OPP-26 | Advanced Sampling (min_p, top_k) | 4 | 5 | 1.0 | 1 | **20** | D | DONE |
+| — | OPP-30 | Echo Load Config | 4 | 5 | 0.9 | 1 | **18** | D | DONE |
 | 6 | OPP-21 | Native Reasoning Parameter | 9 | 8 | 0.9 | 1 | **64.8** | v5-B | PROPOSED |
 | 7 | OPP-27 | Advanced Model Load Params | 5 | 6 | 0.9 | 1 | **27** | v5-B | PROPOSED |
 | 8 | OPP-29 | Log-Probabilities | 5 | 6 | 0.8 | 1 | **24** | v5-B | PROPOSED |
@@ -121,6 +121,7 @@ Changes from original:
 - Round A (Phases 2+3 parallel): **309.6** — 6 OPPs — **DONE**
 - Round B (Phase 4): **85.9** — 5 OPPs — **DONE**
 - Round C (Phase 5): **30** — 3 OPPs — **DONE**
+- Round D (Quick Wins): **138.1** — 4 OPPs — **DONE**
 
 **Proposed round totals**:
 - Round D (v4.0.0 — Quick Wins): **138.1** — 4 OPPs — OPP-22, 23, 26, 30
@@ -297,7 +298,8 @@ v5.0.0 Phase C ────┐
 | Round C (Phase 5) | OPP-17, 09, 15 | 30 | ~30 |
 | Error Audit | 10 bug fixes | — | ~50 |
 | Code Quality Audit | 12 findings fixed | — | ~75 |
-| **TOTAL DONE** | **18 OPPs + 22 fixes** | **638** | **~500** |
+| Round D (Quick Wins) | OPP-22, 23, 26, 30 | 138.1 | ~90 |
+| **TOTAL DONE** | **22 OPPs + 22 fixes** | **776.1** | **~590** |
 
 Final completed state: ~1684 tests, 91% coverage, VERSION 4.0.0.
 
@@ -305,8 +307,7 @@ Final completed state: ~1684 tests, 91% coverage, VERSION 4.0.0.
 
 | Round | OPPs | RICE Total |
 |-------|------|-----------|
-| Round D (v4.0.0 — Quick Wins) | OPP-22, 23, 26, 30 | 138.1 |
 | v5.0.0 Phase A (Architecture) | ARCH-1..5 | — |
 | v5.0.0 Phase B (Features) | OPP-21, 24, 27, 28, 29 | 151.8 |
 | v5.0.0 Phase C (Major) | OPP-19, 25 | 23.9 |
-| **TOTAL PROPOSED** | **11 OPPs + 5 ARCH** | **313.8** |
+| **TOTAL PROPOSED** | **7 OPPs + 5 ARCH** | **175.7** |

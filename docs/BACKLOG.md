@@ -128,7 +128,7 @@ All 3 OPPs implemented, tested, and merged. Coverage reached ~90%.
 - [x] Test infrastructure overhaul complete (12 commits)
 - [x] Comprehensive OPP review complete (12 fix commits)
 - [x] All documentation current (v4.0.0)
-- [ ] Release tag created
+- [x] Release tag created (v4.0.0)
 - [ ] CI/CD pipeline green
 
 ---
@@ -153,17 +153,24 @@ Round C ────────────────┘ DONE (v3.5.0)
   C-Step 2: OPP-09 ────→
   [Gate: coverage ≥ 80% ✅, VERSION → v3.5.0 ✅]
                         │
-Polish ─────────────────┘ IN PROGRESS
+Polish ─────────────────┘ DONE
   - Coverage push → 89% ✅
   - Test infra overhaul ✅ (12 commits)
   - OPP review ✅ (12 fix commits)
-  - Docs update (in progress)
-  - Release tag (pending)
+  - Docs update ✅
+  - Release tag ✅ (v4.0.0)
+                        │
+Round D ────────────────┘ DONE (v4.0.0)
+  D-Step 1: OPP-22 ═══╗ parallel
+            OPP-23 ═══╣
+            OPP-26 ═══╣
+            OPP-30 ═══╝
+  [Gate: coverage ≥ 91% ✅, VERSION → v4.0.0 ✅]
 ```
 
 ---
 
-## Round D — Quick Wins (PROPOSED — v4.0.0)
+## Round D — Quick Wins (DONE — v4.0.0)
 
 Low-effort, high-value additive improvements. All backward compatible.
 
