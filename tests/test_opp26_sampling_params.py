@@ -181,3 +181,82 @@ class TestNativeMCPSamplingParams:
         payload = client.session.post.call_args[1]["json"]
         assert "min_p" not in payload
         assert "top_k" not in payload
+
+
+class TestStreamChatSamplingParams:
+    """Tests for min_p/top_k in stream_chat_completion payload (F-7)."""
+
+    def _make_streaming_client(self):
+        """Create LLMClient with mocked session returning an iterable response."""
+        from llm.llm_client import LLMClient
+
+        client = LLMClient.__new__(LLMClient)
+        client.model = "test-model"
+        client.api_base = "http://localhost:1234/v1"
+        client.session = MagicMock()
+        client._ensure_model_loaded = MagicMock()
+        mock_response = MagicMock()
+        mock_response.raise_for_status = MagicMock()
+        mock_response.iter_lines.return_value = iter([
+            b'data: {"choices":[{"delta":{"content":"hi"}}]}',
+            b"data: [DONE]",
+        ])
+        client.session.post.return_value = mock_response
+        return client
+
+    def test_stream_chat_min_p(self):
+        """min_p=0.1 appears in stream_chat_completion payload."""
+        client = self._make_streaming_client()
+        # Consume the generator to trigger the POST call
+        list(client.stream_chat_completion(
+            messages=[{"role": "user", "content": "hi"}],
+            min_p=0.1,
+        ))
+        payload = client.session.post.call_args[1]["json"]
+        assert payload["min_p"] == 0.1
+
+    def test_stream_chat_top_k(self):
+        """top_k=40 appears in stream_chat_completion payload."""
+        client = self._make_streaming_client()
+        list(client.stream_chat_completion(
+            messages=[{"role": "user", "content": "hi"}],
+            top_k=40,
+        ))
+        payload = client.session.post.call_args[1]["json"]
+        assert payload["top_k"] == 40
+
+
+class TestCreateResponseSamplingParams:
+    """Tests for min_p/top_k in create_response payload (F-7)."""
+
+    def _make_response_client(self):
+        """Create LLMClient with mocked session for /v1/responses API."""
+        from llm.llm_client import LLMClient
+
+        client = LLMClient.__new__(LLMClient)
+        client.model = "test-model"
+        client.api_base = "http://localhost:1234/v1"
+        client.session = MagicMock()
+        client._ensure_model_loaded = MagicMock()
+        mock_response = MagicMock()
+        mock_response.json.return_value = {
+            "id": "resp_123",
+            "output": [{"type": "message", "content": [{"type": "output_text", "text": "test"}]}],
+        }
+        mock_response.raise_for_status = MagicMock()
+        client.session.post.return_value = mock_response
+        return client
+
+    def test_create_response_min_p(self):
+        """min_p=0.05 appears in create_response payload."""
+        client = self._make_response_client()
+        client.create_response(input_text="hi", min_p=0.05)
+        payload = client.session.post.call_args[1]["json"]
+        assert payload["min_p"] == 0.05
+
+    def test_create_response_top_k(self):
+        """top_k=50 appears in create_response payload."""
+        client = self._make_response_client()
+        client.create_response(input_text="hi", top_k=50)
+        payload = client.session.post.call_args[1]["json"]
+        assert payload["top_k"] == 50
