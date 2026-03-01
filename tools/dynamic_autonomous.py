@@ -757,6 +757,34 @@ Continue with the task based on these results."""
 
         return results
 
+    def _record_round_metrics(
+        self,
+        round_metrics_list: list,
+        completed_rounds: int,
+        llm_call_duration: float,
+        round_tool_calls: list,
+        round_errors: int,
+    ) -> None:
+        """Record metrics for a single autonomous loop round.
+
+        Silently swallows exceptions — metrics must never break the loop.
+        Caps the list at 100 entries, popping the oldest when full.
+        """
+        try:
+            rm = RoundMetrics(
+                round_number=completed_rounds,
+                llm_call_duration_seconds=llm_call_duration,
+                tool_calls=round_tool_calls,
+                error_count=round_errors,
+            )
+            if len(round_metrics_list) < 100:
+                round_metrics_list.append(rm)
+            else:
+                round_metrics_list.pop(0)
+                round_metrics_list.append(rm)
+        except Exception:  # noqa: S110 — metrics must never break the autonomous loop
+            pass
+
     async def _autonomous_loop(
         self,
         dispatcher,
@@ -844,40 +872,14 @@ Continue with the task based on these results."""
                         final_status = "aborted"
                         # Record round before early return
                         completed_rounds += 1
-                        try:
-                            llm_call_duration = time.monotonic() - round_start_time
-                            rm = RoundMetrics(
-                                round_number=completed_rounds,
-                                llm_call_duration_seconds=llm_call_duration,
-                                tool_calls=round_tool_calls,
-                                error_count=round_errors,
-                            )
-                            if len(round_metrics_list) < 100:
-                                round_metrics_list.append(rm)
-                            else:
-                                round_metrics_list.pop(0)
-                                round_metrics_list.append(rm)
-                        except Exception:  # noqa: S110 — metrics must never break the autonomous loop
-                            pass
+                        llm_call_duration = time.monotonic() - round_start_time
+                        self._record_round_metrics(round_metrics_list, completed_rounds, llm_call_duration, round_tool_calls, round_errors)
                         return f"Task aborted: {self.consecutive_error_count} consecutive errors. Last: {e}"
                     pending_tool_results.append(("_llm_error", f"LLM call failed: {e}"))
                     # Record this round and continue
                     completed_rounds += 1
-                    try:
-                        llm_call_duration = time.monotonic() - round_start_time
-                        rm = RoundMetrics(
-                            round_number=completed_rounds,
-                            llm_call_duration_seconds=llm_call_duration,
-                            tool_calls=round_tool_calls,
-                            error_count=round_errors,
-                        )
-                        if len(round_metrics_list) < 100:
-                            round_metrics_list.append(rm)
-                        else:
-                            round_metrics_list.pop(0)
-                            round_metrics_list.append(rm)
-                    except Exception:  # noqa: S110 — metrics must never break the autonomous loop
-                        pass
+                    llm_call_duration = time.monotonic() - round_start_time
+                    self._record_round_metrics(round_metrics_list, completed_rounds, llm_call_duration, round_tool_calls, round_errors)
                     continue
 
                 llm_call_duration = time.monotonic() - round_start_time
@@ -941,20 +943,7 @@ Continue with the task based on these results."""
 
                     # Record completed round metrics
                     completed_rounds += 1
-                    try:
-                        rm = RoundMetrics(
-                            round_number=completed_rounds,
-                            llm_call_duration_seconds=llm_call_duration,
-                            tool_calls=round_tool_calls,
-                            error_count=round_errors,
-                        )
-                        if len(round_metrics_list) < 100:
-                            round_metrics_list.append(rm)
-                        else:
-                            round_metrics_list.pop(0)
-                            round_metrics_list.append(rm)
-                    except Exception:  # noqa: S110 — metrics must never break the autonomous loop
-                        pass
+                    self._record_round_metrics(round_metrics_list, completed_rounds, llm_call_duration, round_tool_calls, round_errors)
 
                     # Check abort threshold after tool execution
                     if self.consecutive_error_count >= MAX_CONSECUTIVE_ERRORS:
@@ -968,20 +957,7 @@ Continue with the task based on these results."""
 
                     # Record completed round metrics (no tool calls this round)
                     completed_rounds += 1
-                    try:
-                        rm = RoundMetrics(
-                            round_number=completed_rounds,
-                            llm_call_duration_seconds=llm_call_duration,
-                            tool_calls=round_tool_calls,
-                            error_count=round_errors,
-                        )
-                        if len(round_metrics_list) < 100:
-                            round_metrics_list.append(rm)
-                        else:
-                            round_metrics_list.pop(0)
-                            round_metrics_list.append(rm)
-                    except Exception:  # noqa: S110 — metrics must never break the autonomous loop
-                        pass
+                    self._record_round_metrics(round_metrics_list, completed_rounds, llm_call_duration, round_tool_calls, round_errors)
 
                     final_status = "completed"
                     if text_content:
