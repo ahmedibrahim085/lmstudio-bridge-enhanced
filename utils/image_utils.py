@@ -45,7 +45,12 @@ from config.constants import (
     DEFAULT_VISION_DETAIL,
     ERROR_SSRF_BLOCKED_HOST,
     ERROR_SSRF_BLOCKED_SCHEME,
+    HTTP_RETRY_BACKOFF_FACTOR,
+    HTTP_RETRY_TOTAL,
+    IMAGE_DOWNLOAD_TIMEOUT,
     IMAGE_EXTENSION_MAP,
+    IMAGE_POOL_CONNECTIONS,
+    IMAGE_POOL_MAXSIZE,
     IMAGE_URL_PATTERNS,
     MAX_IMAGE_DIMENSION,
     MAX_IMAGE_SIZE_BYTES,
@@ -61,9 +66,9 @@ def _get_http_session():
     if _http_session is None:
         _http_session = requests.Session()
         adapter = HTTPAdapter(
-            pool_connections=5,
-            pool_maxsize=10,
-            max_retries=Retry(total=3, backoff_factor=0.3)
+            pool_connections=IMAGE_POOL_CONNECTIONS,
+            pool_maxsize=IMAGE_POOL_MAXSIZE,
+            max_retries=Retry(total=HTTP_RETRY_TOTAL, backoff_factor=HTTP_RETRY_BACKOFF_FACTOR)
         )
         _http_session.mount('http://', adapter)
         _http_session.mount('https://', adapter)
@@ -421,7 +426,7 @@ def _process_url(url: str, detail: str) -> ImageInput:
         headers = {
             'User-Agent': 'Mozilla/5.0 (compatible; LMStudioBridge/3.2; +https://github.com/ahmedibrahim085/lmstudio-bridge-enhanced)'
         }
-        response = session.get(url, timeout=30, stream=True, headers=headers)
+        response = session.get(url, timeout=IMAGE_DOWNLOAD_TIMEOUT, stream=True, headers=headers)
         response.raise_for_status()
 
         # Check content length if available

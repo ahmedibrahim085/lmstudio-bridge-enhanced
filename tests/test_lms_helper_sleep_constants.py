@@ -89,12 +89,12 @@ class TestLmsHelperImportsConstants:
     def test_import_is_from_config_constants(self):
         """The import statement must be 'from config.constants import ...'."""
         source = _read_source(LMS_HELPER_PATH)
-        # Look for a from-import line that covers both constants
+        # Look for a from-import block (single or multi-line) that covers both constants
         assert re.search(
-            r"from config\.constants import[^\n]*MODEL_REACTIVATION_DELAY",
+            r"from config\.constants import[\s\S]*?MODEL_REACTIVATION_DELAY",
             source,
         ) or re.search(
-            r"from config\.constants import[^\n]*MODEL_LOADING_DELAY",
+            r"from config\.constants import[\s\S]*?MODEL_LOADING_DELAY",
             source,
         ), (
             "Expected 'from config.constants import MODEL_REACTIVATION_DELAY / MODEL_LOADING_DELAY' "

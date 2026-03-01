@@ -34,7 +34,16 @@ import time
 from typing import Optional, Dict, List, Any
 from pathlib import Path
 
-from config.constants import MODEL_REACTIVATION_DELAY, MODEL_LOADING_DELAY, LMS_REST_MODELS_CACHE_TTL
+from config.constants import (
+    LMS_CLI_CHECK_TIMEOUT,
+    LMS_CLI_DEFAULT_TIMEOUT,
+    LMS_CLI_LOAD_TIMEOUT,
+    LMS_CLI_PS_TIMEOUT,
+    LMS_CLI_UNLOAD_TIMEOUT,
+    LMS_REST_MODELS_CACHE_TTL,
+    MODEL_LOADING_DELAY,
+    MODEL_REACTIVATION_DELAY,
+)
 from llm.exceptions import LLMError
 from utils.retry import run_with_retry
 from utils.validation import validate_model_name, ValidationError
@@ -327,7 +336,7 @@ class LMSHelper:
                 ["lms", "ps"],
                 capture_output=True,
                 text=True,
-                timeout=5
+                timeout=LMS_CLI_CHECK_TIMEOUT
             )
             cls._is_installed = result.returncode == 0
 
@@ -470,7 +479,7 @@ ALTERNATIVE:
                 cmd,
                 capture_output=True,
                 text=True,
-                timeout=60  # Model loading can take time
+                timeout=LMS_CLI_LOAD_TIMEOUT  # Model loading can take time
             )
 
             if result.returncode == 0:
@@ -524,7 +533,7 @@ ALTERNATIVE:
                 ["lms", "unload", model_name],
                 capture_output=True,
                 text=True,
-                timeout=30
+                timeout=LMS_CLI_UNLOAD_TIMEOUT
             )
 
             if result.returncode == 0:
@@ -563,7 +572,7 @@ ALTERNATIVE:
                 cmd.append("--llm")
 
             # Use retry for resilience against timeouts
-            result = run_with_retry(cmd, timeout=30)
+            result = run_with_retry(cmd, timeout=LMS_CLI_DEFAULT_TIMEOUT)
 
             if result.returncode == 0:
                 models = json.loads(result.stdout)
@@ -612,7 +621,7 @@ ALTERNATIVE:
 
         try:
             # Use retry for resilience against timeouts
-            result = run_with_retry(["lms", "ps", "--json"], timeout=10)
+            result = run_with_retry(["lms", "ps", "--json"], timeout=LMS_CLI_PS_TIMEOUT)
 
             if result.returncode == 0:
                 return json.loads(result.stdout)

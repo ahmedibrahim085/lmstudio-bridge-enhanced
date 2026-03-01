@@ -16,7 +16,12 @@ from typing import Optional
 import httpx
 
 from config import get_config
-from config.constants import MODELS_FETCH_CACHE_TTL
+from config.constants import (
+    DEFAULT_MAX_RETRIES,
+    DEFAULT_RETRY_BASE_DELAY,
+    MODEL_LIST_TIMEOUT,
+    MODELS_FETCH_CACHE_TTL,
+)
 from llm.exceptions import LLMConnectionError, ModelNotFoundError
 from utils.error_handling import retry_with_backoff
 
@@ -59,7 +64,7 @@ class ModelValidator:
 
         logger.debug(f"ModelValidator initialized with api_base: {self.api_base}")
 
-    @retry_with_backoff(max_retries=3, base_delay=1.0, exceptions=(httpx.HTTPError,))
+    @retry_with_backoff(max_retries=DEFAULT_MAX_RETRIES, base_delay=DEFAULT_RETRY_BASE_DELAY, exceptions=(httpx.HTTPError,))
     async def _fetch_models(self, force_refresh: bool = False) -> list[str]:
         """Fetch available models from LM Studio API.
 
@@ -94,7 +99,7 @@ class ModelValidator:
         # Lock is released here — network I/O happens outside the lock.
 
         try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
+            async with httpx.AsyncClient(timeout=MODEL_LIST_TIMEOUT) as client:
                 # Try native /api/v1/models first (richer data)
                 try:
                     native_base = self.api_base.rstrip("/")

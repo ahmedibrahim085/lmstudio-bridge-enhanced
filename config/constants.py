@@ -107,17 +107,29 @@ __all__ = [
     "HEALTH_CHECK_INTERVAL",
     "HEALTH_CHECK_TIMEOUT",
     "HTTP_BAD_REQUEST",
+    "HTTP_RETRY_BACKOFF_FACTOR",
+    "HTTP_RETRY_TOTAL",
     "HTTP_NOT_FOUND",
     "HTTP_OK",
     "HTTP_RATE_LIMIT",
     "HTTP_SERVER_ERROR",
     "HTTP_TIMEOUT",
+    "IMAGE_DOWNLOAD_TIMEOUT",
     "IMAGE_EXTENSION_MAP",
+    "IMAGE_POOL_CONNECTIONS",
+    "IMAGE_POOL_MAXSIZE",
     "IMAGE_URL_PATTERNS",
     "JIT_TTL_AUTONOMOUS",
     "JIT_TTL_DEFAULT",
     "JIT_TTL_EMBEDDING",
+    "LLM_POOL_CONNECTIONS",
+    "LLM_POOL_MAXSIZE",
     "LLMSTER_PROCESS_NAME",
+    "LMS_CLI_CHECK_TIMEOUT",
+    "LMS_CLI_DEFAULT_TIMEOUT",
+    "LMS_CLI_LOAD_TIMEOUT",
+    "LMS_CLI_PS_TIMEOUT",
+    "LMS_CLI_UNLOAD_TIMEOUT",
     "LMS_DOWNLOAD_MODEL_ENDPOINT",
     "LMS_LOAD_MODEL_ENDPOINT",
     "LMS_REST_DEFAULT_TIMEOUT",
@@ -260,6 +272,24 @@ DEFAULT_LLM_TIMEOUT = 58
 DEFAULT_MAX_RETRIES = 3
 DEFAULT_RETRY_BASE_DELAY = 1.0
 DEFAULT_RETRY_MAX_DELAY = 60.0
+
+# HTTP Connection Pool Configuration
+LLM_POOL_CONNECTIONS = 10       # Pool connections for LLMClient HTTP adapter
+LLM_POOL_MAXSIZE = 20           # Pool max size for LLMClient HTTP adapter
+IMAGE_POOL_CONNECTIONS = 5      # Pool connections for image_utils HTTP adapter
+IMAGE_POOL_MAXSIZE = 10         # Pool max size for image_utils HTTP adapter
+HTTP_RETRY_TOTAL = 3            # urllib3 Retry total attempts
+HTTP_RETRY_BACKOFF_FACTOR = 0.3 # urllib3 Retry exponential backoff factor
+
+# Image Download
+IMAGE_DOWNLOAD_TIMEOUT = 30     # Timeout for downloading images from URLs
+
+# LMS CLI Timeouts (seconds) — used in subprocess.run calls
+LMS_CLI_CHECK_TIMEOUT = 5       # Quick CLI availability check (lms ps)
+LMS_CLI_LOAD_TIMEOUT = 60       # Model loading via CLI (can take time)
+LMS_CLI_UNLOAD_TIMEOUT = 30     # Model unloading via CLI
+LMS_CLI_DEFAULT_TIMEOUT = 30    # General CLI operations (discover, etc.)
+LMS_CLI_PS_TIMEOUT = 10         # lms ps --json / lms server status --json
 
 # Model Validation
 MODEL_CACHE_TTL_SECONDS = 60  # 60-second cache for model validation

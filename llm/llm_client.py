@@ -25,8 +25,12 @@ from config.constants import (
     DEFAULT_RETRY_BASE_DELAY,
     DEFAULT_THINKING_BUDGET_TOKENS,
     HEALTH_CHECK_TIMEOUT,
+    HTTP_RETRY_BACKOFF_FACTOR,
+    HTTP_RETRY_TOTAL,
     JIT_TTL_DEFAULT,
     JIT_TTL_EMBEDDING,
+    LLM_POOL_CONNECTIONS,
+    LLM_POOL_MAXSIZE,
     MAX_THINKING_BUDGET_TOKENS,
     MIN_THINKING_BUDGET_TOKENS,
     MODEL_LIST_TIMEOUT,
@@ -158,9 +162,9 @@ class LLMClient:
             self.session = requests.Session()
             self._owns_session = True
             adapter = HTTPAdapter(
-                pool_connections=10,
-                pool_maxsize=20,
-                max_retries=Retry(total=3, backoff_factor=0.3)
+                pool_connections=LLM_POOL_CONNECTIONS,
+                pool_maxsize=LLM_POOL_MAXSIZE,
+                max_retries=Retry(total=HTTP_RETRY_TOTAL, backoff_factor=HTTP_RETRY_BACKOFF_FACTOR)
             )
             self.session.mount('http://', adapter)
             self.session.mount('https://', adapter)
