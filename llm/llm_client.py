@@ -273,7 +273,9 @@ class LLMClient:
         tool_choice: str = "auto",
         timeout: int = DEFAULT_LLM_TIMEOUT,
         response_format: Optional[Dict[str, Any]] = None,
-        model: Optional[str] = None
+        model: Optional[str] = None,
+        min_p: Optional[float] = None,
+        top_k: Optional[int] = None,
     ) -> Dict[str, Any]:
         """Generate a chat completion from the local LLM.
 
@@ -350,6 +352,12 @@ class LLMClient:
         if response_format is not None:
             payload["response_format"] = response_format
 
+        # Advanced sampling parameters (OPP-26)
+        if min_p is not None:
+            payload["min_p"] = min_p
+        if top_k is not None:
+            payload["top_k"] = top_k
+
         try:
             response = self.session.post(
                 self._get_endpoint("chat/completions"),
@@ -374,7 +382,9 @@ class LLMClient:
         max_tokens: int = DEFAULT_MAX_TOKENS,
         stop_sequences: Optional[List[str]] = None,
         model: Optional[str] = None,
-        timeout: int = DEFAULT_LLM_TIMEOUT
+        timeout: int = DEFAULT_LLM_TIMEOUT,
+        min_p: Optional[float] = None,
+        top_k: Optional[int] = None,
     ) -> Dict[str, Any]:
         """Generate a raw text completion from the local LLM.
 
@@ -416,6 +426,12 @@ class LLMClient:
         # Add stop sequences if provided
         if stop_sequences:
             payload["stop"] = stop_sequences
+
+        # Advanced sampling parameters (OPP-26)
+        if min_p is not None:
+            payload["min_p"] = min_p
+        if top_k is not None:
+            payload["top_k"] = top_k
 
         try:
             response = self.session.post(
@@ -582,6 +598,8 @@ class LLMClient:
         ttl: Optional[int] = None,
         timeout: int = DEFAULT_LLM_TIMEOUT,
         draft_model: Optional[str] = None,
+        min_p: Optional[float] = None,
+        top_k: Optional[int] = None,
     ) -> Dict[str, Any]:
         """Create a stateful response with optional function calling.
 
@@ -666,6 +684,12 @@ class LLMClient:
 
         # Always include TTL for JIT model loading
         payload["ttl"] = resolved_ttl
+
+        # Advanced sampling parameters (OPP-26)
+        if min_p is not None:
+            payload["min_p"] = min_p
+        if top_k is not None:
+            payload["top_k"] = top_k
 
         try:
             response = self.session.post(
@@ -794,6 +818,8 @@ class LLMClient:
         tool_choice: Optional[Dict[str, Any]] = None,
         model: Optional[str] = None,
         timeout: int = DEFAULT_LLM_TIMEOUT,
+        min_p: Optional[float] = None,
+        top_k: Optional[int] = None,
     ) -> Dict[str, Any]:
         """Send a request to LM Studio's Anthropic-compatible /v1/messages endpoint.
 
@@ -841,6 +867,12 @@ class LLMClient:
         if tool_choice is not None:
             payload["tool_choice"] = tool_choice
 
+        # Advanced sampling parameters (OPP-26)
+        if min_p is not None:
+            payload["min_p"] = min_p
+        if top_k is not None:
+            payload["top_k"] = top_k
+
         headers = {
             "anthropic-version": DEFAULT_ANTHROPIC_API_VERSION,
         }
@@ -868,6 +900,8 @@ class LLMClient:
         timeout: float = STREAM_READ_TIMEOUT,
         response_format: Optional[Dict[str, Any]] = None,
         model: Optional[str] = None,
+        min_p: Optional[float] = None,
+        top_k: Optional[int] = None,
     ):
         """Stream a chat completion from the local LLM via SSE.
 
@@ -916,6 +950,12 @@ class LLMClient:
         if response_format is not None:
             payload["response_format"] = response_format
 
+        # Advanced sampling parameters (OPP-26)
+        if min_p is not None:
+            payload["min_p"] = min_p
+        if top_k is not None:
+            payload["top_k"] = top_k
+
         try:
             response = self.session.post(
                 self._get_endpoint("chat/completions"),
@@ -941,6 +981,8 @@ class LLMClient:
         ttl: Optional[int] = None,
         timeout: float = STREAM_READ_TIMEOUT,
         draft_model: Optional[str] = None,
+        min_p: Optional[float] = None,
+        top_k: Optional[int] = None,
     ):
         """Stream a stateful response via SSE from ``/v1/responses``.
 
@@ -997,6 +1039,12 @@ class LLMClient:
         if draft_model is not None:
             payload["draft_model"] = draft_model
 
+        # Advanced sampling parameters (OPP-26)
+        if min_p is not None:
+            payload["min_p"] = min_p
+        if top_k is not None:
+            payload["top_k"] = top_k
+
         try:
             response = self.session.post(
                 self._get_endpoint("responses"),
@@ -1020,6 +1068,8 @@ class LLMClient:
         tool_choice: Optional[Dict[str, Any]] = None,
         model: Optional[str] = None,
         timeout: float = STREAM_READ_TIMEOUT,
+        min_p: Optional[float] = None,
+        top_k: Optional[int] = None,
     ):
         """Stream an Anthropic-compatible messages response via SSE.
 
@@ -1069,6 +1119,12 @@ class LLMClient:
             payload["tools"] = tools
         if tool_choice is not None:
             payload["tool_choice"] = tool_choice
+
+        # Advanced sampling parameters (OPP-26)
+        if min_p is not None:
+            payload["min_p"] = min_p
+        if top_k is not None:
+            payload["top_k"] = top_k
 
         headers = {
             "anthropic-version": DEFAULT_ANTHROPIC_API_VERSION,

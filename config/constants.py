@@ -333,6 +333,20 @@ ERROR_MAX_TOKENS_OUT_OF_RANGE = (
     "max_tokens must be between {min} and {max}, got {value}"
 )
 
+# Advanced sampling parameters (OPP-26)
+DEFAULT_MIN_P = None
+DEFAULT_TOP_K = None
+MIN_MIN_P = 0.0
+MAX_MIN_P = 1.0
+MIN_TOP_K = 1
+MAX_TOP_K = 1000
+ERROR_MIN_P_OUT_OF_RANGE = (
+    "min_p must be between {min} and {max}, got {value}"
+)
+ERROR_TOP_K_OUT_OF_RANGE = (
+    "top_k must be between {min} and {max}, got {value}"
+)
+
 # Success Messages
 SUCCESS_MODEL_LOADED = "Model '{model}' loaded successfully"
 SUCCESS_VALIDATION_PASSED = "Model '{model}' validation passed"

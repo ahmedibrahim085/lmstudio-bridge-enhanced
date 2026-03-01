@@ -63,15 +63,14 @@ class TestSamplingParamsInPayload:
     """Tests for min_p/top_k in LLMClient method payloads."""
 
     def _make_client(self):
-        """Create LLMClient with mocked session."""
+        """Create LLMClient with mocked session (no real HTTP)."""
         from llm.llm_client import LLMClient
 
         client = LLMClient.__new__(LLMClient)
         client.model = "test-model"
-        client.base_url = "http://localhost:1234/v1"
+        client.api_base = "http://localhost:1234/v1"
         client.session = MagicMock()
-        client._rest_client = MagicMock()
-        client._rest_client.is_model_loaded.return_value = True
+        client._ensure_model_loaded = MagicMock()
         mock_response = MagicMock()
         mock_response.json.return_value = {
             "choices": [{"message": {"content": "test"}}]

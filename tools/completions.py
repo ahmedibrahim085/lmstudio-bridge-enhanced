@@ -21,11 +21,22 @@ from config.constants import (
     ERROR_MAX_TOKENS_OUT_OF_RANGE,
     DEFAULT_MAX_TOKENS,
     DEFAULT_ANTHROPIC_MAX_TOKENS,
+    MIN_MIN_P,
+    MAX_MIN_P,
+    MIN_TOP_K,
+    MAX_TOP_K,
+    ERROR_MIN_P_OUT_OF_RANGE,
+    ERROR_TOP_K_OUT_OF_RANGE,
 )
 import json
 
 
-def _validate_generation_params(temperature: float, max_tokens: int) -> None:
+def _validate_generation_params(
+    temperature: float,
+    max_tokens: int,
+    min_p: Optional[float] = None,
+    top_k: Optional[int] = None,
+) -> None:
     """Validate common generation parameters.
 
     Raises:
@@ -41,6 +52,18 @@ def _validate_generation_params(temperature: float, max_tokens: int) -> None:
         raise ValueError(
             ERROR_MAX_TOKENS_OUT_OF_RANGE.format(
                 min=MIN_MAX_TOKENS, max=MAX_MAX_TOKENS, value=max_tokens
+            )
+        )
+    if min_p is not None and not MIN_MIN_P <= min_p <= MAX_MIN_P:
+        raise ValueError(
+            ERROR_MIN_P_OUT_OF_RANGE.format(
+                min=MIN_MIN_P, max=MAX_MIN_P, value=min_p
+            )
+        )
+    if top_k is not None and not MIN_TOP_K <= top_k <= MAX_TOP_K:
+        raise ValueError(
+            ERROR_TOP_K_OUT_OF_RANGE.format(
+                min=MIN_TOP_K, max=MAX_TOP_K, value=top_k
             )
         )
 
