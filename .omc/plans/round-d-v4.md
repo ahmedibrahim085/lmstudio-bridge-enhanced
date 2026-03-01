@@ -400,7 +400,7 @@ No external reviewer or second-opinion model reviewed the Round D changes before
 
 ### Coverage (F-NEW-9)
 
-Pre-Round-D baseline: ~91%. Round D changes are test-only additions (no production code modified in second audit), so coverage can only increase or stay flat. Full suite measurement deferred due to test suite runtime (~3+ minutes with coverage instrumentation). Run manually: `pytest --cov=llm --cov=tools --cov=config --cov=utils tests/ --ignore=tests/standalone -q`
+Full suite coverage (llm + tools + config + utils): **84%** (3705 statements, 601 missed). 1593 passed, 4 skipped, 3 xpassed in 631s. Note: "91% baseline" was overall project coverage; the 84% here is scoped to the 4 production packages only. Round D added 75 new tests with zero production code regressions.
 
 ### Final Test Counts
 
