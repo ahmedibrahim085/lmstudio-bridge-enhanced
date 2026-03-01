@@ -3,32 +3,33 @@
 Completion tools for LM Studio (chat and text completions).
 """
 
-from typing import Optional, List, Dict, Any
-from llm.llm_client import LLMClient
-from llm.exceptions import LLMResponseError
-from config.constants import (
-    ERROR_NO_CHAT_RESPONSE,
-    ERROR_EMPTY_CHAT_RESPONSE,
-    ERROR_NO_TEXT_COMPLETION,
-    ERROR_EMPTY_TEXT_COMPLETION,
-    ERROR_STREAM_NOT_SUPPORTED,
-    ERROR_MESSAGES_NOT_LIST,
-    MIN_TEMPERATURE,
-    MAX_TEMPERATURE,
-    MIN_MAX_TOKENS,
-    MAX_MAX_TOKENS,
-    ERROR_TEMPERATURE_OUT_OF_RANGE,
-    ERROR_MAX_TOKENS_OUT_OF_RANGE,
-    DEFAULT_MAX_TOKENS,
-    DEFAULT_ANTHROPIC_MAX_TOKENS,
-    MIN_MIN_P,
-    MAX_MIN_P,
-    MIN_TOP_K,
-    MAX_TOP_K,
-    ERROR_MIN_P_OUT_OF_RANGE,
-    ERROR_TOP_K_OUT_OF_RANGE,
-)
 import json
+from typing import Any, Dict, List, Optional
+
+from config.constants import (
+    DEFAULT_ANTHROPIC_MAX_TOKENS,
+    DEFAULT_MAX_TOKENS,
+    ERROR_EMPTY_CHAT_RESPONSE,
+    ERROR_EMPTY_TEXT_COMPLETION,
+    ERROR_MAX_TOKENS_OUT_OF_RANGE,
+    ERROR_MESSAGES_NOT_LIST,
+    ERROR_MIN_P_OUT_OF_RANGE,
+    ERROR_NO_CHAT_RESPONSE,
+    ERROR_NO_TEXT_COMPLETION,
+    ERROR_STREAM_NOT_SUPPORTED,
+    ERROR_TEMPERATURE_OUT_OF_RANGE,
+    ERROR_TOP_K_OUT_OF_RANGE,
+    MAX_MAX_TOKENS,
+    MAX_MIN_P,
+    MAX_TEMPERATURE,
+    MAX_TOP_K,
+    MIN_MAX_TOKENS,
+    MIN_MIN_P,
+    MIN_TEMPERATURE,
+    MIN_TOP_K,
+)
+from llm.exceptions import LLMResponseError
+from llm.llm_client import LLMClient
 
 
 def _validate_generation_params(

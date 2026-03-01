@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Tests for OPP-26: Advanced Sampling Parameters (min_p, top_k)."""
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
