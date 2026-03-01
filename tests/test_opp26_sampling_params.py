@@ -58,6 +58,14 @@ class TestTopKValidation:
         """top_k=None does not raise."""
         _validate_generation_params(temperature=0.7, max_tokens=100, top_k=None)
 
+    def test_top_k_boundary_one(self):
+        """top_k=1 is valid (lower boundary)."""
+        _validate_generation_params(temperature=0.7, max_tokens=100, top_k=1)
+
+    def test_top_k_boundary_max(self):
+        """top_k=1000 is valid (upper boundary)."""
+        _validate_generation_params(temperature=0.7, max_tokens=100, top_k=1000)
+
 
 class TestSamplingParamsInPayload:
     """Tests for min_p/top_k in LLMClient method payloads."""
@@ -260,3 +268,81 @@ class TestCreateResponseSamplingParams:
         client.create_response(input_text="hi", top_k=50)
         payload = client.session.post.call_args[1]["json"]
         assert payload["top_k"] == 50
+
+
+class TestStreamCreateResponseSamplingParams:
+    """Tests for min_p/top_k in stream_create_response payload."""
+
+    def _make_stream_response_client(self):
+        """Create LLMClient with mocked session returning an iterable SSE response."""
+        from llm.llm_client import LLMClient
+
+        client = LLMClient.__new__(LLMClient)
+        client.model = "test-model"
+        client.api_base = "http://localhost:1234/v1"
+        client.session = MagicMock()
+        client._ensure_model_loaded = MagicMock()
+        mock_response = MagicMock()
+        mock_response.raise_for_status = MagicMock()
+        mock_response.iter_lines.return_value = iter([
+            b'data: {"id":"resp_1","output":[]}',
+            b"data: [DONE]",
+        ])
+        client.session.post.return_value = mock_response
+        return client
+
+    def test_stream_create_response_min_p(self):
+        """min_p=0.1 appears in stream_create_response payload."""
+        client = self._make_stream_response_client()
+        list(client.stream_create_response(input_text="hi", min_p=0.1))
+        payload = client.session.post.call_args[1]["json"]
+        assert payload["min_p"] == 0.1
+
+    def test_stream_create_response_top_k(self):
+        """top_k=40 appears in stream_create_response payload."""
+        client = self._make_stream_response_client()
+        list(client.stream_create_response(input_text="hi", top_k=40))
+        payload = client.session.post.call_args[1]["json"]
+        assert payload["top_k"] == 40
+
+
+class TestStreamAnthropicMessagesSamplingParams:
+    """Tests for min_p/top_k in stream_anthropic_messages payload."""
+
+    def _make_stream_anthropic_client(self):
+        """Create LLMClient with mocked session returning an iterable SSE response."""
+        from llm.llm_client import LLMClient
+
+        client = LLMClient.__new__(LLMClient)
+        client.model = "test-model"
+        client.api_base = "http://localhost:1234/v1"
+        client.session = MagicMock()
+        client._ensure_model_loaded = MagicMock()
+        mock_response = MagicMock()
+        mock_response.raise_for_status = MagicMock()
+        mock_response.iter_lines.return_value = iter([
+            b'data: {"type":"content_block_delta","delta":{"text":"hi"}}',
+            b"data: [DONE]",
+        ])
+        client.session.post.return_value = mock_response
+        return client
+
+    def test_stream_anthropic_min_p(self):
+        """min_p=0.1 appears in stream_anthropic_messages payload."""
+        client = self._make_stream_anthropic_client()
+        list(client.stream_anthropic_messages(
+            messages=[{"role": "user", "content": "hi"}],
+            min_p=0.1,
+        ))
+        payload = client.session.post.call_args[1]["json"]
+        assert payload["min_p"] == 0.1
+
+    def test_stream_anthropic_top_k(self):
+        """top_k=40 appears in stream_anthropic_messages payload."""
+        client = self._make_stream_anthropic_client()
+        list(client.stream_anthropic_messages(
+            messages=[{"role": "user", "content": "hi"}],
+            top_k=40,
+        ))
+        payload = client.session.post.call_args[1]["json"]
+        assert payload["top_k"] == 40
