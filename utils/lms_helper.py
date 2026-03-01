@@ -113,14 +113,27 @@ class LMSRestClient:
 
     def is_model_loaded(self, model_key: str) -> Optional[bool]:
         """Check if model is loaded via loaded_instances. Returns True/False/None."""
+        model = self.get_model(model_key)
+        if model is None:
+            return None if self.list_all_models() is None else False
+        return len(model.get("loaded_instances", [])) > 0
+
+    def get_model(self, model_key: str) -> Optional[Dict[str, Any]]:
+        """Get single model by key. Cache-first, fetch on miss."""
+        if self._models_cache is not None:
+            now = time.time()
+            if (now - self._models_cache_time) < LMS_REST_MODELS_CACHE_TTL:
+                for m in self._models_cache:
+                    if m.get("key") == model_key:
+                        return m
+                return None
         models = self.list_all_models()
         if models is None:
             return None
         for m in models:
             if m.get("key") == model_key:
-                loaded = m.get("loaded_instances", [])
-                return len(loaded) > 0
-        return False
+                return m
+        return None
 
     def is_server_available(self) -> bool:
         """Check if LM Studio REST API is reachable."""
