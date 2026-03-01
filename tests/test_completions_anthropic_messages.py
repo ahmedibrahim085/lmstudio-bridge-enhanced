@@ -130,6 +130,8 @@ class TestAnthropicMessagesHappyPath:
             max_tokens=2048,
             temperature=0.5,
             model="custom-model",
+            min_p=None,
+            top_k=None,
         )
 
 
