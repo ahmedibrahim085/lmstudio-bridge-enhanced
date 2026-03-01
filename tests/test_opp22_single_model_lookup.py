@@ -80,6 +80,31 @@ class TestGetModel:
         assert result is not None
         assert result["key"] == "qwen/qwen3-4b"
 
+    def test_get_model_empty_string_key(self, client):
+        """Empty string key returns None when no model has empty key."""
+        client._models_cache = SAMPLE_MODELS.copy()
+        client._models_cache_time = time.time()
+
+        result = client.get_model("")
+        assert result is None
+
+    def test_get_model_partial_key_no_match(self, client):
+        """Partial key 'qwen/qwen3' does not match 'qwen/qwen3-coder-next'."""
+        client._models_cache = SAMPLE_MODELS.copy()
+        client._models_cache_time = time.time()
+
+        result = client.get_model("qwen/qwen3")
+        assert result is None
+
+    def test_get_model_api_returns_none(self, client):
+        """When API is unavailable (list_all_models returns None), get_model returns None."""
+        assert client._models_cache is None  # No cache
+
+        with patch.object(client, "list_all_models", return_value=None):
+            result = client.get_model("qwen/qwen3-coder-next")
+
+        assert result is None
+
 
 class TestIsModelLoadedRefactored:
     """Tests for refactored is_model_loaded() using get_model()."""
