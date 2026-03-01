@@ -13,6 +13,10 @@ Supported input formats (auto-detected):
 Requires a vision-capable model loaded in LM Studio (e.g., LLaVA, Qwen-VL).
 """
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 from typing import Optional, List, Dict, Any
 from llm.llm_client import LLMClient
 from config.constants import VISION_MODEL_WARNING, DEFAULT_VISION_DETAIL
@@ -77,6 +81,7 @@ class VisionTools:
         except ValueError as e:
             return json.dumps({"error": str(e)})
         except Exception as e:
+            logger.error("Error analyzing image: %s", e, exc_info=True)
             return json.dumps({"error": f"Error analyzing image: {str(e)}"})
 
     async def describe_image(
@@ -114,6 +119,7 @@ class VisionTools:
         except ValueError as e:
             return json.dumps({"error": str(e)})
         except Exception as e:
+            logger.error("Error describing image: %s", e, exc_info=True)
             return json.dumps({"error": f"Error describing image: {str(e)}"})
 
     async def compare_images(
@@ -153,6 +159,7 @@ class VisionTools:
         except ValueError as e:
             return json.dumps({"error": str(e)})
         except Exception as e:
+            logger.error("Error comparing images: %s", e, exc_info=True)
             return json.dumps({"error": f"Error comparing images: {str(e)}"})
 
     async def extract_text_from_image(
@@ -188,6 +195,7 @@ If no text is visible, state that clearly."""
         except ValueError as e:
             return json.dumps({"error": str(e)})
         except Exception as e:
+            logger.error("Error extracting text: %s", e, exc_info=True)
             return json.dumps({"error": f"Error extracting text: {str(e)}"})
 
     async def identify_objects(
@@ -222,6 +230,7 @@ Format the response as a structured list."""
         except ValueError as e:
             return json.dumps({"error": str(e)})
         except Exception as e:
+            logger.error("Error identifying objects: %s", e, exc_info=True)
             return json.dumps({"error": f"Error identifying objects: {str(e)}"})
 
     async def answer_about_image(
@@ -252,6 +261,7 @@ Format the response as a structured list."""
         except ValueError as e:
             return json.dumps({"error": str(e)})
         except Exception as e:
+            logger.error("Error answering question: %s", e, exc_info=True)
             return json.dumps({"error": f"Error answering question: {str(e)}"})
 
 

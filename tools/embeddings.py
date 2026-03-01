@@ -3,9 +3,12 @@
 Embeddings generation tools for LM Studio.
 """
 
+import json
+import logging
 from typing import Optional, Union, List
 from llm.llm_client import LLMClient
-import json
+
+logger = logging.getLogger(__name__)
 
 
 class EmbeddingsTools:
@@ -46,6 +49,7 @@ class EmbeddingsTools:
             return json.dumps(response)
 
         except Exception as e:
+            logger.error("Failed to generate embeddings: %s", e, exc_info=True)
             error_response = {
                 "error": f"Failed to generate embeddings: {str(e)}"
             }

@@ -65,7 +65,7 @@ def _detect_type_from_response(resp: httpx.Response) -> Optional[ServerType]:
         if body_type == SERVER_TYPE_HEADLESS:
             return ServerType.HEADLESS
     except (ValueError, AttributeError):
-        pass
+        logger.debug("Failed to parse server type from response body")
 
     return None
 
@@ -94,6 +94,7 @@ class HealthTools:
             else:
                 return "LM Studio API is not responding."
         except Exception as e:
+            logger.error("Error connecting to LM Studio API: %s", e, exc_info=True)
             return json.dumps({"error": f"Error connecting to LM Studio API: {str(e)}"})
 
     async def list_models(self) -> str:
@@ -114,6 +115,7 @@ class HealthTools:
 
             return result
         except Exception as e:
+            logger.error("Error listing models: %s", e, exc_info=True)
             return json.dumps({"error": f"Error listing models: {str(e)}"})
 
     async def get_current_model(self) -> str:
@@ -134,6 +136,7 @@ class HealthTools:
             model_info = response.get("model", "Unknown")
             return f"Currently loaded model: {model_info}"
         except Exception as e:
+            logger.error("Error identifying current model: %s", e, exc_info=True)
             return json.dumps({"error": f"Error identifying current model: {str(e)}"})
 
     async def check_server_type(self) -> ServerType:
@@ -188,8 +191,8 @@ class HealthTools:
             )
             if resp.status_code == 200:
                 return ServerType.UNKNOWN
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("Models endpoint probe failed: %s", exc)
 
         return ServerType.UNAVAILABLE
 

@@ -5,9 +5,12 @@ Registration module for dynamic autonomous tools.
 This registers the truly dynamic MCP tools with FastMCP.
 """
 
+import logging
 from typing import List, Union, Optional, Annotated
 from pydantic import Field
 from config.constants import DEFAULT_MAX_TOKENS, DEFAULT_VISION_DETAIL
+
+logger = logging.getLogger(__name__)
 from llm.llm_client import LLMClient
 from tools.dynamic_autonomous import DynamicAutonomousAgent, DEFAULT_MAX_ROUNDS
 
@@ -493,6 +496,7 @@ def register_dynamic_autonomous_tools(mcp, llm_client: Optional[LLMClient] = Non
             return result
 
         except Exception as e:
+            logger.error("Error listing MCPs: %s", e, exc_info=True)
             return f"Error listing MCPs: {e}"
 
     @mcp.tool()
