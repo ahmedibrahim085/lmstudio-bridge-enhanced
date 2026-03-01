@@ -1,8 +1,13 @@
 #!/usr/bin/env python3
-"""Tests for H-error: All tool modules must have module-level loggers.
+"""Tests for silent error catch prevention across ALL tool modules.
 
-Verifies that every module under tools/ that catches exceptions also
-has a module-level logger configured via logging.getLogger(__name__).
+Two layers of defense:
+1. Every tool module with except blocks must have a module-level logger
+2. Every `except Exception` block must contain a logger.* call OR an explicit
+   # noqa suppression comment (for intentional catch-and-ignore patterns)
+
+This is an architectural guard — it uses AST parsing to structurally enforce
+that no one can add a silent catch block without the test suite catching it.
 """
 
 import ast
@@ -22,6 +27,16 @@ TOOL_MODULES = [
     "tools.vision",
     "tools.dynamic_autonomous",
     "tools.dynamic_autonomous_register",
+]
+
+# All tool files to scan for silent catches (every .py except __init__)
+TOOL_FILES = [
+    "completions.py",
+    "dynamic_autonomous.py",
+    "dynamic_autonomous_register.py",
+    "embeddings.py",
+    "health.py",
+    "vision.py",
 ]
 
 
@@ -48,38 +63,92 @@ class TestToolModulesHaveLoggers:
         )
 
 
-class TestNoSilentCatchesInVision:
-    """vision.py: every except Exception block must call logger before return."""
+class TestNoSilentCatchesAllModules:
+    """AST guard: every except Exception block in ANY tool module must log.
 
-    def _get_except_blocks(self):
-        source = (TOOLS_DIR / "vision.py").read_text()
+    Scans every tool file for `except Exception` handlers and verifies
+    that each one contains a logging call OR an explicit `# noqa`
+    suppression comment (for intentional catch-and-ignore patterns like
+    metrics collection that must never break the autonomous loop).
+
+    Recognized logging patterns:
+    - logger.error/warning/debug/info (standard logging module)
+    - log_error/log_info/log_warning (custom_logging helpers)
+    """
+
+    # Patterns that count as "logging" inside an except block
+    LOGGING_PATTERNS = ("logger.", "log_error", "log_info", "log_warning")
+
+    @staticmethod
+    def _get_except_exception_blocks(filename):
+        """Parse a tool file and return all except Exception handler nodes."""
+        source = (TOOLS_DIR / filename).read_text()
         tree = ast.parse(source)
         blocks = []
         for node in ast.walk(tree):
             if isinstance(node, ast.ExceptHandler):
-                if node.type and isinstance(node.type, ast.Name) and node.type.id == "Exception":
+                if (
+                    node.type
+                    and isinstance(node.type, ast.Name)
+                    and node.type.id == "Exception"
+                ):
                     blocks.append(node)
         return blocks, source
 
-    def test_all_except_blocks_have_logger_call(self):
-        """Every except Exception block in vision.py must contain a logger call."""
-        blocks, source = self._get_except_blocks()
-        assert len(blocks) >= 1, f"Expected >=1 except Exception blocks, found {len(blocks)}"
+    @pytest.mark.parametrize("filename", TOOL_FILES)
+    def test_except_exception_blocks_have_logging_or_noqa(self, filename):
+        """Every except Exception block must contain a logging call or # noqa."""
+        blocks, source = self._get_except_exception_blocks(filename)
 
+        # Get the raw source lines for noqa comment checking
+        source_lines = source.splitlines()
+
+        violations = []
         for handler in blocks:
             body_source = ast.get_source_segment(source, handler)
-            assert body_source is not None
-            assert "logger." in body_source, (
-                f"Line {handler.lineno}: except Exception block has no logger call"
-            )
+            if body_source is None:
+                continue
+
+            # Check 1: any recognized logging pattern in the except block body
+            has_logging = any(pat in body_source for pat in self.LOGGING_PATTERNS)
+
+            # Check 2: noqa comment on the except line itself
+            except_line = source_lines[handler.lineno - 1] if handler.lineno <= len(source_lines) else ""
+            has_noqa = "# noqa" in except_line
+
+            if not has_logging and not has_noqa:
+                violations.append(
+                    f"  Line {handler.lineno}: except Exception block — no logging call, no # noqa"
+                )
+
+        assert not violations, (
+            f"\n{filename}: silent except Exception blocks found:\n"
+            + "\n".join(violations)
+            + "\n\nFix: add logger.error/warning/debug call, or # noqa: S110 if intentional"
+        )
+
+    @pytest.mark.parametrize("filename", TOOL_FILES)
+    def test_no_bare_except(self, filename):
+        """No bare `except:` (without exception type) allowed in any tool module."""
+        source = (TOOLS_DIR / filename).read_text()
+        tree = ast.parse(source)
+
+        bare_excepts = []
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ExceptHandler) and node.type is None:
+                bare_excepts.append(f"  Line {node.lineno}: bare except:")
+
+        assert not bare_excepts, (
+            f"\n{filename}: bare except blocks found (use except Exception instead):\n"
+            + "\n".join(bare_excepts)
+        )
 
 
 class TestNoSilentCatchesInHealth:
-    """health.py: except blocks returning errors must log first."""
+    """health.py: specific log message guards for critical error paths."""
 
     def test_health_check_logs_error(self):
         source = (TOOLS_DIR / "health.py").read_text()
-        # The health_check method's except block should log
         assert "logger.error" in source or "logger.debug" in source, (
             "health.py has no logger.error or logger.debug calls"
         )

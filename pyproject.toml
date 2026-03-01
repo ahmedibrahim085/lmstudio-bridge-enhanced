@@ -34,13 +34,15 @@ target-version = "py39"
 
 [tool.ruff.lint]
 select = [
-    "E",      # pycodestyle errors
+    "E",      # pycodestyle errors (includes E722: bare except)
     "W",      # pycodestyle warnings
     "F",      # Pyflakes
     "I",      # isort
     "B",      # flake8-bugbear
     "C4",     # flake8-comprehensions
     "UP",     # pyupgrade
+    "S110",   # flake8-bandit: try-except-pass (silent swallowing)
+    "S112",   # flake8-bandit: try-except-continue (silent swallowing)
 ]
 ignore = [
     "E501",   # line too long (handled by formatter)

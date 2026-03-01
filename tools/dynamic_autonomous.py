@@ -1003,8 +1003,8 @@ Continue with the task based on these results."""
                     final_status=final_status,
                     rounds=round_metrics_list,
                 )
-            except Exception:
-                pass  # Never break the caller for metrics
+            except Exception:  # noqa: S110 — metrics must never break the autonomous loop
+                pass
 
 
     async def _autonomous_loop_anthropic(
