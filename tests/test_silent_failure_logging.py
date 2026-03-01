@@ -26,6 +26,7 @@ class TestLmsHelperLogging:
         client.base_url = "http://localhost:1234"
         client._models_endpoint = "/api/v1/models"
         client._default_timeout = 5.0
+        client._cache_lock = __import__("threading").Lock()
         client._models_cache = None
         client._models_cache_time = 0.0
         mock_http = MagicMock()

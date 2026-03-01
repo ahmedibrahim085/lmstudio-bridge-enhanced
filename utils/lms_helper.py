@@ -29,6 +29,7 @@ __all__ = [
 import subprocess
 import json
 import logging
+import threading
 import time
 from typing import Optional, Dict, List, Any
 from pathlib import Path
@@ -67,6 +68,7 @@ class LMSRestClient:
         self._load_timeout = LMS_REST_LOAD_TIMEOUT
         self._default_timeout = LMS_REST_DEFAULT_TIMEOUT
         self._client: "httpx.Client | None" = None
+        self._cache_lock = threading.Lock()
         self._models_cache: list[dict] | None = None
         self._models_cache_time: float = 0.0
 
@@ -79,9 +81,10 @@ class LMSRestClient:
 
     def list_all_models(self) -> Optional[List[Dict[str, Any]]]:
         """GET /api/v1/models — returns models[] or None on error. Cached for LMS_REST_MODELS_CACHE_TTL seconds."""
-        now = time.time()
-        if self._models_cache is not None and (now - self._models_cache_time) < LMS_REST_MODELS_CACHE_TTL:
-            return self._models_cache
+        with self._cache_lock:
+            now = time.monotonic()
+            if self._models_cache is not None and (now - self._models_cache_time) < LMS_REST_MODELS_CACHE_TTL:
+                return self._models_cache
 
         try:
             response = self._get_client().get(
@@ -97,8 +100,9 @@ class LMSRestClient:
                     result = data.get("models", data.get("data", []))
                 else:
                     result = []
-                self._models_cache = result
-                self._models_cache_time = now
+                with self._cache_lock:
+                    self._models_cache = result
+                    self._models_cache_time = time.monotonic()
                 return result
             logger.warning(f"Native models API returned {response.status_code}")
             return None
@@ -108,8 +112,9 @@ class LMSRestClient:
 
     def invalidate_cache(self) -> None:
         """Clear the models cache. Forces a fresh HTTP GET on next call."""
-        self._models_cache = None
-        self._models_cache_time = 0.0
+        with self._cache_lock:
+            self._models_cache = None
+            self._models_cache_time = 0.0
 
     def is_model_loaded(self, model_key: str) -> Optional[bool]:
         """Check if model is loaded via loaded_instances. Returns True/False/None."""
@@ -120,13 +125,14 @@ class LMSRestClient:
 
     def get_model(self, model_key: str) -> Optional[dict[str, Any]]:
         """Get single model by key. Cache-first, fetch on miss."""
-        if self._models_cache is not None:
-            now = time.time()
-            if (now - self._models_cache_time) < LMS_REST_MODELS_CACHE_TTL:
-                for m in self._models_cache:
-                    if m.get("key") == model_key:
-                        return m
-                return None
+        with self._cache_lock:
+            if self._models_cache is not None:
+                now = time.monotonic()
+                if (now - self._models_cache_time) < LMS_REST_MODELS_CACHE_TTL:
+                    for m in self._models_cache:
+                        if m.get("key") == model_key:
+                            return m
+                    return None
         models = self.list_all_models()
         if models is None:
             return None
