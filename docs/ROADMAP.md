@@ -1,6 +1,6 @@
 # LM Studio Bridge Enhanced — OPP Roadmap
 
-> Updated: 2026-02-24 | LM Studio target: 0.4.4+ | Baseline: ~1455 tests passing, 91% coverage
+> Updated: 2026-03-01 | LM Studio target: 0.4.4+ | Baseline: ~1684 tests passing, 91% coverage
 
 ---
 
@@ -14,7 +14,8 @@
 | Round B (Phase 4) | OPP-12, 10, 08, 14, 18 | **DONE** | v3.4.0 | ~80 |
 | Round C (Phase 5) | OPP-17, 09, 15 | **DONE** | v3.5.0 | ~30 |
 | Error Audit | 10 bug fixes | **DONE** | v3.5.1-error-audit | ~50 |
-| Round D (Quick Wins) | OPP-22, 23, 26, 30 | **PROPOSED** | v4.0.0 | — |
+| Code Quality Audit | 12 findings fixed | **DONE** | v4.0.0 | ~75 |
+| Round D (Quick Wins) | OPP-22, 23, 26, 30 | **PROPOSED** | v4.1.0 | — |
 | v5.0.0 Phase A (Architecture) | ARCH-1..5 | **PROPOSED** | v5.0.0 | — |
 | v5.0.0 Phase B (Features) | OPP-21, 24, 27, 28, 29 | **PROPOSED** | v5.0.0 | — |
 | v5.0.0 Phase C (Major) | OPP-19, 25 | **PROPOSED** | v5.0.0 | — |
@@ -114,8 +115,7 @@ Changes from original:
 | 8 | OPP-29 | Log-Probabilities | 5 | 6 | 0.8 | 1 | **24** | v5-B | PROPOSED |
 | 9 | OPP-28 | API Authentication | 4 | 6 | 0.8 | 1 | **19.2** | v5-B | PROPOSED |
 | 10 | OPP-24 | Model Auto-Download (REST) | 6 | 7 | 0.8 | 2 | **16.8** | v5-B | PROPOSED |
-| 11 | OPP-19 | Native Chat API (`/api/v1/chat`) | 8 | 10 | 0.8 | 4 | **16** | v5-C | PROPOSED |
-| 12 | OPP-25 | Ephemeral MCP Servers | 5 | 9 | 0.7 | 4 | **7.9** | v5-C | PROPOSED |
+| 11 | OPP-25 | Ephemeral MCP Servers | 5 | 9 | 0.7 | 4 | **7.9** | v5-C | PROPOSED |
 
 **Completed round totals**:
 - Round A (Phases 2+3 parallel): **309.6** — 6 OPPs — **DONE**
@@ -296,9 +296,10 @@ v5.0.0 Phase C ────┐
 | Round B (Phase 4) | OPP-12, 10, 08, 14, 18 | 85.9 | ~80 |
 | Round C (Phase 5) | OPP-17, 09, 15 | 30 | ~30 |
 | Error Audit | 10 bug fixes | — | ~50 |
-| **TOTAL DONE** | **18 OPPs + 10 fixes** | **638** | **~425** |
+| Code Quality Audit | 12 findings fixed | — | ~75 |
+| **TOTAL DONE** | **18 OPPs + 22 fixes** | **638** | **~500** |
 
-Final completed state: ~1455 tests, 91% coverage, VERSION 3.5.0.
+Final completed state: ~1684 tests, 91% coverage, VERSION 4.0.0.
 
 **Proposed totals**:
 

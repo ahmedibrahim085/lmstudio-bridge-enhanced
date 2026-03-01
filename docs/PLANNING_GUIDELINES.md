@@ -112,19 +112,9 @@ Every change covers:
 | **Critical path coverage** | **95%** | **100%** |
 
 - Measure with: `pytest --cov=llm --cov=tools --cov=config --cov=model_registry --cov=mcp_client --cov=utils --cov-report=term-missing`
-- **Current baseline**: 67% overall (verified 2026-02-23)
-- Coverage debt modules (below 50%):
-
-  | Module | Current | Action |
-  |--------|---------|--------|
-  | `tools/dynamic_autonomous_register.py` | 0% | Add registration tests |
-  | `tools/health.py` | 21% | Add health check tests |
-  | `tools/completions.py` | 36% | Add completion MCP tool tests |
-  | `model_registry/tools.py` | 37% | Add registry MCP tool tests |
-  | `tools/lms_cli_tools.py` | 36% | Add CLI tool tests |
-  | `model_registry/registry.py` | 42% | Add registry logic tests |
-  | `tools/embeddings.py` | 42% | Add embedding tests |
-  | `tools/vision.py` | 43% | Add vision tool tests |
+- **Current baseline**: 91% overall, 1684 tests (verified 2026-03-01, v4.0.0)
+- Coverage debt largely resolved through test infrastructure overhaul + error audit + code quality audit
+- Remaining low-coverage modules tracked in per-module coverage reports
 
 - **Every PR must not decrease overall coverage.** New code must meet 90% minimum.
 

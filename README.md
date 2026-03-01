@@ -1,4 +1,4 @@
-# LM Studio Bridge Enhanced v3.5.0
+# LM Studio Bridge Enhanced v4.0.0
 
 An autonomous middleware agent that lets any MCP client delegate tasks to local LLMs, which can then use any MCP tool — translating between all 3 API formats in real-time.
 
@@ -7,7 +7,7 @@ An autonomous middleware agent that lets any MCP client delegate tasks to local 
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![LM Studio](https://img.shields.io/badge/LM%20Studio-0.4.4+-green.svg)](https://lmstudio.ai/)
-[![Tests](https://img.shields.io/badge/tests-1455%20passing-brightgreen.svg)](#testing)
+[![Tests](https://img.shields.io/badge/tests-1684%20passing-brightgreen.svg)](#testing)
 [![Coverage](https://img.shields.io/badge/coverage-91%25-brightgreen.svg)](#testing)
 
 ---
@@ -501,7 +501,7 @@ cd lmstudio-bridge-enhanced
 python3 -m pytest tests/ -v
 ```
 
-**Test Results**: ~1455 tests passing, 91% coverage
+**Test Results**: ~1684 tests passing, 91% coverage
 
 Test coverage includes:
 - Format adapter 3-way translation (200+ tests)
@@ -555,7 +555,19 @@ See [Troubleshooting Guide](docs/TROUBLESHOOTING.md) for more.
 
 ## Version History
 
-### v3.5.0 (February 2026) - Current
+### v4.0.0 (March 2026) - Current
+- **Code quality audit** — 12-agent, 3-wave deep review with TDD fixes
+- **Hardcoded value extraction** — all magic numbers moved to config/constants.py
+- **Silent error catch elimination** — logging added to all 16 catch blocks
+- **Vision helper deduplication** — 6 duplicated try/except blocks consolidated
+- **Unused import cleanup** — ruff --fix across all tool modules
+- **Public API test coverage** — register_*_tools() functions now tested
+- **Thread safety** — threading.Lock on shared caches
+- **Error contracts** — standardized tool error return format
+- **Monotonic timers** — time.monotonic() for TTL caches
+- **1684 tests, 91% coverage**
+
+### v3.5.0 (February 2026)
 - **18 OPPs implemented** across 5 rounds (Phase 1 through Round C)
 - **3-way format adapter** — OpenAI, Anthropic, Responses (bidirectional)
 - **Dual-format autonomous loops** — OpenAI and Anthropic tool-calling

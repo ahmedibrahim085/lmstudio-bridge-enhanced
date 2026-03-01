@@ -1,6 +1,6 @@
 # LM Studio Bridge Enhanced — Execution Backlog
 
-> Updated: 2026-02-24 | Post-error-audit | Baseline: ~1455 tests passing, 91% coverage
+> Updated: 2026-03-01 | Post-code-quality-audit | Baseline: ~1684 tests passing, 91% coverage
 
 ---
 
@@ -8,12 +8,12 @@
 
 | Metric | Value |
 |--------|-------|
-| Branch | `fix/server-error-audit` at `275c243` |
-| Tests | ~1455 passed, 0 failures, 4 skipped |
+| Branch | `feat/round-d-v4` at `3455f69` |
+| Tests | ~1684 passed, 0 failures |
 | Coverage | **91%** |
 | Coverage target | **80% minimum / 89% goal (exceeded)** |
-| VERSION | 3.5.0 (in constants.py) |
-| Completed rounds | Phase 1, Phase 1.5, Round A, Round B, Round C, Polish, Error Audit |
+| VERSION | 4.0.0 (in constants.py) |
+| Completed rounds | Phase 1, Phase 1.5, Round A, Round B, Round C, Polish, Error Audit, Code Quality Audit |
 
 ---
 
@@ -64,7 +64,7 @@ OPP-04 DONE → OPP-18 DONE
 
 ---
 
-## Completed OPPs (All 14)
+## Completed OPPs (All 18)
 
 | OPP | Name | Round | RICE | PR |
 |-----|------|-------|------|----|
@@ -127,7 +127,7 @@ All 3 OPPs implemented, tested, and merged. Coverage reached ~90%.
 - [x] Coverage push toward **89%** goal (achieved 89%)
 - [x] Test infrastructure overhaul complete (12 commits)
 - [x] Comprehensive OPP review complete (12 fix commits)
-- [ ] All documentation current (in progress)
+- [x] All documentation current (v4.0.0)
 - [ ] Release tag created
 - [ ] CI/CD pipeline green
 
@@ -370,3 +370,5 @@ These are not individual OPPs — they are **synergy effects** from combining mu
 | 2026-02-24 | Versioning revision: Round C → v3.5.0, Round D → v4.0.0, merged Round E + F + Architecture into v5.0.0 |
 | 2026-02-24 | OPP-21 moved from Round D to v5.0.0 Phase B (breaking change bundles with v5) |
 | 2026-02-24 | Added Architecture Refactoring phase (ARCH-1..5) from ARCHITECTURE_REVIEW.md findings |
+| 2026-03-01 | Code quality audit: 12 findings fixed (threading, error contracts, logging, dedup, imports) |
+| 2026-03-01 | VERSION bumped to 4.0.0, docs updated to reflect current state |
