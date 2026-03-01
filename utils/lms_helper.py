@@ -118,7 +118,7 @@ class LMSRestClient:
             return None if self.list_all_models() is None else False
         return len(model.get("loaded_instances", [])) > 0
 
-    def get_model(self, model_key: str) -> Optional[Dict[str, Any]]:
+    def get_model(self, model_key: str) -> Optional[dict[str, Any]]:
         """Get single model by key. Cache-first, fetch on miss."""
         if self._models_cache is not None:
             now = time.time()

@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """Tests for OPP-22: Single-Model Lookup."""
 import time
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
+
 import pytest
 
-from utils.lms_helper import LMSRestClient
 from config.constants import LMS_REST_MODELS_CACHE_TTL
-
+from utils.lms_helper import LMSRestClient
 
 SAMPLE_MODELS = [
     {"key": "qwen/qwen3-coder-next", "loaded_instances": [{"id": "inst-1"}]},
