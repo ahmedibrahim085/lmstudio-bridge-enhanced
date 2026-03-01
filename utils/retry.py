@@ -11,7 +11,7 @@ import time
 import random
 import logging
 import subprocess
-from typing import List, Any
+from typing import List
 
 logger = logging.getLogger(__name__)
 

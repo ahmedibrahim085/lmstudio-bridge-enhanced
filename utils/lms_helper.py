@@ -20,12 +20,30 @@ Note: This is OPTIONAL. The system works without it, but LMS CLI provides
       better reliability and debugging capabilities.
 """
 
+__all__ = [
+    "LMSHelper",
+    "LMSRestClient",
+    "check_lms_availability",
+]
+
 import subprocess
 import json
 import logging
+import threading
+import time
 from typing import Optional, Dict, List, Any
-from pathlib import Path
 
+from config.constants import (
+    LMS_CLI_CHECK_TIMEOUT,
+    LMS_CLI_DEFAULT_TIMEOUT,
+    LMS_CLI_LOAD_TIMEOUT,
+    LMS_CLI_PS_TIMEOUT,
+    LMS_CLI_UNLOAD_TIMEOUT,
+    LMS_REST_MODELS_CACHE_TTL,
+    MODEL_LOADING_DELAY,
+    MODEL_REACTIVATION_DELAY,
+)
+from llm.exceptions import LLMError
 from utils.retry import run_with_retry
 from utils.validation import validate_model_name, ValidationError
 
@@ -37,7 +55,10 @@ TEMP_MODEL_TTL = 300     # 5 minutes for temporary models
 
 
 class LMSRestClient:
-    """REST client for LM Studio native API (v0.4.x+)."""
+    """REST client for LM Studio native API (v0.4.x+).
+
+    Uses a shared httpx.Client for connection pooling across all requests.
+    """
 
     def __init__(self, base_url=None):
         from config.constants import (  # noqa: PLC0415
@@ -54,47 +75,101 @@ class LMSRestClient:
         self._unload_endpoint = LMS_UNLOAD_MODEL_ENDPOINT
         self._load_timeout = LMS_REST_LOAD_TIMEOUT
         self._default_timeout = LMS_REST_DEFAULT_TIMEOUT
+        self._client: "httpx.Client | None" = None
+        self._cache_lock = threading.Lock()
+        self._models_cache: list[dict] | None = None
+        self._models_cache_time: float = 0.0
+
+    def _get_client(self) -> "httpx.Client":
+        """Get or create the shared httpx.Client for connection pooling."""
+        if self._client is None:
+            import httpx
+            self._client = httpx.Client(timeout=self._default_timeout)
+        return self._client
 
     def list_all_models(self) -> Optional[List[Dict[str, Any]]]:
-        """GET /api/v1/models — returns models[] or None on error."""
+        """GET /api/v1/models — returns models[] or None on error. Cached for LMS_REST_MODELS_CACHE_TTL seconds."""
+        with self._cache_lock:
+            now = time.monotonic()
+            if self._models_cache is not None and (now - self._models_cache_time) < LMS_REST_MODELS_CACHE_TTL:
+                return self._models_cache
+
         try:
-            import httpx
-            response = httpx.get(
+            response = self._get_client().get(
                 f"{self.base_url}{self._models_endpoint}",
                 timeout=self._default_timeout
             )
             if response.status_code == 200:
                 data = response.json()
                 if isinstance(data, list):
-                    return data
-                return []
+                    result = data
+                elif isinstance(data, dict):
+                    # Native /api/v1/models wraps in {"models": [...]}
+                    result = data.get("models", data.get("data", []))
+                else:
+                    result = []
+                with self._cache_lock:
+                    self._models_cache = result
+                    self._models_cache_time = time.monotonic()
+                return result
             logger.warning(f"Native models API returned {response.status_code}")
             return None
         except Exception as e:
-            logger.debug(f"Native models API unavailable: {e}")
+            logger.warning(f"Native models API unavailable: {e}", exc_info=True)
             return None
+
+    def invalidate_cache(self) -> None:
+        """Clear the models cache. Forces a fresh HTTP GET on next call."""
+        with self._cache_lock:
+            self._models_cache = None
+            self._models_cache_time = 0.0
 
     def is_model_loaded(self, model_key: str) -> Optional[bool]:
         """Check if model is loaded via loaded_instances. Returns True/False/None."""
+        model = self.get_model(model_key)
+        if model is None:
+            return None if self.list_all_models() is None else False
+        return len(model.get("loaded_instances", [])) > 0
+
+    def get_model(self, model_key: str) -> Optional[dict[str, Any]]:
+        """Get single model by key. Cache-first, fetch on miss."""
+        with self._cache_lock:
+            if self._models_cache is not None:
+                now = time.monotonic()
+                if (now - self._models_cache_time) < LMS_REST_MODELS_CACHE_TTL:
+                    for m in self._models_cache:
+                        if m.get("key") == model_key:
+                            return m
+                    return None
         models = self.list_all_models()
         if models is None:
             return None
         for m in models:
             if m.get("key") == model_key:
-                loaded = m.get("loaded_instances", [])
-                return len(loaded) > 0
-        return False
+                return m
+        return None
+
+    def _fetch_model_config(self, model_key: str) -> Optional[dict[str, Any]]:
+        """Fetch load config from latest loaded instance after cache invalidation."""
+        self.invalidate_cache()
+        model = self.get_model(model_key)
+        if model is None:
+            return None
+        instances = model.get("loaded_instances", [])
+        if not instances:
+            return None
+        return instances[-1].get("config", {})
 
     def is_server_available(self) -> bool:
         """Check if LM Studio REST API is reachable."""
         try:
-            import httpx
-            response = httpx.get(
+            response = self._get_client().get(
                 f"{self.base_url}{self._models_endpoint}",
                 timeout=self._default_timeout
             )
             return response.status_code == 200
         except Exception:
+            logger.warning("LM Studio server availability check failed", exc_info=True)
             return False
 
     def load_model(self, model_key: str, context_length=None, flash_attention=None):
@@ -111,18 +186,18 @@ class LMSRestClient:
                 "instance_id": None,
                 "already_loaded": True,
                 "memory_error": False,
-                "message": f"Model '{model_key}' already loaded"
+                "message": f"Model '{model_key}' already loaded",
+                "config": self._fetch_model_config(model_key),
             }
 
         try:
-            import httpx
             body = {"model": model_key}
             if context_length is not None:
                 body["context_length"] = context_length
             if flash_attention is not None:
                 body["flash_attention"] = flash_attention
 
-            response = httpx.post(
+            response = self._get_client().post(
                 f"{self.base_url}{self._load_endpoint}",
                 json=body,
                 timeout=self._load_timeout
@@ -135,7 +210,8 @@ class LMSRestClient:
                     "instance_id": data.get("instance_id"),
                     "already_loaded": False,
                     "memory_error": False,
-                    "message": f"Model '{model_key}' loaded successfully"
+                    "message": f"Model '{model_key}' loaded successfully",
+                    "config": self._fetch_model_config(model_key),
                 }
             else:
                 body_text = response.text
@@ -145,7 +221,8 @@ class LMSRestClient:
                     "instance_id": None,
                     "already_loaded": False,
                     "memory_error": is_memory,
-                    "message": body_text
+                    "message": body_text,
+                    "config": None,
                 }
         except Exception as e:
             return {
@@ -153,14 +230,14 @@ class LMSRestClient:
                 "instance_id": None,
                 "already_loaded": False,
                 "memory_error": False,
-                "message": str(e)
+                "message": str(e),
+                "config": None,
             }
 
     def unload_model(self, instance_id: str) -> bool:
         """Unload model by instance_id. POST /api/v1/models/unload."""
         try:
-            import httpx
-            response = httpx.post(
+            response = self._get_client().post(
                 f"{self.base_url}{self._unload_endpoint}",
                 json={"instance_id": instance_id},
                 timeout=self._default_timeout
@@ -258,7 +335,7 @@ class LMSHelper:
                 ["lms", "ps"],
                 capture_output=True,
                 text=True,
-                timeout=5
+                timeout=LMS_CLI_CHECK_TIMEOUT
             )
             cls._is_installed = result.returncode == 0
 
@@ -401,7 +478,7 @@ ALTERNATIVE:
                 cmd,
                 capture_output=True,
                 text=True,
-                timeout=60  # Model loading can take time
+                timeout=LMS_CLI_LOAD_TIMEOUT  # Model loading can take time
             )
 
             if result.returncode == 0:
@@ -455,7 +532,7 @@ ALTERNATIVE:
                 ["lms", "unload", model_name],
                 capture_output=True,
                 text=True,
-                timeout=30
+                timeout=LMS_CLI_UNLOAD_TIMEOUT
             )
 
             if result.returncode == 0:
@@ -494,7 +571,7 @@ ALTERNATIVE:
                 cmd.append("--llm")
 
             # Use retry for resilience against timeouts
-            result = run_with_retry(cmd, timeout=30)
+            result = run_with_retry(cmd, timeout=LMS_CLI_DEFAULT_TIMEOUT)
 
             if result.returncode == 0:
                 models = json.loads(result.stdout)
@@ -533,7 +610,7 @@ ALTERNATIVE:
                                 "identifier": m.get("key", ""),
                                 "modelKey": m.get("key", ""),
                                 "status": "loaded",
-                                "instance_id": inst.get("instance_id", ""),
+                                "instance_id": inst.get("id", ""),
                             })
                 return loaded
         # Fall back to subprocess
@@ -543,7 +620,7 @@ ALTERNATIVE:
 
         try:
             # Use retry for resilience against timeouts
-            result = run_with_retry(["lms", "ps", "--json"], timeout=10)
+            result = run_with_retry(["lms", "ps", "--json"], timeout=LMS_CLI_PS_TIMEOUT)
 
             if result.returncode == 0:
                 return json.loads(result.stdout)
@@ -689,8 +766,7 @@ ALTERNATIVE:
 
                         if response.status_code == 200:
                             # API call succeeded, check if model is now active
-                            import time
-                            time.sleep(1)  # Give it a moment to transition
+                            time.sleep(MODEL_REACTIVATION_DELAY)  # Give it a moment to transition
 
                             # Verify model is now loaded
                             if cls.is_model_loaded(model_name):
@@ -715,8 +791,7 @@ ALTERNATIVE:
                 if status == "loading":
                     # Model is currently loading, wait briefly
                     logger.info(f"⏳ Model '{model_name}' is loading, waiting...")
-                    import time
-                    time.sleep(2)
+                    time.sleep(MODEL_LOADING_DELAY)
                     # Check again after wait
                     return cls.is_model_loaded(model_name) or False
 
@@ -786,7 +861,12 @@ ALTERNATIVE:
             return False
 
     @classmethod
-    def ensure_model_loaded_with_verification(cls, model_name: str, ttl: Optional[int] = None) -> bool:
+    def ensure_model_loaded_with_verification(
+        cls,
+        model_name: str,
+        ttl: Optional[int] = None,
+        skip_initial_check: bool = False,
+    ) -> bool:
         """
         Ensure model is loaded AND verify it's actually available.
 
@@ -796,6 +876,9 @@ ALTERNATIVE:
         Args:
             model_name: Name of model to ensure is loaded
             ttl: Optional TTL override
+            skip_initial_check: If True, skip the initial is_model_loaded() call.
+                Set by callers (e.g. _ensure_model_loaded) that have already
+                performed this check to avoid a redundant HTTP GET.
 
         Returns:
             True if model is loaded and verified
@@ -803,20 +886,20 @@ ALTERNATIVE:
         Raises:
             Exception: If model loading or verification fails
         """
-        if cls.is_model_loaded(model_name):
-            logger.debug(f"Model '{model_name}' already loaded")
-            return True
+        if not skip_initial_check:
+            if cls.is_model_loaded(model_name):
+                logger.debug(f"Model '{model_name}' already loaded")
+                return True
 
         logger.info(f"Loading model '{model_name}'...")
         if not cls.load_model(model_name, keep_loaded=True, ttl=ttl):
-            raise Exception(f"Failed to load model '{model_name}'")
+            raise LLMError(f"Failed to load model '{model_name}'")
 
         # Give LM Studio time to fully load the model
-        import time
-        time.sleep(2)
+        time.sleep(MODEL_LOADING_DELAY)
 
         if not cls.verify_model_loaded(model_name):
-            raise Exception(
+            raise LLMError(
                 f"Model '{model_name}' reported loaded but verification failed. "
                 "This usually means LM Studio is under memory pressure."
             )

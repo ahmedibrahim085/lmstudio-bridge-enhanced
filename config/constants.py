@@ -14,6 +14,214 @@ Usage:
     port = int(os.getenv("LMSTUDIO_PORT", DEFAULT_LMSTUDIO_PORT))
 """
 
+__all__ = [
+    "ALLOWED_URL_SCHEMES",
+    "ANTHROPIC_AUTONOMOUS_SYSTEM_TEMPLATE",
+    "ANTHROPIC_MESSAGES_ENDPOINT",
+    "API_VERSION",
+    "API_VERSION_SUPPORTED",
+    "BASE64_DATA_URI_PREFIX",
+    "BLOCKED_HOSTNAMES",
+    "BLOCKED_IP_PREFIXES",
+    "BLOCKED_IP_RANGES_172",
+    "CACHE_VALIDATION_TARGET_MS",
+    "CHARS_PER_TOKEN_ESTIMATE",
+    "CHAT_COMPLETIONS_ENDPOINT",
+    "COMPLETIONS_ENDPOINT",
+    "DEFAULT_ANTHROPIC_API_VERSION",
+    "DEFAULT_ANTHROPIC_MAX_TOKENS",
+    "DEFAULT_AUTONOMOUS_FORMAT",
+    "DEFAULT_AUTONOMOUS_MODEL",
+    "DEFAULT_AUTONOMOUS_TIMEOUT",
+    "DEFAULT_BRANCH_PREFIX",
+    "DEFAULT_CACHE_DIR",
+    "DEFAULT_CONFIG_DIR",
+    "DEFAULT_CONNECTION_TIMEOUT",
+    "DEFAULT_FALLBACK_MODEL",
+    "DEFAULT_FILESYSTEM_ROOT",
+    "DEFAULT_FREQUENCY_PENALTY",
+    "DEFAULT_JSON_SCHEMA_STRICT",
+    "DEFAULT_LLM_TIMEOUT",
+    "DEFAULT_LMSTUDIO_BASE_URL",
+    "DEFAULT_LMSTUDIO_HOST",
+    "DEFAULT_LMSTUDIO_MCP_PATH",
+    "DEFAULT_LMSTUDIO_PORT",
+    "DEFAULT_LOG_DIR",
+    "DEFAULT_MAX_RETRIES",
+    "DEFAULT_MAX_ROUNDS",
+    "E2E_TEST_MAX_ROUNDS",
+    "DEFAULT_MAX_TOKENS",
+    "DEFAULT_MCP_CONFIG_PATH",
+    "DEFAULT_MCP_NPX_ARGS",
+    "DEFAULT_MCP_NPX_COMMAND",
+    "DEFAULT_MCP_TIMEOUT",
+    "DEFAULT_MIN_P",
+    "DEFAULT_MODEL_KEYWORD",
+    "DEFAULT_PRESENCE_PENALTY",
+    "DEFAULT_READ_TIMEOUT",
+    "DEFAULT_REQUEST_TIMEOUT",
+    "DEFAULT_RETRY_BASE_DELAY",
+    "DEFAULT_RETRY_MAX_DELAY",
+    "DEFAULT_REVIEW_MODEL",
+    "DEFAULT_SMALL_MODEL",
+    "DEFAULT_TEMPERATURE",
+    "DEFAULT_THINKING_BUDGET_TOKENS",
+    "DEFAULT_THINKING_MODEL",
+    "DEFAULT_TOP_K",
+    "DEFAULT_TOP_P",
+    "DEFAULT_VISION_DETAIL",
+    "DEFAULT_VISION_MODEL",
+    "DIAGNOSTICS_ENDPOINT",
+    "EMBEDDINGS_ENDPOINT",
+    "ENABLE_CACHING",
+    "ENABLE_LOGGING",
+    "ENABLE_METRICS",
+    "ENABLE_RETRY",
+    "ENV_LMSTUDIO_HOST",
+    "ENV_LMSTUDIO_PORT",
+    "ENV_LOG_LEVEL",
+    "ENV_MAX_RETRIES",
+    "ENV_MCP_FILESYSTEM_ROOT",
+    "ENV_REQUEST_TIMEOUT",
+    "ERROR_CONNECTION_FAILED",
+    "ERROR_EMPTY_CHAT_RESPONSE",
+    "ERROR_EMPTY_TEXT_COMPLETION",
+    "ERROR_MAX_TOKENS_OUT_OF_RANGE",
+    "ERROR_MCP_NOT_FOUND",
+    "ERROR_MIN_P_OUT_OF_RANGE",
+    "ERROR_MESSAGES_NOT_LIST",
+    "ERROR_MODEL_NOT_FOUND",
+    "ERROR_NO_CHAT_RESPONSE",
+    "ERROR_NO_TEXT_COMPLETION",
+    "ERROR_SSRF_BLOCKED_HOST",
+    "ERROR_SSRF_BLOCKED_SCHEME",
+    "ERROR_STREAM_NOT_SUPPORTED",
+    "ERROR_TEMPERATURE_OUT_OF_RANGE",
+    "ERROR_TIMEOUT",
+    "ERROR_TOP_K_OUT_OF_RANGE",
+    "ERROR_VALIDATION_FAILED",
+    "EXAMPLE_MODEL_NAME",
+    "FORMAT_ANTHROPIC",
+    "FORMAT_OPENAI",
+    "FORMAT_RESPONSES",
+    "HEALTH_CHECK_INTERVAL",
+    "HEALTH_CHECK_TIMEOUT",
+    "HTTP_BAD_REQUEST",
+    "HTTP_RETRY_BACKOFF_FACTOR",
+    "HTTP_RETRY_TOTAL",
+    "HTTP_NOT_FOUND",
+    "HTTP_OK",
+    "HTTP_RATE_LIMIT",
+    "HTTP_SERVER_ERROR",
+    "HTTP_TIMEOUT",
+    "IMAGE_DOWNLOAD_TIMEOUT",
+    "IMAGE_EXTENSION_MAP",
+    "IMAGE_POOL_CONNECTIONS",
+    "IMAGE_POOL_MAXSIZE",
+    "IMAGE_URL_PATTERNS",
+    "JIT_TTL_AUTONOMOUS",
+    "JIT_TTL_DEFAULT",
+    "JIT_TTL_EMBEDDING",
+    "LLM_POOL_CONNECTIONS",
+    "LLM_POOL_MAXSIZE",
+    "LLMSTER_PROCESS_NAME",
+    "LMS_CLI_CHECK_TIMEOUT",
+    "LMS_CLI_DEFAULT_TIMEOUT",
+    "LMS_CLI_LOAD_TIMEOUT",
+    "LMS_CLI_PS_TIMEOUT",
+    "LMS_CLI_UNLOAD_TIMEOUT",
+    "LMS_DOWNLOAD_MODEL_ENDPOINT",
+    "LMS_LOAD_MODEL_ENDPOINT",
+    "LMS_REST_DEFAULT_TIMEOUT",
+    "LMS_REST_LOAD_TIMEOUT",
+    "LMS_REST_MODELS_CACHE_TTL",
+    "LMS_TEST_ENV_VAR_PREFIX",
+    "LMS_TEST_ENV_VARS",
+    "LMSTUDIO_TESTING_DEFAULT_MODEL",
+    "LMSTUDIO_TESTING_ENV_VAR",
+    "LMS_UNLOAD_MODEL_ENDPOINT",
+    "LOG_FORMAT",
+    "LOG_LEVEL",
+    "LONG_TEST_TIMEOUT",
+    "MAX_ANTHROPIC_LOOP_MESSAGES",
+    "MAX_BRANCHES_PER_TREE",
+    "MAX_BRANCH_DEPTH",
+    "MAX_CONSECUTIVE_ERRORS",
+    "MAX_IMAGES_PER_AUTONOMOUS_INPUT",
+    "MAX_IMAGE_DIMENSION",
+    "MAX_IMAGE_SIZE_BYTES",
+    "MAX_JSON_SCHEMA_DEPTH",
+    "MAX_JSON_SCHEMA_PROPERTIES",
+    "MAX_MAX_TOKENS",
+    "MAX_MIN_P",
+    "MAX_TEMPERATURE",
+    "MAX_TOP_K",
+    "MAX_THINKING_BUDGET_TOKENS",
+    "MCP_CONFIG_SEARCH_PATHS",
+    "MCP_PACKAGE_PATTERNS",
+    "MCP_PACKAGES",
+    "MEMORY_OVERHEAD_TARGET_MB",
+    "MIN_MAX_TOKENS",
+    "MIN_MIN_P",
+    "MIN_PYTHON_VERSION",
+    "MIN_TEMPERATURE",
+    "MIN_TOP_K",
+    "MIN_THINKING_BUDGET_TOKENS",
+    "MODEL_CACHE_TTL_SECONDS",
+    "MODEL_INVENTORY_DIR",
+    "MODEL_INVENTORY_REASON_DIRECT",
+    "MODEL_INVENTORY_REASON_FIXTURE",
+    "MODEL_INVENTORY_REASON_LIFECYCLE",
+    "MODEL_INVENTORY_SCOPE_CLASS",
+    "MODEL_INVENTORY_SCOPE_FUNCTION",
+    "MODEL_INVENTORY_SCOPE_MODULE",
+    "MODEL_INVENTORY_SCOPE_SESSION",
+    "MODEL_LIST_TIMEOUT",
+    "MODEL_LOADING_DELAY",
+    "MODEL_REACTIVATION_DELAY",
+    "MODEL_ROLE_KEYWORDS",
+    "MODEL_VALIDATION_TIMEOUT",
+    "MODELS_ENDPOINT",
+    "MODELS_FETCH_CACHE_TTL",
+    "MULTIMODAL_DETAIL_DEFAULT",
+    "NATIVE_MODELS_ENDPOINT",
+    "RESPONSES_ENDPOINT",
+    "REVIEW_MODELS",
+    "SELECTION_ERROR_INTERNAL",
+    "SELECTION_ERROR_NO_MODELS",
+    "SELECTION_FALLBACK_SORT_KEY",
+    "SELECTION_WEIGHT_CAPABILITY",
+    "SELECTION_WEIGHT_CONFIDENCE",
+    "SERVER_TYPE_GUI",
+    "SERVER_TYPE_HEADER",
+    "SERVER_TYPE_HEADLESS",
+    "SHORT_TEST_TIMEOUT",
+    "SLOW_TEST_THRESHOLD_SECONDS",
+    "SSE_DATA_PREFIX",
+    "SSE_DONE_SENTINEL",
+    "SSE_USAGE_KEY",
+    "STREAM_READ_TIMEOUT",
+    "STRUCTURED_OUTPUT_MODEL_WARNING",
+    "STRUCTURED_OUTPUT_TYPES",
+    "SUCCESS_CACHE_HIT",
+    "SUCCESS_MODEL_LOADED",
+    "SUCCESS_VALIDATION_PASSED",
+    "SUPPORTED_API_FORMATS",
+    "SUPPORTED_IMAGE_TYPES",
+    "SYSTEM_STATUS_ENDPOINT",
+    "TASK_CAPABILITY_MAP",
+    "TEST_MAX_LOADED_MODELS",
+    "TEST_MODEL_TTL",
+    "TEST_TIMEOUT",
+    "THINKING_TAG_CLOSE",
+    "THINKING_TAG_OPEN",
+    "VERSION",
+    "VISION_INPUT_TYPES",
+    "VISION_MODEL_WARNING",
+    "WAKE_UP_PING_MAX_TOKENS",
+    "WAKE_UP_PING_TIMEOUT",
+]
+
 # LM Studio Server Configuration
 DEFAULT_LMSTUDIO_HOST = "localhost"
 DEFAULT_LMSTUDIO_PORT = 1234
@@ -27,11 +235,15 @@ COMPLETIONS_ENDPOINT = "/v1/completions"
 EMBEDDINGS_ENDPOINT = "/v1/embeddings"
 RESPONSES_ENDPOINT = "/v1/responses"
 NATIVE_MODELS_ENDPOINT = "/api/v1/models"  # LM Studio native REST API (richer than /v1/models)
-ANTHROPIC_MESSAGES_ENDPOINT = "/v1/messages"  # LM Studio Anthropic-compat endpoint (0.4.x+)
+ANTHROPIC_MESSAGES_ENDPOINT = "messages"  # Path segment for _get_endpoint (api_base already has /v1)
 
 # Anthropic API Defaults
 DEFAULT_ANTHROPIC_MAX_TOKENS = 4096  # Anthropic requires max_tokens (no default in protocol)
 DEFAULT_ANTHROPIC_API_VERSION = "2023-06-01"  # anthropic-version header value
+
+# Model loading delays (seconds) — used in sync LMSHelper methods
+MODEL_REACTIVATION_DELAY = 1    # Delay after reactivation API call before verifying
+MODEL_LOADING_DELAY = 2          # Delay for model loading/verification transitions
 
 # LM Studio Native REST API Endpoints (Model Lifecycle)
 LMS_LOAD_MODEL_ENDPOINT = "/api/v1/models/load"
@@ -50,15 +262,42 @@ JIT_TTL_AUTONOMOUS = 10800   # 3 hours for autonomous tasks (long-running)
 DEFAULT_REQUEST_TIMEOUT = 120.0
 DEFAULT_CONNECTION_TIMEOUT = 10.0
 DEFAULT_READ_TIMEOUT = 300.0
+# Default timeout for LLM API calls via LLMClient
+# Set to 58s to accommodate slower models (Magistral: 45-46s response time)
+# Still safely under Claude Code's 60-second MCP timeout limit
+# See: https://github.com/anthropics/claude-code/issues/7575
+DEFAULT_LLM_TIMEOUT = 58
 
 # Retry Configuration
 DEFAULT_MAX_RETRIES = 3
 DEFAULT_RETRY_BASE_DELAY = 1.0
 DEFAULT_RETRY_MAX_DELAY = 60.0
 
+# HTTP Connection Pool Configuration
+LLM_POOL_CONNECTIONS = 10       # Pool connections for LLMClient HTTP adapter
+LLM_POOL_MAXSIZE = 20           # Pool max size for LLMClient HTTP adapter
+IMAGE_POOL_CONNECTIONS = 5      # Pool connections for image_utils HTTP adapter
+IMAGE_POOL_MAXSIZE = 10         # Pool max size for image_utils HTTP adapter
+HTTP_RETRY_TOTAL = 3            # urllib3 Retry total attempts
+HTTP_RETRY_BACKOFF_FACTOR = 0.3 # urllib3 Retry exponential backoff factor
+
+# Image Download
+IMAGE_DOWNLOAD_TIMEOUT = 30     # Timeout for downloading images from URLs
+
+# LMS CLI Timeouts (seconds) — used in subprocess.run calls
+LMS_CLI_CHECK_TIMEOUT = 5       # Quick CLI availability check (lms ps)
+LMS_CLI_LOAD_TIMEOUT = 60       # Model loading via CLI (can take time)
+LMS_CLI_UNLOAD_TIMEOUT = 30     # Model unloading via CLI
+LMS_CLI_DEFAULT_TIMEOUT = 30    # General CLI operations (discover, etc.)
+LMS_CLI_PS_TIMEOUT = 10         # lms ps --json / lms server status --json
+
 # Model Validation
 MODEL_CACHE_TTL_SECONDS = 60  # 60-second cache for model validation
 MODEL_VALIDATION_TIMEOUT = 5.0
+
+# Timeout for model listing API calls (list_models, list_models_enriched, get_model_info)
+# Used in: llm/llm_client.py (session.get calls for /models endpoints)
+MODEL_LIST_TIMEOUT = 10
 
 # LLM Generation Defaults
 DEFAULT_MAX_TOKENS = 8192
@@ -69,6 +308,7 @@ DEFAULT_PRESENCE_PENALTY = 0.0
 
 # Autonomous Execution
 DEFAULT_MAX_ROUNDS = 10000  # High limit - let LLM work until task complete
+E2E_TEST_MAX_ROUNDS = 5  # Budget: 5 × DEFAULT_LLM_TIMEOUT(58s) = 290s < LONG_TEST_TIMEOUT(300s)
 DEFAULT_AUTONOMOUS_TIMEOUT = 600  # 10 minutes per autonomous task
 MAX_CONSECUTIVE_ERRORS = 3  # Abort autonomous loop after this many consecutive errors
 
@@ -101,6 +341,50 @@ ERROR_CONNECTION_FAILED = "Failed to connect to LM Studio at {url}"
 ERROR_TIMEOUT = "Request timed out after {timeout} seconds"
 ERROR_VALIDATION_FAILED = "Model validation failed: {reason}"
 ERROR_MCP_NOT_FOUND = "MCP '{mcp}' not found in configuration"
+ERROR_NO_CHAT_RESPONSE = "No response generated from chat completion (empty choices)"
+ERROR_EMPTY_CHAT_RESPONSE = "Empty response content from chat completion model"
+ERROR_NO_TEXT_COMPLETION = "No completion generated from text completion (empty choices)"
+ERROR_EMPTY_TEXT_COMPLETION = "Empty completion content from text completion model"
+
+# H-2: stream=True guard for create_response
+# Used in: tools/completions.py (CompletionTools.create_response)
+ERROR_STREAM_NOT_SUPPORTED = (
+    "stream=True is not supported in create_response. "
+    "Use the stream_create_response tool for streaming responses."
+)
+
+# H-9: type validation after json.loads in anthropic_messages
+# Used in: tools/completions.py (CompletionTools.anthropic_messages)
+ERROR_MESSAGES_NOT_LIST = (
+    "messages must be a JSON array of message objects, got {actual_type}"
+)
+
+# H-10: Input validation bounds for MCP tool parameters
+# Used in: tools/completions.py (MCP tool wrappers and CompletionTools methods)
+MIN_TEMPERATURE = 0.0
+MAX_TEMPERATURE = 2.0
+MIN_MAX_TOKENS = 1
+MAX_MAX_TOKENS = 131072  # 128K context — upper bound for any model
+ERROR_TEMPERATURE_OUT_OF_RANGE = (
+    "temperature must be between {min} and {max}, got {value}"
+)
+ERROR_MAX_TOKENS_OUT_OF_RANGE = (
+    "max_tokens must be between {min} and {max}, got {value}"
+)
+
+# Advanced sampling parameters (OPP-26)
+DEFAULT_MIN_P = None
+DEFAULT_TOP_K = None
+MIN_MIN_P = 0.0
+MAX_MIN_P = 1.0
+MIN_TOP_K = 1
+MAX_TOP_K = 1000
+ERROR_MIN_P_OUT_OF_RANGE = (
+    "min_p must be between {min} and {max}, got {value}"
+)
+ERROR_TOP_K_OUT_OF_RANGE = (
+    "top_k must be between {min} and {max}, got {value}"
+)
 
 # Success Messages
 SUCCESS_MODEL_LOADED = "Model '{model}' loaded successfully"
@@ -122,7 +406,7 @@ ENABLE_LOGGING = True
 ENABLE_METRICS = True
 
 # Version Info
-VERSION = "3.2.2"
+VERSION = "4.0.0"
 API_VERSION_SUPPORTED = "1.0"
 MIN_PYTHON_VERSION = "3.9"
 
@@ -140,12 +424,12 @@ ENV_MCP_FILESYSTEM_ROOT = "MCP_FILESYSTEM_ROOT"
 
 # Default fallback model when no model is specified in API calls
 # Used in: lmstudio_bridge.py:296 (fallback when model resolution fails)
-DEFAULT_FALLBACK_MODEL = "qwen/qwen3-coder-30b"
+DEFAULT_FALLBACK_MODEL = "qwen/qwen3-coder-next"
 
 # Default model for autonomous execution tasks (coding, analysis, implementation)
 # Used in: lmstudio_bridge.py:423, tools/dynamic_autonomous.py:129,261,430
 #          tools/dynamic_autonomous_register.py:82,163,231
-DEFAULT_AUTONOMOUS_MODEL = "qwen/qwen3-coder-30b"
+DEFAULT_AUTONOMOUS_MODEL = "qwen/qwen3-coder-next"
 
 # Default model for code review tasks (smaller, faster for review)
 # Used in: run_code_review.py:60, retry_magistral.py:38
@@ -155,15 +439,23 @@ DEFAULT_REVIEW_MODEL = "mistralai/magistral-small-2509"
 # Used in: get_llm_reviews.py:155
 DEFAULT_THINKING_MODEL = "qwen/qwen3-4b-thinking-2507"
 
+# Default model for small/lightweight tasks
+# Used in: tests/test_constants.py (SMALL_MODEL fallback)
+DEFAULT_SMALL_MODEL = "ibm/granite-4-h-tiny"
+
+# Default model for vision/multimodal tasks
+# Used in: tests/test_constants.py (VISION_MODEL fallback)
+DEFAULT_VISION_MODEL = "qwen/qwen3-vl-8b"
+
 # Example model name for documentation and docstrings
 # Used in: tools/lms_cli_tools.py docstrings, examples
-EXAMPLE_MODEL_NAME = "qwen/qwen3-coder-30b"
+EXAMPLE_MODEL_NAME = "qwen/qwen3-coder-next"
 
 # List of models to use for comprehensive code reviews
 # Used in: get_llm_reviews.py:141,148,155 (multiple model reviews)
 REVIEW_MODELS = [
     "mistralai/magistral-small-2509",   # Fast, efficient for quick reviews
-    "qwen/qwen3-coder-30b",             # Coding specialist
+    "qwen/qwen3-coder-next",            # Coding specialist
     "qwen/qwen3-4b-thinking-2507"       # Deep reasoning
 ]
 
@@ -299,6 +591,36 @@ DEFAULT_VISION_DETAIL = "auto"
 # Used in: utils/image_utils.py (input format detection)
 VISION_INPUT_TYPES = ["file_path", "url", "base64"]
 
+# ==============================================================================
+# OPP-18: HEADLESS DEPLOYMENT (llmster) — Health Check Configuration
+# ==============================================================================
+
+# Timeout for health-check HTTP calls (seconds)
+# Short by design — this is a liveness probe, not a data fetch
+HEALTH_CHECK_TIMEOUT = 5.0
+
+# LM Studio diagnostics endpoint (available in 0.4.x headless/GUI)
+# Returns server type, version, uptime
+DIAGNOSTICS_ENDPOINT = "/api/v1/diagnostics"
+
+# LM Studio system status endpoint (fallback if diagnostics not available)
+SYSTEM_STATUS_ENDPOINT = "/api/v1/system/status"
+
+# HTTP response header that identifies the LM Studio server variant
+# Value is "gui" or "headless" when present
+SERVER_TYPE_HEADER = "x-lmstudio-server-type"
+
+# Process name used by the llmster headless daemon
+# Used as a last-resort process-name fallback for type detection
+LLMSTER_PROCESS_NAME = "llmster"
+
+# How often (seconds) to re-check server health in long-running contexts
+HEALTH_CHECK_INTERVAL = 30.0
+
+# Known server type string values returned by the diagnostics endpoint
+SERVER_TYPE_GUI = "gui"
+SERVER_TYPE_HEADLESS = "headless"
+
 # URL patterns for detecting image URLs
 # Used in: utils/image_utils.py (URL detection)
 IMAGE_URL_PATTERNS = [
@@ -310,9 +632,222 @@ IMAGE_URL_PATTERNS = [
 # Used in: utils/image_utils.py (base64 detection)
 BASE64_DATA_URI_PREFIX = "data:image/"
 
+# SSRF protection — allowed schemes and blocked IP ranges for image URL fetching
+# Used in: utils/image_utils.py (_is_safe_url validation)
+ALLOWED_URL_SCHEMES = ("http", "https")
+BLOCKED_IP_PREFIXES = (
+    "127.", "10.", "0.", "169.254.",
+    "192.168.",
+)
+BLOCKED_IP_RANGES_172 = range(16, 32)  # 172.16.0.0 - 172.31.255.255
+BLOCKED_HOSTNAMES = ("localhost", "localhost.localdomain", "::1")
+ERROR_SSRF_BLOCKED_SCHEME = "URL scheme '{scheme}' not allowed. Only HTTP/HTTPS URLs are accepted for image fetching."
+ERROR_SSRF_BLOCKED_HOST = "URL host '{host}' is blocked. Private/internal network addresses are not allowed for image fetching."
+
 # Warning message for models that may not support vision
 VISION_MODEL_WARNING = (
     "Note: Not all models support vision/image input. "
     "Requires multimodal models like LLaVA, GPT-4V compatible, or Qwen-VL. "
     "Text-only models will return an error when given image input."
 )
+
+# ==============================================================================
+# OPP-08: SMART MODEL SELECTION — Task-to-capability mapping and scoring weights
+# ==============================================================================
+
+# Maps task_type strings → ModelCapabilities attribute names
+# Used in: model_registry/selector.py (SmartModelSelector._classify_task)
+TASK_CAPABILITY_MAP: dict[str, str] = {
+    "code_generation": "coding",
+    "code_review": "coding",
+    "coding": "coding",
+    "summarization": "long_context",
+    "long_document": "long_context",
+    "reasoning": "reasoning",
+    "analysis": "reasoning",
+    "math": "reasoning",
+    "tool_use": "tool_calling",
+    "agents": "tool_calling",
+    "function_calling": "tool_calling",
+    "vision": "vision",
+    "image_analysis": "vision",
+    "multimodal": "vision",
+}
+
+# Scoring weights for smart model selection
+# Used in: model_registry/selector.py (SmartModelSelector._score_model)
+SELECTION_WEIGHT_CAPABILITY = 1.0   # Weight for the primary capability score
+SELECTION_WEIGHT_CONFIDENCE = 1.0   # Weight for the confidence multiplier
+
+# Fallback sort key when scores are tied
+# Used in: model_registry/selector.py (SmartModelSelector.select)
+SELECTION_FALLBACK_SORT_KEY = "model_id"
+
+# Error code constants for MCP tool responses
+# Used in: model_registry/selection_tool.py
+SELECTION_ERROR_NO_MODELS = "no_models_available"
+SELECTION_ERROR_INTERNAL = "selection_error"
+
+# ==============================================================================
+# OPP-12: SSE STREAMING CONFIGURATION
+# ==============================================================================
+
+# Sentinel value that signals the end of an SSE stream
+# When the data field equals this value, streaming is complete
+# Used in: llm/sse_parser.py, llm/llm_client.py streaming methods
+SSE_DONE_SENTINEL = "[DONE]"
+
+# Key in SSE chunks that contains token usage statistics
+# LM Studio includes this in the final data chunk before [DONE]
+# Used in: llm/sse_parser.py (parse_sse_stream_with_usage)
+SSE_USAGE_KEY = "usage"
+
+# Prefix used by SSE protocol for data lines
+# Every SSE data line begins with this prefix followed by the payload
+# Used in: llm/sse_parser.py (parse_sse_stream)
+SSE_DATA_PREFIX = "data: "
+
+# Timeout for streaming responses (seconds)
+# Long streams (e.g. large code generation) can take several minutes
+# This is separate from DEFAULT_LLM_TIMEOUT which is for non-streaming calls
+# Used in: llm/llm_client.py streaming methods
+STREAM_READ_TIMEOUT = 300.0
+
+# ==============================================================================
+# OPP-14: EXTENDED THINKING CONFIGURATION
+# ==============================================================================
+
+# Default thinking token budget (tokens allocated for reasoning)
+# Used in: llm/llm_client.py thinking methods
+DEFAULT_THINKING_BUDGET_TOKENS = 4096
+
+# Minimum and maximum allowed thinking budget
+MIN_THINKING_BUDGET_TOKENS = 128
+MAX_THINKING_BUDGET_TOKENS = 32768
+
+# Tags used by thinking models (QwQ, DeepSeek-R1, etc.)
+THINKING_TAG_OPEN = "<think>"
+THINKING_TAG_CLOSE = "</think>"
+
+# Approximate characters per token for budget estimation
+CHARS_PER_TOKEN_ESTIMATE = 4
+
+# ==============================================================================
+# OPP-10: FORMAT ADAPTER — 3-way API format routing
+# ==============================================================================
+
+# Canonical format identifiers for 3-way routing
+# Used in: llm/format_adapter.py
+FORMAT_OPENAI = "openai"
+FORMAT_ANTHROPIC = "anthropic"
+FORMAT_RESPONSES = "responses"
+
+# All supported format identifiers (for validation)
+SUPPORTED_API_FORMATS = [FORMAT_OPENAI, FORMAT_ANTHROPIC, FORMAT_RESPONSES]
+
+# ==============================================================================
+# OPP-17: DUAL-FORMAT AUTONOMOUS LOOP
+# ==============================================================================
+
+# Default API format for autonomous execution
+# Used in: tools/dynamic_autonomous.py
+DEFAULT_AUTONOMOUS_FORMAT = FORMAT_RESPONSES  # Current behavior preserved
+
+# Maximum messages to keep in Anthropic autonomous loop before trimming
+# Keeps initial user task + last N messages to prevent unbounded memory growth
+# The Responses loop doesn't need this because LM Studio manages state server-side
+MAX_ANTHROPIC_LOOP_MESSAGES = 100
+
+# System prompt template for Anthropic-format autonomous execution
+# Anthropic uses top-level system prompt, not a system message in the array
+ANTHROPIC_AUTONOMOUS_SYSTEM_TEMPLATE = (
+    "You are an autonomous agent with access to tools. "
+    "Use the available tools to complete the task. "
+    "When done, provide your final answer as plain text."
+)
+
+# ==============================================================================
+# OPP-09: MULTI-MODAL AUTONOMOUS LOOPS
+# ==============================================================================
+
+# Maximum number of images allowed per autonomous loop input
+# Used in: llm/multimodal_input.py (MultiModalInput)
+MAX_IMAGES_PER_AUTONOMOUS_INPUT = 5
+
+# Default detail level for images in autonomous loop inputs
+# Reuses DEFAULT_VISION_DETAIL — "auto" lets the model decide
+# Used in: llm/multimodal_input.py (MultiModalInput.to_chat_messages)
+MULTIMODAL_DETAIL_DEFAULT = DEFAULT_VISION_DETAIL  # "auto"
+
+# ==============================================================================
+# OPP-15: CONVERSATION BRANCHING
+# ==============================================================================
+
+# ==============================================================================
+# TEST INFRASTRUCTURE — Model discovery, lifecycle, and VRAM budget
+# ==============================================================================
+
+# Keywords for classifying models into roles during test discovery
+# Maps role name → list of substring patterns to match against model identifiers
+MODEL_ROLE_KEYWORDS: dict[str, list[str]] = {
+    "chat": ["chat", "instruct", "-it-", "-it"],
+    "reasoning": ["magistral", "deepseek-r1", "reasoning", "r1"],
+    "coding": ["coder", "codestral", "starcoder", "deepseek-coder", "devstral"],
+    "thinking": ["thinking", "qwq", "thought"],
+    "small": ["tiny", "mini", "small", "1b-", "3b-", "4b-"],
+    "vision": ["-vl-", "-vl", "vision", "llava", "multimodal"],
+}
+
+# Model Loading Inventory — tracks every model load/unload with audit trail
+# Used in: tests/fixtures/model_inventory.py
+MODEL_INVENTORY_DIR = ".omc/model-inventory"
+MODEL_INVENTORY_SCOPE_SESSION = "session"
+MODEL_INVENTORY_SCOPE_MODULE = "module"
+MODEL_INVENTORY_SCOPE_CLASS = "class"
+MODEL_INVENTORY_SCOPE_FUNCTION = "function"
+MODEL_INVENTORY_REASON_FIXTURE = "fixture"
+MODEL_INVENTORY_REASON_LIFECYCLE = "ensure_model_for_phase"
+MODEL_INVENTORY_REASON_DIRECT = "direct"
+
+# TTL (seconds) for models loaded by the test session
+# Models auto-unload after this idle time; prevents VRAM leak across sessions
+TEST_MODEL_TTL = 1800  # 30 minutes
+
+# Maximum number of models the test session will keep loaded simultaneously
+# Acts as a VRAM budget proxy — prevents OOM from loading too many models
+TEST_MAX_LOADED_MODELS = 3
+
+# Class-level cache TTL for ModelValidator._fetch_models()
+# Prevents repeated /v1/models polling across multiple ModelValidator instances
+MODELS_FETCH_CACHE_TTL = 30  # seconds
+
+# Env var overrides for explicit model selection in tests (D-13)
+LMS_TEST_ENV_VAR_PREFIX = "LMS_TEST"
+LMS_TEST_ENV_VARS: dict[str, str] = {
+    "chat": "LMS_TEST_CHAT_MODEL",
+    "thinking": "LMS_TEST_THINKING_MODEL",
+    "coding": "LMS_TEST_CODING_MODEL",
+    "vision": "LMS_TEST_VISION_MODEL",
+    "embedding": "LMS_TEST_EMBEDDING_MODEL",
+}
+
+# TTL cache for LMSRestClient.list_all_models() (RC-3)
+LMS_REST_MODELS_CACHE_TTL = 30  # seconds
+
+# Wake-up ping constants (D-5)
+WAKE_UP_PING_MAX_TOKENS = 1
+WAKE_UP_PING_TIMEOUT = 10  # seconds
+
+# Maximum depth of conversation tree (prevent runaway branching)
+MAX_BRANCH_DEPTH = 50
+
+# Maximum number of branches per conversation tree
+MAX_BRANCHES_PER_TREE = 100
+
+# Default branch name prefix
+DEFAULT_BRANCH_PREFIX = "branch"
+
+# Testing mode — env var to skip HTTP auto-detection in get_config()
+# Used in: config_main.py:from_env() to prevent real HTTP calls during pytest
+LMSTUDIO_TESTING_ENV_VAR = "LMSTUDIO_TESTING"
+LMSTUDIO_TESTING_DEFAULT_MODEL = "default"

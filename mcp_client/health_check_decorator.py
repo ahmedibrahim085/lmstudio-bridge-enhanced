@@ -15,6 +15,15 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+__all__ = [
+    "MCPUnavailableError",
+    "require_any_mcp",
+    "require_filesystem",
+    "require_github",
+    "require_memory",
+    "require_mcp",
+]
+
 
 class MCPUnavailableError(Exception):
     """Raised when an MCP is not available and operation cannot proceed."""
@@ -92,11 +101,10 @@ def require_mcp(mcp_name: str, return_error_message: bool = True):
 
         @wraps(func)
         def sync_wrapper(*args, **kwargs) -> Any:
-            # For sync functions, run async check in event loop
+            # For sync functions, run async check via asyncio.run()
             from utils.mcp_health_check import check_required_mcps
 
-            loop = asyncio.get_event_loop()
-            is_running, skip_reason = loop.run_until_complete(
+            is_running, skip_reason = asyncio.run(
                 check_required_mcps([mcp_name])
             )
 
@@ -184,8 +192,7 @@ def require_any_mcp(mcp_names: list[str], return_error_message: bool = True):
             from utils.mcp_health_check import MCPHealthChecker
 
             checker = MCPHealthChecker()
-            loop = asyncio.get_event_loop()
-            statuses = loop.run_until_complete(checker.check_all_mcps(mcp_names))
+            statuses = asyncio.run(checker.check_all_mcps(mcp_names))
 
             any_running = any(status.running for status in statuses.values())
 

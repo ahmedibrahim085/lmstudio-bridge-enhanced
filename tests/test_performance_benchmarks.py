@@ -5,14 +5,13 @@ Performance Benchmarks for LM Studio Bridge Enhanced.
 Measures latency, throughput, memory usage, and validates production SLAs.
 """
 
-import pytest
-import time
-import asyncio
-from unittest import mock
-from unittest.mock import MagicMock, patch
-import psutil
 import os
 import sys
+import time
+from unittest.mock import MagicMock, patch
+
+import psutil
+import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
@@ -240,15 +239,17 @@ class TestScalability:
             mock_result.returncode = 0
             mock_result.stdout = str(mock_models)
 
-            with patch('subprocess.run', return_value=mock_result):
-                with patch('json.loads', return_value=mock_models):
-                    start = time.perf_counter()
-                    result = LMSHelper.list_loaded_models()
-                    latency = time.perf_counter() - start
+            # Must bypass the REST client path (tries real LM Studio first)
+            with patch.object(LMSHelper, '_get_rest_client', return_value=None):
+                with patch('subprocess.run', return_value=mock_result):
+                    with patch('json.loads', return_value=mock_models):
+                        start = time.perf_counter()
+                        result = LMSHelper.list_loaded_models()
+                        latency = time.perf_counter() - start
 
-                    assert len(result) == 100
-                    assert latency < 1.0, f"Large list latency {latency}s too high"
-                    print(f"✅ Large list (100 models) latency: {latency*1000:.2f}ms")
+                        assert len(result) == 100
+                        assert latency < 1.0, f"Large list latency {latency}s too high"
+                        print(f"✅ Large list (100 models) latency: {latency*1000:.2f}ms")
 
     def test_rapid_fire_verifications(self):
         """Benchmark: Rapid sequential verifications."""

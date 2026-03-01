@@ -1,6 +1,6 @@
 [project]
 name = "lmstudio-bridge-enhanced"
-version = "3.2.2"
+version = "4.0.0"
 description = "Enhanced MCP bridge for LM Studio with local LLM orchestration"
 readme = "README.md"
 requires-python = ">=3.9"
@@ -34,13 +34,15 @@ target-version = "py39"
 
 [tool.ruff.lint]
 select = [
-    "E",      # pycodestyle errors
+    "E",      # pycodestyle errors (includes E722: bare except)
     "W",      # pycodestyle warnings
     "F",      # Pyflakes
     "I",      # isort
     "B",      # flake8-bugbear
     "C4",     # flake8-comprehensions
     "UP",     # pyupgrade
+    "S110",   # flake8-bandit: try-except-pass (silent swallowing)
+    "S112",   # flake8-bandit: try-except-continue (silent swallowing)
 ]
 ignore = [
     "E501",   # line too long (handled by formatter)
@@ -59,6 +61,8 @@ disallow_untyped_defs = false  # Too strict for existing codebase
 check_untyped_defs = true
 ignore_missing_imports = true
 
+# NOTE: When pytest.ini exists, [tool.pytest.ini_options] is ignored by pytest.
+# Keep this section in sync with pytest.ini for IDE tooling that reads pyproject.toml.
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
@@ -69,4 +73,8 @@ markers = [
     "slow: marks tests as slow",
     "mcp: marks tests that require MCP servers",
     "integration: marks integration tests",
+    "e2e: marks tests as end-to-end tests (require running LM Studio)",
+    "flaky: marks tests as flaky (eligible for targeted reruns)",
+    "model_required: marks tests that require a specific model loaded",
+    "unit: marks tests as pure unit tests (no external dependencies)",
 ]

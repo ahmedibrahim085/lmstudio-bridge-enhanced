@@ -1,25 +1,33 @@
 #!/usr/bin/env python3
 """
-Test Constants - Configuration for all tests.
+Test Constants — Configuration for all tests.
 
-This file contains all hardcoded values used in tests, making them
-configurable and easy to maintain across different environments.
+Non-model constants are static. Model constants use PEP 562 module-level
+__getattr__ for lazy resolution via discover_models(), so they automatically
+resolve to actually-available models at first access.
+
+Import interface is unchanged:
+    from tests.test_constants import REASONING_MODEL  # still works
 """
 
-# Model names (adjust based on available models in LM Studio)
-DEFAULT_TEST_MODEL = "qwen/qwen3-coder-30b"
-REASONING_MODEL = "mistralai/magistral-small-2509"
-CODING_MODEL = "qwen/qwen3-coder-30b"
-THINKING_MODEL = "qwen/qwen3-4b-thinking-2507"
-SMALL_MODEL = "ibm/granite-4-h-tiny"
-VISION_MODEL = "qwen/qwen-vl-7b"  # Vision-capable multimodal model
+import logging
+import os
 
-# Alternative model names for fallback
-FALLBACK_MODELS = [
-    "qwen/qwen3-coder-30b",
-    "mistralai/magistral-small-2509",
-    "qwen/qwen3-4b-thinking-2507",
-]
+from config.constants import (
+    DEFAULT_FALLBACK_MODEL,
+    DEFAULT_REVIEW_MODEL,
+    DEFAULT_SMALL_MODEL,
+    DEFAULT_THINKING_MODEL,
+    DEFAULT_VISION_MODEL,
+    E2E_TEST_MAX_ROUNDS,  # noqa: F401 — re-exported for test consumers
+    LMSTUDIO_TESTING_ENV_VAR,
+)
+
+logger = logging.getLogger(__name__)
+
+# ==============================================================================
+# STATIC CONSTANTS — never change at runtime
+# ==============================================================================
 
 # MCP names
 FILESYSTEM_MCP = "filesystem"
@@ -36,6 +44,7 @@ LONG_TIMEOUT = 300
 DEFAULT_MAX_ROUNDS = 20
 SHORT_MAX_ROUNDS = 10  # Increased from 5: gives LLM more attempts to discover correct paths
 LONG_MAX_ROUNDS = 50
+# E2E_TEST_MAX_ROUNDS imported from config.constants (single source of truth)
 
 # Performance targets
 CACHE_VALIDATION_TARGET_MS = 0.1  # < 0.1ms
@@ -81,3 +90,92 @@ VERBOSE_LOGGING = False
 
 # Test markers
 SLOW_TEST_THRESHOLD_SECONDS = 30  # Tests taking > 30s are marked as slow
+
+# Alternative model names for fallback (static list for backward compat)
+FALLBACK_MODELS = [
+    DEFAULT_FALLBACK_MODEL,
+    DEFAULT_REVIEW_MODEL,
+    DEFAULT_THINKING_MODEL,
+]
+
+# ==============================================================================
+# DYNAMIC MODEL CONSTANTS — resolved lazily via PEP 562 __getattr__
+# ==============================================================================
+
+# Mapping: attribute name → (discovery role, static fallback)
+_MODEL_ATTR_MAP = {
+    "DEFAULT_TEST_MODEL": ("chat", DEFAULT_FALLBACK_MODEL),
+    "REASONING_MODEL": ("reasoning", DEFAULT_REVIEW_MODEL),
+    "CODING_MODEL": ("coding", DEFAULT_FALLBACK_MODEL),
+    "THINKING_MODEL": ("thinking", DEFAULT_THINKING_MODEL),
+    "SMALL_MODEL": ("small", DEFAULT_SMALL_MODEL),
+    "VISION_MODEL": ("vision", DEFAULT_VISION_MODEL),
+}
+
+# Cache: once resolved, values are stored here so __getattr__ is only called once
+_resolved_cache: dict = {}
+_discovery_done = False
+
+
+def _ensure_discovery():
+    """Run model discovery exactly once, populating _resolved_cache for all dynamic attrs.
+
+    Resolve-once semantics: the first call runs discover_models() and caches
+    every dynamic attribute. Subsequent calls are no-ops (_discovery_done guard).
+    On failure, all attrs get their static fallback from _MODEL_ATTR_MAP.
+    Results are frozen — changing LM Studio state after first access has no effect.
+    """
+    global _discovery_done
+    if _discovery_done:
+        return
+
+    _discovery_done = True
+
+    # S-2: Skip HTTP discovery when LMSTUDIO_TESTING is active.
+    # D-1 sets this env var in conftest.py before any production imports.
+    # Without this guard, PEP 562 __getattr__ triggers discover_models()
+    # which makes HTTP calls to LM Studio during test collection.
+    if os.environ.get(LMSTUDIO_TESTING_ENV_VAR):
+        logger.debug("LMSTUDIO_TESTING active — skipping discover_models(), using static fallbacks")
+        for attr_name, (_role, fallback) in _MODEL_ATTR_MAP.items():
+            _resolved_cache[attr_name] = fallback
+        return
+
+    try:
+        from tests.fixtures.model_discovery import discover_models
+
+        discovered = discover_models()
+
+        for attr_name, (role, fallback) in _MODEL_ATTR_MAP.items():
+            resolved = discovered.roles.get(role, fallback)
+            _resolved_cache[attr_name] = resolved
+
+        if discovered.lmstudio_available:
+            logger.debug(
+                f"Dynamic model resolution: {_resolved_cache}"
+            )
+        else:
+            logger.debug("LM Studio unavailable — using static fallbacks")
+
+    except Exception as e:
+        logger.debug(f"Model discovery failed ({e}), using static fallbacks")
+        for attr_name, (_role, fallback) in _MODEL_ATTR_MAP.items():
+            _resolved_cache[attr_name] = fallback
+
+
+def __getattr__(name: str):
+    """PEP 562: resolve model constants lazily on first access.
+
+    On first access of any dynamic attr (e.g., DEFAULT_TEST_MODEL),
+    _ensure_discovery() runs once, resolving ALL dynamic attrs and storing
+    them in module globals. Subsequent accesses hit globals directly —
+    __getattr__ is never called again for that name.
+    """
+    if name in _MODEL_ATTR_MAP:
+        _ensure_discovery()
+        if name in _resolved_cache:
+            # Store in module globals so __getattr__ isn't called again
+            globals()[name] = _resolved_cache[name]
+            return _resolved_cache[name]
+
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

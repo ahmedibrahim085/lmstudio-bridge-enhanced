@@ -8,23 +8,91 @@ This provides pytest fixtures and decorators to:
 1. Check MCP health before running tests
 2. Skip tests gracefully if MCPs unavailable
 3. Show clear error messages with log excerpts
+
+Architecture Boundary — Test Fixtures vs Production Code
+=========================================================
+Test fixtures (model_discovery, model_lifecycle, model_management) use
+LMSHelper exclusively for LM Studio interaction. Production code uses
+ModelValidator for model validation with its own class-level cache.
+
+These two worlds MUST NOT cross:
+- Test fixtures NEVER call ModelValidator (prevents cache pollution)
+- ModelValidator's class cache is reset via opt-in fixture for tests that need isolation
+- discover_models() and ModelLifecycleManager delegate to LMSHelper only
 """
+
+import asyncio
+import logging
+import os
+import sys
+from unittest.mock import patch
 
 import pytest
 import pytest_asyncio
-import asyncio
-import sys
-import os
 
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
+# D-1: Activate testing mode BEFORE any production imports that could trigger
+# get_config() → LMStudioConfig.from_env() → HTTP auto-detection.
+# Capability added in R-2 (config_main.py:82-83), activated here.
+from config.constants import LMSTUDIO_TESTING_ENV_VAR  # noqa: I001 — must precede production imports
+os.environ.setdefault(LMSTUDIO_TESTING_ENV_VAR, "1")
+
+from llm.model_validator import ModelValidator
+from tests.fixtures.model_discovery import discover_models
+from tests.fixtures.model_inventory import ModelLoadInventory
+from tests.fixtures.model_lifecycle import ModelLifecycleManager
+from utils.lms_helper import LMSHelper
 from utils.mcp_health_check import (
     MCPHealthChecker,
-    check_required_mcps,
     check_filesystem_mcp,
     check_memory_mcp,
+    check_required_mcps,
 )
+
+logger = logging.getLogger(__name__)
+
+
+@pytest.fixture
+def reset_model_validator_cache():
+    """Reset ModelValidator class-level cache. Opt-in only.
+
+    Use this fixture in tests that mock _fetch_models() differently
+    and need cache isolation. Most tests should let the cache work
+    naturally (30s TTL) to match production behavior.
+
+    Uses reset_cache() classmethod (thread-safe, via _class_cache_lock)
+    rather than direct attribute assignment.
+    """
+    ModelValidator.reset_cache()
+    yield
+    ModelValidator.reset_cache()
+
+
+# ============================================================================
+# D-4/S-1: Global REST API Leak Prevention
+# ============================================================================
+
+@pytest.fixture(autouse=True)
+def _prevent_rest_api_leaks(request):
+    """Block LMSHelper REST API calls in all non-e2e tests.
+
+    Patches _get_rest_client() → None so load_model(), list_loaded_models(),
+    etc. fall back to CLI instead of making real HTTP requests to LM Studio.
+
+    E2e tests (marked @pytest.mark.e2e) are exempt — they need real API access.
+
+    This replaces per-file _prevent_rest_api_leaks fixtures that only covered
+    2 of 20+ test files (test_failure_scenarios.py, test_performance_benchmarks.py).
+    """
+    markers = {m.name for m in request.node.iter_markers()}
+    if "e2e" in markers:
+        yield
+        return
+
+    with patch.object(LMSHelper, '_get_rest_client', return_value=None):
+        yield
 
 
 # ============================================================================
@@ -121,13 +189,29 @@ def pytest_configure(config):
         "markers",
         "requires_mcps: mark test as requiring specific MCPs (list in marker)"
     )
+    config.addinivalue_line(
+        "markers",
+        "flaky: mark test as flaky (eligible for targeted reruns)"
+    )
+    config.addinivalue_line(
+        "markers",
+        "model_required: mark test as requiring a specific model loaded"
+    )
+    config.addinivalue_line(
+        "markers",
+        "unit: mark test as pure unit test (no external dependencies)"
+    )
 
 
 def _check_lmstudio_available():
     """Check if LM Studio is running and available."""
-    import requests
+    import httpx
+
+    from config.constants import DEFAULT_LMSTUDIO_BASE_URL, MODELS_ENDPOINT
     try:
-        response = requests.get("http://localhost:1234/v1/models", timeout=2)
+        response = httpx.get(
+            f"{DEFAULT_LMSTUDIO_BASE_URL}{MODELS_ENDPOINT}", timeout=2.0
+        )
         return response.status_code == 200
     except Exception:
         return False
@@ -202,6 +286,206 @@ def pytest_runtest_setup(item):
             f"3. Restart MCP servers\n"
             f"4. Run: python3 utils/mcp_health_check.py to verify"
         )
+
+
+# ============================================================================
+# Session-Level Model Management Fixtures
+# ============================================================================
+
+@pytest.fixture(scope="session")
+def discovered_models():
+    """Discover available models once at session start.
+
+    Returns DiscoveredModels with loaded_ids, downloaded_ids, roles.
+    Safe when LM Studio is unavailable (returns empty DiscoveredModels).
+    """
+    result = discover_models()
+    if result.lmstudio_available:
+        logger.info(
+            f"Session discovery: {len(result.loaded_ids)} loaded, "
+            f"{len(result.roles)} roles"
+        )
+    else:
+        logger.info("Session discovery: LM Studio not available")
+    return result
+
+
+@pytest.fixture(scope="session")
+def model_inventory():
+    """Session-scoped model loading inventory with JSON persistence.
+
+    Tracks every model load/unload with full audit trail.
+    Saves to JSON at session teardown for post-mortem debugging.
+    """
+    inv = ModelLoadInventory()
+    yield inv
+
+    # Persist audit trail before unloading
+    try:
+        inv.save()
+    except Exception as e:
+        logger.warning(f"Inventory: failed to save audit trail: {e}")
+
+    # Final sweep: unload any models still tracked by inventory
+    try:
+        count = inv.unload_all()
+        if count:
+            logger.info(f"Inventory teardown: unloaded {count} tracked model(s)")
+    except Exception as e:
+        logger.warning(f"Inventory teardown: failed to unload: {e}")
+
+
+@pytest.fixture(scope="session")
+def model_lifecycle(discovered_models, model_inventory):
+    """Session-scoped model lifecycle manager.
+
+    Cleans up duplicate model instances at session start AND end.
+    Unloads models we loaded at session end.
+    Wired to model_inventory for audit trail tracking.
+    """
+    mgr = ModelLifecycleManager(inventory=model_inventory)
+
+    if discovered_models.lmstudio_available:
+        cleaned = mgr.cleanup_duplicates()
+        if cleaned:
+            logger.info(f"Session start: cleaned {cleaned} duplicate model(s)")
+
+    yield mgr
+
+    if discovered_models.lmstudio_available:
+        unloaded = mgr.unload_models_we_loaded()
+        if unloaded:
+            logger.info(f"Session teardown: unloaded {unloaded} model(s)")
+        cleaned = mgr.cleanup_duplicates()
+        if cleaned:
+            logger.info(f"Session teardown: cleaned {cleaned} duplicate(s)")
+
+
+def _snapshot_loaded_models() -> set[str]:
+    """Return base names of currently loaded models."""
+    result: set[str] = set()
+    loaded = LMSHelper.list_loaded_models() or []
+    for m in loaded:
+        name = LMSHelper._get_base_model_name(
+            m.get("identifier") or m.get("modelKey") or ""
+        )
+        if name:
+            result.add(name)
+    return result
+
+
+def _unload_new_models(initial_models: set[str]) -> None:
+    """Unload any models not in the initial snapshot."""
+    loaded = LMSHelper.list_loaded_models() or []
+    for m in loaded:
+        name = LMSHelper._get_base_model_name(
+            m.get("identifier") or m.get("modelKey") or ""
+        )
+        if name and name not in initial_models:
+            try:
+                LMSHelper.unload_model(name)
+                logger.info(f"Session safety net: unloaded '{name}'")
+            except Exception as e:
+                logger.warning(f"Session safety net: failed to unload '{name}': {e}")
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _session_model_cleanup():
+    """Defense-in-depth: unload models added during this test session.
+
+    Primary cleanup is via ModelLifecycleManager (model_lifecycle fixture).
+    This safety net:
+    1. Unloads models loaded outside the lifecycle system
+    2. Cleans up duplicate instances (e.g., model:2, model:3)
+    """
+    try:
+        initial_models = _snapshot_loaded_models()
+    except Exception:
+        yield
+        return
+
+    yield
+
+    try:
+        _unload_new_models(initial_models)
+    except Exception:
+        pass
+
+    # Always clean duplicates — even if they were in the initial snapshot
+    try:
+        mgr = ModelLifecycleManager()
+        cleaned = mgr.cleanup_duplicates()
+        if cleaned:
+            logger.info(f"Session safety net: cleaned {cleaned} duplicate(s)")
+    except Exception:
+        pass
+
+
+@pytest.fixture(scope="session")
+def lmstudio_available(discovered_models):
+    """Boolean: whether LM Studio was reachable at session start."""
+    return discovered_models.lmstudio_available
+
+
+# ============================================================================
+# Test Requirement Fixtures
+# ============================================================================
+
+@pytest.fixture
+def require_lmstudio(lmstudio_available):
+    """Skip test if LM Studio is not running."""
+    if not lmstudio_available:
+        pytest.skip("LM Studio not available")
+
+
+@pytest.fixture
+def require_chat_model(discovered_models):
+    """Skip if no chat model available. Returns the model name."""
+    model = discovered_models.chat_model
+    if not model:
+        pytest.skip("No chat model available")
+    return model
+
+
+@pytest.fixture
+def require_multiple_models(discovered_models):
+    """Skip if fewer than 2 models are loaded."""
+    if len(discovered_models.loaded_ids) < 2:
+        pytest.skip(
+            f"Need 2+ loaded models, have {len(discovered_models.loaded_ids)}"
+        )
+    return discovered_models.loaded_ids
+
+
+# ============================================================================
+# Test Phase Ordering
+# ============================================================================
+
+def pytest_collection_modifyitems(config, items):
+    """Reorder tests: unit first, integration second, e2e last.
+
+    This ensures fast unit tests run before slower integration/e2e tests,
+    giving faster feedback on basic correctness before hitting external deps.
+    """
+    unit_tests = []
+    integration_tests = []
+    e2e_tests = []
+    other_tests = []
+
+    for item in items:
+        markers = {m.name for m in item.iter_markers()}
+        if "e2e" in markers:
+            e2e_tests.append(item)
+        elif "integration" in markers:
+            integration_tests.append(item)
+        elif "unit" in markers:
+            unit_tests.append(item)
+        else:
+            # Unmarked tests treated as unit-level (fastest first)
+            other_tests.append(item)
+
+    # Reorder: unit/unmarked → integration → e2e
+    items[:] = unit_tests + other_tests + integration_tests + e2e_tests
 
 
 # ============================================================================

@@ -22,6 +22,10 @@ from .schemas import ModelMetadata, RegistryStats, ResearchStatus
 
 logger = logging.getLogger(__name__)
 
+__all__ = [
+    "CacheManager",
+]
+
 # Default cache filename
 DEFAULT_CACHE_FILENAME = "model_registry.json"
 
@@ -278,7 +282,7 @@ class CacheManager:
                 if data.get("updated_at"):
                     stats.last_updated = datetime.fromisoformat(data["updated_at"])
             except Exception:
-                pass
+                logger.warning("Failed to read cache timestamp from %s", self.cache_path, exc_info=True)
 
         return stats
 

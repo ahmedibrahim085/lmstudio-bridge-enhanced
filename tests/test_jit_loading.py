@@ -261,7 +261,7 @@ class TestCreateResponseJITGuard(unittest.TestCase):
             client.create_response(input_text="hello", model="test-model")
 
             mock_check.assert_called_once_with("test-model")
-            mock_load.assert_called_once_with("test-model", ttl=JIT_TTL_DEFAULT)
+            mock_load.assert_called_once_with("test-model", ttl=JIT_TTL_DEFAULT, skip_initial_check=True)
 
     def test_create_response_skips_load_when_loaded(self):
         """When is_model_loaded returns True, ensure_model_loaded_with_verification must NOT be called."""
@@ -326,7 +326,7 @@ class TestGenerateEmbeddingsJIT(unittest.TestCase):
             client.generate_embeddings(text="hello", model="embed-model")
 
             mock_check.assert_called_once_with("embed-model")
-            mock_load.assert_called_once_with("embed-model", ttl=JIT_TTL_EMBEDDING)
+            mock_load.assert_called_once_with("embed-model", ttl=JIT_TTL_EMBEDDING, skip_initial_check=True)
 
 
 # ===========================================================================

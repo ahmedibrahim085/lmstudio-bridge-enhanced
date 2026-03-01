@@ -20,6 +20,16 @@ from .schemas import ResearchStatus
 
 logger = logging.getLogger(__name__)
 
+__all__ = [
+    "get_best_coding_model",
+    "get_best_tool_calling_model",
+    "get_best_vision_model",
+    "get_model_capabilities",
+    "get_tool_handlers",
+    "list_available_models",
+    "refresh_model_registry",
+]
+
 
 # =============================================================================
 # Tool Response Formatters

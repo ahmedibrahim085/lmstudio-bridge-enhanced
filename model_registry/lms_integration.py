@@ -18,6 +18,13 @@ from .schemas import ModelMetadata, ModelType
 
 logger = logging.getLogger(__name__)
 
+__all__ = [
+    "LMSCommandError",
+    "LMSIntegration",
+    "LMSModelInfo",
+    "LMSNotInstalledError",
+]
+
 
 class LMSNotInstalledError(Exception):
     """Raised when LMS CLI is not installed."""

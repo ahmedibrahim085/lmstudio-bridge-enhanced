@@ -15,40 +15,34 @@ Usage:
     pytest tests/test_e2e_multi_model.py -v -s
 """
 
-import pytest
-import asyncio
-import sys
 import os
-from typing import List, Dict, Any
+import sys
+
+import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from tools.dynamic_autonomous import DynamicAutonomousAgent
-from llm.exceptions import ModelNotFoundError, LLMConnectionError
+from config.constants import LONG_TEST_TIMEOUT
 from tests.test_constants import (
-    REASONING_MODEL,
     CODING_MODEL,
-    SMALL_MODEL,
-    VISION_MODEL,
-    FILESYSTEM_MCP,
-    MEMORY_MCP,
-    DEFAULT_MAX_ROUNDS,
-    SHORT_MAX_ROUNDS,
-    LONG_MAX_ROUNDS,
-    E2E_ANALYSIS_TASK,
-    E2E_IMPLEMENTATION_TASK,
-    SIMPLE_TASK,
-    INVALID_MODEL_NAME,
+    E2E_TEST_MAX_ROUNDS,
     ERROR_KEYWORDS,
-    NO_CONTENT_MESSAGE,
+    FILESYSTEM_MCP,
+    INVALID_MODEL_NAME,
+    REASONING_MODEL,
+    SHORT_MAX_ROUNDS,
+    SIMPLE_TASK,
 )
+from tools.dynamic_autonomous import DynamicAutonomousAgent
 
 
+@pytest.mark.flaky(reruns=2, reruns_delay=5)
 class TestE2EMultiModelWorkflows:
     """End-to-end tests for complete multi-model workflows."""
 
     @pytest.mark.asyncio
     @pytest.mark.e2e
+    @pytest.mark.timeout(LONG_TEST_TIMEOUT)
     async def test_reasoning_to_coding_pipeline(self):
         """
         E2E Test: Reasoning model analyzes, coding model implements.
@@ -164,6 +158,7 @@ class TestE2EMultiModelWorkflows:
 
     @pytest.mark.asyncio
     @pytest.mark.e2e
+    @pytest.mark.timeout(LONG_TEST_TIMEOUT)
     async def test_model_switching_within_mcp(self):
         """
         E2E Test: Switch models for different tasks within same MCP.
@@ -192,7 +187,7 @@ class TestE2EMultiModelWorkflows:
         result1 = await agent.autonomous_with_mcp(
             mcp_name="filesystem",
             task="List the files in the llm/ directory",
-            max_rounds=10
+            max_rounds=E2E_TEST_MAX_ROUNDS
         )
 
         assert result1 is not None
@@ -204,7 +199,7 @@ class TestE2EMultiModelWorkflows:
         result2 = await agent.autonomous_with_mcp(
             mcp_name="filesystem",
             task="What is the purpose of the llm/ directory based on its contents?",
-            max_rounds=15,
+            max_rounds=E2E_TEST_MAX_ROUNDS,
             model=models[0]
         )
 
@@ -218,7 +213,7 @@ class TestE2EMultiModelWorkflows:
             result3 = await agent.autonomous_with_mcp(
                 mcp_name="filesystem",
                 task="Count how many Python files are in llm/",
-                max_rounds=10,
+                max_rounds=E2E_TEST_MAX_ROUNDS,
                 model=models[1]
             )
 
@@ -229,6 +224,7 @@ class TestE2EMultiModelWorkflows:
 
     @pytest.mark.asyncio
     @pytest.mark.e2e
+    @pytest.mark.timeout(LONG_TEST_TIMEOUT)
     async def test_multi_mcp_with_model(self):
         """
         E2E Test: Multiple MCPs with consistent model.
@@ -257,16 +253,17 @@ class TestE2EMultiModelWorkflows:
         if 'memory' not in available_mcps:
             pytest.skip("Memory MCP not configured")
 
-        # Use model loading fixture to ensure model is actually loaded
-        # This handles memory errors properly rather than just picking small models
-        from tests.fixtures.model_management import ensure_model_loaded
+        # Use lifecycle manager for tracked loading (models auto-unload at teardown)
         from llm.exceptions import ModelMemoryError
+        from tests.fixtures.model_lifecycle import ModelLifecycleManager
+
+        lifecycle = ModelLifecycleManager()
 
         # Try models in order until one loads successfully
         test_model = None
         for model in models:
             try:
-                if ensure_model_loaded(model):
+                if lifecycle.ensure_model_for_phase(model):
                     test_model = model
                     break
             except ModelMemoryError as e:
@@ -277,13 +274,13 @@ class TestE2EMultiModelWorkflows:
             pytest.skip("No model could be loaded - all models require too much memory")
 
         print(f"\n🔧 Using model: {test_model}")
-        print(f"📦 Using MCPs: filesystem, memory")
+        print("📦 Using MCPs: filesystem, memory")
 
         # Execute multi-MCP task with model
         result = await agent.autonomous_with_multiple_mcps(
             mcp_names=["filesystem", "memory"],
             task="Read the README.md file and create a knowledge graph entity summarizing the project",
-            max_rounds=30,
+            max_rounds=E2E_TEST_MAX_ROUNDS,
             model=test_model
         )
 
@@ -295,6 +292,7 @@ class TestE2EMultiModelWorkflows:
 
     @pytest.mark.asyncio
     @pytest.mark.e2e
+    @pytest.mark.timeout(LONG_TEST_TIMEOUT)
     async def test_invalid_model_error_handling(self):
         """
         E2E Test: Invalid model produces clear error.
@@ -326,6 +324,7 @@ class TestE2EMultiModelWorkflows:
 
     @pytest.mark.asyncio
     @pytest.mark.e2e
+    @pytest.mark.timeout(LONG_TEST_TIMEOUT)
     async def test_backward_compatibility_no_model(self):
         """
         E2E Test: Existing code without model parameter still works.
@@ -366,6 +365,7 @@ class TestE2EModelValidation:
 
     @pytest.mark.asyncio
     @pytest.mark.e2e
+    @pytest.mark.timeout(LONG_TEST_TIMEOUT)
     async def test_validation_caching(self):
         """
         E2E Test: Model validation caching works.
@@ -421,6 +421,7 @@ class TestE2EModelValidation:
 
     @pytest.mark.asyncio
     @pytest.mark.e2e
+    @pytest.mark.timeout(LONG_TEST_TIMEOUT)
     async def test_none_and_default_models(self):
         """
         E2E Test: None and 'default' model values work.
@@ -456,6 +457,7 @@ class TestE2ERealWorldScenarios:
     @pytest.mark.asyncio
     @pytest.mark.e2e
     @pytest.mark.slow
+    @pytest.mark.timeout(LONG_TEST_TIMEOUT)
     async def test_complete_analysis_implementation_workflow(self):
         """
         E2E Test: Complete real-world workflow.
@@ -488,7 +490,7 @@ class TestE2ERealWorldScenarios:
         analysis = await agent.autonomous_with_mcp(
             mcp_name="filesystem",
             task="List the files in the utils/ directory and describe what utilities exist.",
-            max_rounds=20,
+            max_rounds=E2E_TEST_MAX_ROUNDS,
             model=model
         )
 
@@ -507,7 +509,7 @@ class TestE2ERealWorldScenarios:
         details = await agent.autonomous_with_mcp(
             mcp_name="filesystem",
             task=details_task,
-            max_rounds=15,
+            max_rounds=E2E_TEST_MAX_ROUNDS,
             model=model
         )
 
@@ -520,7 +522,6 @@ class TestE2ERealWorldScenarios:
 
 def test_e2e_suite_completeness():
     """Meta-test: Verify E2E test coverage."""
-    import inspect
 
     test_classes = [
         TestE2EMultiModelWorkflows,

@@ -72,7 +72,7 @@ class ModelFallbackManager:
         """
         import time
 
-        now = time.time()
+        now = time.monotonic()
         if not force and self._downloaded_models and (now - self._cache_time) < self._cache_ttl:
             return True  # Cache is still fresh
 

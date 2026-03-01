@@ -5,8 +5,12 @@ Registration module for dynamic autonomous tools.
 This registers the truly dynamic MCP tools with FastMCP.
 """
 
+import logging
 from typing import List, Union, Optional, Annotated
 from pydantic import Field
+from config.constants import DEFAULT_MAX_TOKENS, DEFAULT_VISION_DETAIL
+
+logger = logging.getLogger(__name__)
 from llm.llm_client import LLMClient
 from tools.dynamic_autonomous import DynamicAutonomousAgent, DEFAULT_MAX_ROUNDS
 
@@ -492,7 +496,65 @@ def register_dynamic_autonomous_tools(mcp, llm_client: Optional[LLMClient] = Non
             return result
 
         except Exception as e:
+            logger.error("Error listing MCPs: %s", e, exc_info=True)
             return f"Error listing MCPs: {e}"
+
+    @mcp.tool()
+    async def autonomous_with_images(
+        mcp_name: Annotated[str, Field(
+            description="Name of the MCP to use (e.g., 'filesystem', 'memory', 'fetch')"
+        )],
+        task: Annotated[str, Field(
+            min_length=1,
+            max_length=10000,
+            description="Task for the local LLM to execute autonomously"
+        )],
+        images: Annotated[List[str], Field(
+            description="List of image inputs: file paths, URLs, or base64 strings"
+        )],
+        max_rounds: Annotated[int, Field(
+            ge=1,
+            description="Maximum rounds for autonomous loop (default: 10000)"
+        )] = DEFAULT_MAX_ROUNDS,
+        max_tokens: Annotated[int, Field(
+            description="Maximum tokens per LLM response"
+        )] = DEFAULT_MAX_TOKENS,
+        model: Annotated[Optional[str], Field(
+            description="Optional model name to use (None = default)"
+        )] = None,
+        detail: Annotated[str, Field(
+            description="Vision detail level ('auto', 'low', 'high')"
+        )] = DEFAULT_VISION_DETAIL,
+    ) -> str:
+        """Execute task autonomously with image inputs using tools from a SINGLE MCP.
+
+        Combines multi-modal image processing with autonomous MCP tool execution.
+        Images are processed and their metadata is included in the task context
+        so the LLM can reason about visual content while using MCP tools.
+
+        Supports file paths, URLs, and base64-encoded images.
+
+        Args:
+            mcp_name: MCP server name
+            task: Task description for the local LLM
+            images: List of image inputs (file paths, URLs, or base64 strings)
+            max_rounds: Maximum autonomous loop iterations
+            max_tokens: Maximum tokens per LLM response
+            model: Optional specific model to use
+            detail: Vision detail level
+
+        Returns:
+            Final answer from the local LLM after autonomous tool usage with images
+        """
+        return await agent.autonomous_with_images(
+            mcp_name=mcp_name,
+            task=task,
+            images=images,
+            max_rounds=max_rounds,
+            max_tokens=max_tokens,
+            model=model,
+            detail=detail,
+        )
 
 
 __all__ = [

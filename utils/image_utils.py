@@ -22,25 +22,38 @@ Usage:
     content = build_vision_content("Describe this image", result)
 """
 
+import atexit
+import base64
 import os
 import re
-import base64
-from pathlib import Path
-from typing import Dict, Any, List, Optional, Union, Tuple
 from dataclasses import dataclass, field
 from enum import Enum
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple, Union
+from urllib.parse import urlparse
+
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 from config.constants import (
-    SUPPORTED_IMAGE_TYPES,
-    IMAGE_EXTENSION_MAP,
-    MAX_IMAGE_SIZE_BYTES,
-    MAX_IMAGE_DIMENSION,
+    ALLOWED_URL_SCHEMES,
+    BASE64_DATA_URI_PREFIX,
+    BLOCKED_HOSTNAMES,
+    BLOCKED_IP_PREFIXES,
+    BLOCKED_IP_RANGES_172,
     DEFAULT_VISION_DETAIL,
+    ERROR_SSRF_BLOCKED_HOST,
+    ERROR_SSRF_BLOCKED_SCHEME,
+    HTTP_RETRY_BACKOFF_FACTOR,
+    HTTP_RETRY_TOTAL,
+    IMAGE_DOWNLOAD_TIMEOUT,
+    IMAGE_EXTENSION_MAP,
+    IMAGE_POOL_CONNECTIONS,
+    IMAGE_POOL_MAXSIZE,
     IMAGE_URL_PATTERNS,
-    BASE64_DATA_URI_PREFIX
+    MAX_IMAGE_SIZE_BYTES,
+    SUPPORTED_IMAGE_TYPES,
 )
 
 # Module-level HTTP session with connection pooling for image downloads
@@ -52,13 +65,32 @@ def _get_http_session():
     if _http_session is None:
         _http_session = requests.Session()
         adapter = HTTPAdapter(
-            pool_connections=5,
-            pool_maxsize=10,
-            max_retries=Retry(total=3, backoff_factor=0.3)
+            pool_connections=IMAGE_POOL_CONNECTIONS,
+            pool_maxsize=IMAGE_POOL_MAXSIZE,
+            max_retries=Retry(total=HTTP_RETRY_TOTAL, backoff_factor=HTTP_RETRY_BACKOFF_FACTOR)
         )
         _http_session.mount('http://', adapter)
         _http_session.mount('https://', adapter)
     return _http_session
+
+
+def _close_http_session() -> None:
+    """Close the module-level HTTP session and release connection pool resources.
+
+    Safe to call multiple times (idempotent). After the first call
+    ``_http_session`` is set to ``None`` so subsequent calls are no-ops.
+
+    Registered automatically with :mod:`atexit` so it runs on interpreter
+    shutdown even if the caller never calls it explicitly.
+    """
+    global _http_session
+    if _http_session is not None:
+        _http_session.close()
+        _http_session = None
+
+
+# Register cleanup to run on interpreter exit — BUG 1 fix (resource leak)
+atexit.register(_close_http_session)
 
 
 class ImageInputType(Enum):
@@ -302,6 +334,54 @@ def _process_file_path(file_path: str, detail: str) -> ImageInput:
         )
 
 
+def _is_safe_url(url: str) -> bool:
+    """Validate URL for SSRF safety.
+
+    Checks that:
+    - Scheme is http or https only
+    - Host is not a private/internal IP address
+    - Host is not localhost or loopback
+
+    Args:
+        url: The URL to validate
+
+    Returns:
+        True if URL is safe to fetch, False otherwise
+    """
+    try:
+        parsed = urlparse(url)
+    except Exception:
+        return False
+
+    # Check scheme
+    if parsed.scheme not in ALLOWED_URL_SCHEMES:
+        return False
+
+    hostname = (parsed.hostname or "").lower()
+
+    # Check blocked hostnames
+    if hostname in BLOCKED_HOSTNAMES:
+        return False
+
+    # Check blocked IP prefixes (127.x, 10.x, 0.x, 169.254.x, 192.168.x)
+    for prefix in BLOCKED_IP_PREFIXES:
+        if hostname.startswith(prefix):
+            return False
+
+    # Check 172.16.0.0 - 172.31.255.255 (private range)
+    if hostname.startswith("172."):
+        parts = hostname.split(".")
+        if len(parts) >= 2:
+            try:
+                second_octet = int(parts[1])
+                if second_octet in BLOCKED_IP_RANGES_172:
+                    return False
+            except ValueError:
+                pass
+
+    return True
+
+
 def _process_url(url: str, detail: str) -> ImageInput:
     """Process an image URL by fetching and converting to base64.
 
@@ -315,6 +395,21 @@ def _process_url(url: str, detail: str) -> ImageInput:
     Returns:
         ImageInput with base64 data URI (not the original URL)
     """
+    # SSRF protection: validate URL before any network access
+    if not _is_safe_url(url):
+        parsed = urlparse(url)
+        if parsed.scheme not in ALLOWED_URL_SCHEMES:
+            error_msg = ERROR_SSRF_BLOCKED_SCHEME.format(scheme=parsed.scheme)
+        else:
+            error_msg = ERROR_SSRF_BLOCKED_HOST.format(host=parsed.hostname or url)
+        return ImageInput(
+            input_type=ImageInputType.URL,
+            url="",
+            original_input=url,
+            detail=detail,
+            errors=[error_msg]
+        )
+
     warnings = []
 
     # Try to infer MIME type from URL extension
@@ -330,7 +425,7 @@ def _process_url(url: str, detail: str) -> ImageInput:
         headers = {
             'User-Agent': 'Mozilla/5.0 (compatible; LMStudioBridge/3.2; +https://github.com/ahmedibrahim085/lmstudio-bridge-enhanced)'
         }
-        response = session.get(url, timeout=30, stream=True, headers=headers)
+        response = session.get(url, timeout=IMAGE_DOWNLOAD_TIMEOUT, stream=True, headers=headers)
         response.raise_for_status()
 
         # Check content length if available
@@ -571,5 +666,7 @@ __all__ = [
     "detect_input_type",
     "process_image_input",
     "build_vision_content",
-    "validate_image_inputs"
+    "validate_image_inputs",
+    "_is_safe_url",
+    "_close_http_session",
 ]

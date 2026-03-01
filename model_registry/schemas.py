@@ -11,6 +11,17 @@ from datetime import datetime
 from typing import Optional, List, Dict, Any
 from enum import Enum
 
+__all__ = [
+    "BenchmarkData",
+    "CapabilityScore",
+    "CapabilitySource",
+    "ModelCapabilities",
+    "ModelMetadata",
+    "ModelType",
+    "RegistryStats",
+    "ResearchStatus",
+]
+
 
 class ModelType(str, Enum):
     """Type of model."""

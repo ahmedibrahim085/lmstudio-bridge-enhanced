@@ -46,6 +46,7 @@ pytestmark = pytest.mark.skipif(
 
 
 @pytest.mark.integration
+@pytest.mark.flaky(reruns=1, reruns_delay=3)
 class TestLMSHelperIntegration:
     """Integration tests that use real LMS CLI."""
 

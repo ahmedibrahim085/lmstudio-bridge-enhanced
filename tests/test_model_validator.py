@@ -6,6 +6,8 @@ Note: These tests require LM Studio to be running with at least one model loaded
 If LM Studio is not available, tests will be skipped.
 """
 
+import time
+
 import pytest
 import asyncio
 from llm.model_validator import ModelValidator
@@ -91,43 +93,43 @@ async def test_get_available_models_returns_list():
 
 
 @pytest.mark.asyncio
-async def test_cache_used_on_second_call():
-    """Should use cache on second call within TTL."""
+async def test_cache_used_on_second_call(reset_model_validator_cache):
+    """Should use class-level cache on second call within TTL."""
     if not await is_lm_studio_available():
         pytest.skip("LM Studio not available")
 
     validator = ModelValidator()
 
-    # First call - fetches from API
+    # First call - fetches from API, populates class cache
     models1 = await validator.get_available_models(use_cache=False)
 
-    # Second call - should use cache
+    # Second call - should use class-level cache
     models2 = await validator.get_available_models(use_cache=True)
 
     assert models1 == models2
-    assert validator._cache is not None
+    assert ModelValidator._class_cache is not None
 
 
 @pytest.mark.asyncio
-async def test_cache_can_be_cleared():
-    """Should be able to clear cache."""
+async def test_cache_can_be_cleared(reset_model_validator_cache):
+    """Should be able to clear class-level cache."""
     if not await is_lm_studio_available():
         pytest.skip("LM Studio not available")
 
     validator = ModelValidator()
 
-    # Fetch models to populate cache
+    # Fetch models to populate class cache
     await validator.get_available_models()
-    assert validator._cache is not None
+    assert ModelValidator._class_cache is not None
 
     # Clear cache
     validator.clear_cache()
-    assert validator._cache is None
-    assert validator._cache_timestamp is None
+    assert ModelValidator._class_cache is None
+    assert ModelValidator._class_cache_time == 0.0
 
 
 @pytest.mark.asyncio
-async def test_cache_not_used_when_disabled():
+async def test_cache_not_used_when_disabled(reset_model_validator_cache):
     """Should fetch fresh data when cache is disabled."""
     if not await is_lm_studio_available():
         pytest.skip("LM Studio not available")
@@ -169,20 +171,25 @@ async def test_fetch_models_retries_on_failure():
 
 
 @pytest.mark.asyncio
-async def test_multiple_validators_independent():
-    """Multiple validator instances should be independent."""
+async def test_class_cache_shared_across_validators(reset_model_validator_cache):
+    """Class-level cache is shared across all ModelValidator instances.
+
+    After one instance populates the cache, another instance sees it.
+    This is by design — prevents repeated /v1/models polling.
+    """
     if not await is_lm_studio_available():
         pytest.skip("LM Studio not available")
 
     validator1 = ModelValidator()
     validator2 = ModelValidator()
 
-    # Fetch models in validator1
-    await validator1.get_available_models()
-    assert validator1._cache is not None
+    # Fetch models via validator1 — populates class cache
+    models1 = await validator1.get_available_models()
+    assert ModelValidator._class_cache is not None
 
-    # validator2 cache should be empty
-    assert validator2._cache is None
+    # validator2 sees the shared class cache
+    models2 = await validator2.get_available_models(use_cache=True)
+    assert models1 == models2
 
 
 @pytest.mark.asyncio
@@ -213,6 +220,72 @@ async def test_error_message_includes_available_models():
         error_msg = str(e)
         # Should mention available models
         assert "Available" in error_msg or "available" in error_msg
+
+
+@pytest.mark.asyncio
+async def test_use_cache_false_bypasses_class_cache(reset_model_validator_cache):
+    """REGRESSION C-1: use_cache=False must bypass class-level cache.
+
+    When class cache is warm and use_cache=False is requested,
+    _fetch_models must hit the network, not return stale cached data.
+    """
+    # Warm the class cache with stale data
+    ModelValidator._class_cache = ["stale-cached-model"]
+    ModelValidator._class_cache_time = time.monotonic()  # fresh timestamp
+
+    # Point at non-existent port — if class cache is bypassed, this raises
+    validator = ModelValidator(api_base="http://localhost:9999")
+
+    # If class cache is NOT bypassed (BUG), returns ["stale-cached-model"]
+    # If class cache IS bypassed (FIXED), raises LLMConnectionError
+    with pytest.raises(LLMConnectionError):
+        await validator.get_available_models(use_cache=False)
+
+
+@pytest.mark.asyncio
+async def test_fetch_models_handles_native_dict_response(reset_model_validator_cache):
+    """REGRESSION F-2: _fetch_models must unwrap {"models": [...]} dict from native API.
+
+    Bug: native /api/v1/models returns {"models": [...]} but the code checked
+    isinstance(native_data, list) — always False for a dict — so it fell through
+    to /v1/models instead of using the richer native data.
+
+    Setup: native returns dict with 2 models, /v1/models returns empty.
+    If fix works  → returns ["model-a", "model-b"] from native.
+    If bug remains → falls through to /v1/models → returns [] (or raises).
+    """
+    from unittest.mock import AsyncMock, patch, MagicMock
+
+    validator = ModelValidator(api_base="http://localhost:1234/v1")
+
+    # Reset class cache so we always hit the network path
+    ModelValidator._class_cache = None
+    ModelValidator._class_cache_time = 0.0
+
+    native_dict_response = MagicMock()
+    native_dict_response.status_code = 200
+    native_dict_response.json.return_value = {
+        "models": [{"key": "model-a"}, {"key": "model-b"}]
+    }
+    native_dict_response.raise_for_status = MagicMock()
+
+    # /v1/models returns empty — if we fall through here, result is []
+    fallback_response = MagicMock()
+    fallback_response.status_code = 200
+    fallback_response.json.return_value = {"data": []}
+    fallback_response.raise_for_status = MagicMock()
+
+    mock_client = AsyncMock()
+    mock_client.get = AsyncMock(side_effect=[native_dict_response, fallback_response])
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+
+    with patch("llm.model_validator.httpx.AsyncClient", return_value=mock_client):
+        result = await validator._fetch_models(force_refresh=True)
+
+    assert result == ["model-a", "model-b"], (
+        f"Expected ['model-a', 'model-b'] from native dict response, got {result!r}"
+    )
 
 
 if __name__ == "__main__":

@@ -30,6 +30,12 @@ from .schemas import (
 
 logger = logging.getLogger(__name__)
 
+__all__ = [
+    "ModelResearcher",
+    "ResearchResult",
+    "apply_research_to_metadata",
+]
+
 
 # Known model benchmarks (from BFCL leaderboard and other sources)
 # This serves as a fallback when web search fails

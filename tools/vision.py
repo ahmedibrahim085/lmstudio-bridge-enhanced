@@ -13,9 +13,13 @@ Supported input formats (auto-detected):
 Requires a vision-capable model loaded in LM Studio (e.g., LLaVA, Qwen-VL).
 """
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 from typing import Optional, List, Dict, Any
 from llm.llm_client import LLMClient
-from config.constants import VISION_MODEL_WARNING, DEFAULT_VISION_DETAIL
+from config.constants import DEFAULT_VISION_DETAIL
 import json
 
 
@@ -30,6 +34,35 @@ class VisionTools:
         """
         self.llm = llm_client or LLMClient()
 
+    async def _safe_vision_call(
+        self,
+        prompt: str,
+        images: Any,
+        detail: str,
+        error_context: str,
+    ) -> str:
+        """Centralised try/except wrapper for vision completion calls.
+
+        Args:
+            prompt: The prompt to send to the vision model.
+            images: Image input(s) — single string or list of strings.
+            detail: Vision detail level (auto, low, high).
+            error_context: Human-readable context for error messages (e.g. "analyzing image").
+
+        Returns:
+            Extracted response text on success, or JSON error string on failure.
+        """
+        try:
+            response = self.llm.vision_completion(
+                prompt=prompt, images=images, detail=detail
+            )
+            return self._extract_response(response)
+        except ValueError as e:
+            return json.dumps({"error": str(e)})
+        except Exception as e:
+            logger.error("Error %s: %s", error_context, e, exc_info=True)
+            return json.dumps({"error": f"Error {error_context}: {str(e)}"})
+
     def _extract_response(self, response: Dict[str, Any]) -> str:
         """Extract text content from LLM response.
 
@@ -41,13 +74,13 @@ class VisionTools:
         """
         choices = response.get("choices", [])
         if not choices:
-            return "Error: No response generated"
+            return json.dumps({"error": "No response generated"})
 
         message = choices[0].get("message", {})
         content = message.get("content", "")
 
         if not content:
-            return "Error: Empty response from model"
+            return json.dumps({"error": "Empty response from model"})
 
         return content
 
@@ -67,17 +100,10 @@ class VisionTools:
         Returns:
             Detailed analysis of the image
         """
-        try:
-            response = self.llm.vision_completion(
-                prompt=prompt,
-                images=image,
-                detail=detail
-            )
-            return self._extract_response(response)
-        except ValueError as e:
-            return f"Error: {str(e)}"
-        except Exception as e:
-            return f"Error analyzing image: {str(e)}"
+        return await self._safe_vision_call(
+            prompt=prompt, images=image, detail=detail,
+            error_context="analyzing image",
+        )
 
     async def describe_image(
         self,
@@ -104,17 +130,10 @@ class VisionTools:
 
         prompt = style_prompts.get(style, style_prompts["detailed"])
 
-        try:
-            response = self.llm.vision_completion(
-                prompt=prompt,
-                images=image,
-                detail=detail
-            )
-            return self._extract_response(response)
-        except ValueError as e:
-            return f"Error: {str(e)}"
-        except Exception as e:
-            return f"Error describing image: {str(e)}"
+        return await self._safe_vision_call(
+            prompt=prompt, images=image, detail=detail,
+            error_context="describing image",
+        )
 
     async def compare_images(
         self,
@@ -133,7 +152,7 @@ class VisionTools:
             Comparison analysis of the images
         """
         if len(images) < 2:
-            return "Error: At least 2 images required for comparison"
+            return json.dumps({"error": "At least 2 images required for comparison"})
 
         comparison_prompts = {
             "differences": f"Compare these {len(images)} images and identify all the differences between them. List each difference clearly.",
@@ -143,17 +162,10 @@ class VisionTools:
 
         prompt = comparison_prompts.get(comparison_type, comparison_prompts["differences"])
 
-        try:
-            response = self.llm.vision_completion(
-                prompt=prompt,
-                images=images,
-                detail=detail
-            )
-            return self._extract_response(response)
-        except ValueError as e:
-            return f"Error: {str(e)}"
-        except Exception as e:
-            return f"Error comparing images: {str(e)}"
+        return await self._safe_vision_call(
+            prompt=prompt, images=images, detail=detail,
+            error_context="comparing images",
+        )
 
     async def extract_text_from_image(
         self,
@@ -178,17 +190,10 @@ Include:
 
 If no text is visible, state that clearly."""
 
-        try:
-            response = self.llm.vision_completion(
-                prompt=prompt,
-                images=image,
-                detail=detail
-            )
-            return self._extract_response(response)
-        except ValueError as e:
-            return f"Error: {str(e)}"
-        except Exception as e:
-            return f"Error extracting text: {str(e)}"
+        return await self._safe_vision_call(
+            prompt=prompt, images=image, detail=detail,
+            error_context="extracting text",
+        )
 
     async def identify_objects(
         self,
@@ -212,17 +217,10 @@ For each object, provide:
 
 Format the response as a structured list."""
 
-        try:
-            response = self.llm.vision_completion(
-                prompt=prompt,
-                images=image,
-                detail=detail
-            )
-            return self._extract_response(response)
-        except ValueError as e:
-            return f"Error: {str(e)}"
-        except Exception as e:
-            return f"Error identifying objects: {str(e)}"
+        return await self._safe_vision_call(
+            prompt=prompt, images=image, detail=detail,
+            error_context="identifying objects",
+        )
 
     async def answer_about_image(
         self,
@@ -242,17 +240,10 @@ Format the response as a structured list."""
         """
         prompt = f"Looking at this image, please answer the following question:\n\n{question}"
 
-        try:
-            response = self.llm.vision_completion(
-                prompt=prompt,
-                images=image,
-                detail=detail
-            )
-            return self._extract_response(response)
-        except ValueError as e:
-            return f"Error: {str(e)}"
-        except Exception as e:
-            return f"Error answering question: {str(e)}"
+        return await self._safe_vision_call(
+            prompt=prompt, images=image, detail=detail,
+            error_context="answering question",
+        )
 
 
 def register_vision_tools(mcp, llm_client: Optional[LLMClient] = None):

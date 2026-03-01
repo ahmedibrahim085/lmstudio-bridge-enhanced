@@ -17,26 +17,40 @@ Key Features:
 
 import asyncio
 import json
+import logging
 import time
-from typing import List, Dict, Any, Optional, Union
 from contextlib import AsyncExitStack
-from pathlib import Path
+from typing import Any, Dict, List, Optional, Union
 
-from mcp.client.stdio import stdio_client, StdioServerParameters
+logger = logging.getLogger(__name__)
+
 from mcp import ClientSession
-from mcp_client.discovery import MCPDiscovery, get_mcp_discovery
+from mcp.client.stdio import StdioServerParameters, stdio_client
+
+from config.constants import (
+    ANTHROPIC_AUTONOMOUS_SYSTEM_TEMPLATE,
+    DEFAULT_AUTONOMOUS_FORMAT,
+    DEFAULT_MAX_ROUNDS,
+    DEFAULT_MAX_TOKENS,
+    DEFAULT_TEMPERATURE,
+    DEFAULT_VISION_DETAIL,
+    FORMAT_ANTHROPIC,
+    MAX_ANTHROPIC_LOOP_MESSAGES,
+    MAX_CONSECUTIVE_ERRORS,
+)
+from llm.exceptions import ModelNotFoundError
+from llm.format_adapter import FormatAdapter
 from llm.llm_client import LLMClient
 from llm.model_validator import ModelValidator
-from llm.exceptions import ModelNotFoundError
-from utils.lms_helper import LMSHelper
-from utils.custom_logging import log_info, log_error
-from config.constants import DEFAULT_MAX_ROUNDS, MAX_CONSECUTIVE_ERRORS, DEFAULT_TEMPERATURE
+from mcp_client.discovery import MCPDiscovery
 
 # Import centralized safe_call_tool wrapper from mcp_client
 # This ensures ALL code paths use the same coercion logic via single entry point
-from mcp_client.type_coercion import safe_call_tool
 from mcp_client.executor import ToolExecutor
+from mcp_client.type_coercion import safe_call_tool
 from tools.loop_metrics import LoopMetrics, RoundMetrics
+from utils.custom_logging import log_error, log_info
+from utils.lms_helper import LMSHelper
 
 
 class _SingleSessionDispatcher:
@@ -165,7 +179,8 @@ class DynamicAutonomousAgent:
         task: str,
         max_rounds: int = DEFAULT_MAX_ROUNDS,
         max_tokens: Union[int, str] = "auto",
-        model: Optional[str] = None
+        model: Optional[str] = None,
+        api_format: str = DEFAULT_AUTONOMOUS_FORMAT,
     ) -> str:
         """
         Execute task autonomously using tools from a SINGLE MCP.
@@ -207,7 +222,7 @@ class DynamicAutonomousAgent:
                 task="Do something with my custom MCP"
             )
         """
-        log_info(f"=== Dynamic Autonomous Execution ===")
+        log_info("=== Dynamic Autonomous Execution ===")
         log_info(f"MCP: {mcp_name}")
         log_info(f"Task: {task}")
 
@@ -266,14 +281,15 @@ class DynamicAutonomousAgent:
                         else max_tokens
                     )
 
-                    # Execute autonomous loop
-                    return await self._autonomous_loop(
+                    # Execute autonomous loop via format-aware dispatch
+                    return await self._run_autonomous_dispatch(
                         dispatcher=_SingleSessionDispatcher(session),
                         openai_tools=openai_tools,
                         task=task,
                         max_rounds=max_rounds,
                         max_tokens=actual_max_tokens,
-                        model=model
+                        model=model,
+                        api_format=api_format,
                     )
 
         except ValueError as e:
@@ -291,7 +307,8 @@ class DynamicAutonomousAgent:
         task: str,
         max_rounds: int = DEFAULT_MAX_ROUNDS,
         max_tokens: Union[int, str] = "auto",
-        model: Optional[str] = None
+        model: Optional[str] = None,
+        api_format: str = DEFAULT_AUTONOMOUS_FORMAT,
     ) -> str:
         """
         Execute task autonomously using tools from MULTIPLE MCPs simultaneously!
@@ -333,7 +350,7 @@ class DynamicAutonomousAgent:
                 task="Analyze repo, fetch docs, create knowledge graph, and open GitHub issues for improvements"
             )
         """
-        log_info(f"=== Dynamic Multi-MCP Autonomous Execution ===")
+        log_info("=== Dynamic Multi-MCP Autonomous Execution ===")
         log_info(f"MCPs: {', '.join(mcp_names)}")
         log_info(f"Task: {task}")
 
@@ -434,14 +451,15 @@ class DynamicAutonomousAgent:
                     else max_tokens
                 )
 
-                # Execute autonomous loop with ALL tools
-                return await self._autonomous_loop(
+                # Execute autonomous loop via format-aware dispatch
+                return await self._run_autonomous_dispatch(
                     dispatcher=_MultiSessionDispatcher(tool_to_session),
                     openai_tools=all_openai_tools,
                     task=task,
                     max_rounds=max_rounds,
                     max_tokens=actual_max_tokens,
-                    model=model
+                    model=model,
+                    api_format=api_format,
                 )
 
         except ValueError as e:
@@ -467,7 +485,8 @@ class DynamicAutonomousAgent:
         task: str,
         max_rounds: int = DEFAULT_MAX_ROUNDS,
         max_tokens: Union[int, str] = "auto",
-        model: Optional[str] = None
+        model: Optional[str] = None,
+        api_format: str = DEFAULT_AUTONOMOUS_FORMAT,
     ) -> str:
         """
         Execute task with ALL available MCPs discovered from .mcp.json!
@@ -524,7 +543,78 @@ class DynamicAutonomousAgent:
             task=task,
             max_rounds=max_rounds,
             max_tokens=max_tokens,
-            model=model
+            model=model,
+            api_format=api_format,
+        )
+
+    async def autonomous_with_images(
+        self,
+        mcp_name: str,
+        task: str,
+        images: List[str],
+        max_rounds: int = DEFAULT_MAX_ROUNDS,
+        max_tokens: int = DEFAULT_MAX_TOKENS,
+        model: Optional[str] = None,
+        detail: str = DEFAULT_VISION_DETAIL,
+        **kwargs: Any,
+    ) -> str:
+        """Run the autonomous loop with image inputs included in the first task.
+
+        Wraps :meth:`autonomous_with_mcp` and prepends a multi-modal
+        description of the provided images to the task string so that the
+        LLM receives both the task text and image metadata in round 0.
+
+        Images are processed via :class:`~llm.multimodal_input.MultiModalInput`
+        which reuses the existing ``utils/image_utils`` infrastructure for
+        automatic format detection (file path, URL, or base64).
+
+        Any image processing errors are reported in the task context so the
+        LLM can continue rather than silently losing image data.
+
+        Args:
+            mcp_name: Name of the MCP to use (resolved from ``.mcp.json``).
+            task: Task description for the local LLM.
+            images: List of image inputs (file paths, URLs, or base64 strings).
+            max_rounds: Maximum autonomous loop iterations.
+            max_tokens: Maximum tokens per LLM response.
+            model: Optional model name override.
+            detail: Vision detail level passed to image processing.
+            **kwargs: Additional keyword arguments forwarded to
+                :meth:`autonomous_with_mcp`.
+
+        Returns:
+            Final answer from the local LLM.
+        """
+        # Import here to avoid circular dependency at module load time
+        from llm.multimodal_input import MultiModalInput  # noqa: PLC0415
+
+        multimodal = MultiModalInput(text=task, images=images if images else None)
+
+        if multimodal.has_images:
+            # Surface any processing errors so the LLM is aware
+            errors = multimodal.image_errors
+            valid_count = len([i for i in multimodal.processed_images if i.is_valid])
+
+            # Build an augmented task that informs the LLM about attached images
+            image_summary_parts = [
+                f"[{valid_count} image(s) attached for this task]",
+            ]
+            if errors:
+                image_summary_parts.append(
+                    f"[Image processing warnings: {'; '.join(errors)}]"
+                )
+            image_summary = "\n".join(image_summary_parts)
+            augmented_task = f"{image_summary}\n\n{task}"
+        else:
+            augmented_task = task
+
+        return await self.autonomous_with_mcp(
+            mcp_name=mcp_name,
+            task=augmented_task,
+            max_rounds=max_rounds,
+            max_tokens=max_tokens,
+            model=model,
+            **kwargs,
         )
 
     @staticmethod
@@ -913,8 +1003,186 @@ Continue with the task based on these results."""
                     final_status=final_status,
                     rounds=round_metrics_list,
                 )
-            except Exception:
-                pass  # Never break the caller for metrics
+            except Exception:  # noqa: S110 — metrics must never break the autonomous loop
+                pass
+
+
+    async def _autonomous_loop_anthropic(
+        self,
+        dispatcher,
+        openai_tools: list[dict],
+        task: str,
+        max_rounds: int,
+        max_tokens: int,
+        model: Optional[str] = None,
+        parallel_tools: bool = False,
+    ) -> str:
+        """Core autonomous loop using Anthropic /v1/messages API.
+
+        Mirrors _autonomous_loop() behavior but dispatches via anthropic_messages()
+        instead of create_response(), using Anthropic tool format throughout.
+
+        Args:
+            dispatcher: _SingleSessionDispatcher or _MultiSessionDispatcher instance
+            openai_tools: List of tools in OpenAI function-calling format
+            task: Task description for the LLM
+            max_rounds: Maximum number of autonomous loop iterations
+            max_tokens: Maximum tokens per LLM response
+            model: Optional model name override
+            parallel_tools: Reserved for future parallel tool execution (unused)
+        """
+        # Convert tools once — OpenAI format -> Anthropic format
+        anthropic_tools = FormatAdapter.openai_tools_to_anthropic(openai_tools)
+
+        # Build the initial messages array (user turn only)
+        messages: list[dict[str, Any]] = [{"role": "user", "content": task}]
+
+        self.consecutive_error_count = 0
+
+        for round_num in range(max_rounds):
+            log_info(f"\n--- Anthropic Round {round_num + 1}/{max_rounds} ---")
+
+            try:
+                response = await asyncio.to_thread(
+                    self.llm.anthropic_messages,
+                    messages=messages,
+                    system=ANTHROPIC_AUTONOMOUS_SYSTEM_TEMPLATE,
+                    max_tokens=max_tokens,
+                    tools=anthropic_tools if anthropic_tools else None,
+                    model=model,
+                )
+            except Exception as e:
+                self.consecutive_error_count += 1
+                log_error(
+                    f"Anthropic LLM call failed (consecutive: {self.consecutive_error_count}): {e}"
+                )
+                if self.consecutive_error_count >= MAX_CONSECUTIVE_ERRORS:
+                    return (
+                        f"Task aborted: {self.consecutive_error_count} consecutive errors. Last: {e}"
+                    )
+                # Inject error hint only if it won't create consecutive user messages.
+                # Anthropic API requires strictly alternating user/assistant roles.
+                if messages and messages[-1].get("role") != "user":
+                    messages.append({
+                        "role": "user",
+                        "content": f"Previous LLM call failed: {e}. Please try again.",
+                    })
+                # Otherwise just retry with existing context (error is already logged)
+                continue
+
+            # Reset error count on success
+            self.consecutive_error_count = 0
+
+            stop_reason = response.get("stop_reason", "")
+            log_info(f"stop_reason: {stop_reason}")
+
+            # Extract tool calls from Anthropic response
+            tool_calls = FormatAdapter.extract_anthropic_tool_calls(response)
+
+            if tool_calls:
+                log_info(f"LLM requested {len(tool_calls)} tool call(s)")
+
+                # Append assistant response to conversation
+                messages.append({"role": "assistant", "content": response.get("content", [])})
+
+                # Execute each tool and collect results
+                for tc in tool_calls:
+                    tc_name = tc["name"]
+                    tc_input = tc.get("input", {})
+                    tc_id = tc["id"]
+
+                    log_info(f"Executing {tc_name}")
+                    try:
+                        _, tool_result = await dispatcher.dispatch(tc_name, tc_input)
+                        self.consecutive_error_count = 0
+                        log_info(f"Tool result: {str(tool_result)[:200]}...")
+                    except Exception as e:
+                        tool_result = f"Error: {e}"
+                        log_error(f"Tool execution failed: {e}")
+                        self.consecutive_error_count += 1
+
+                    # Inject tool result back into messages using Anthropic format
+                    tool_result_msg = FormatAdapter.build_anthropic_tool_result(
+                        tool_use_id=tc_id,
+                        content=tool_result,
+                        is_error=str(tool_result).startswith("Error:"),
+                    )
+                    messages.append(tool_result_msg)
+
+                # Trim message history to prevent unbounded memory growth.
+                # Keep first message (user task) + last (limit-1) messages.
+                if len(messages) > MAX_ANTHROPIC_LOOP_MESSAGES:
+                    messages = [messages[0]] + messages[-(MAX_ANTHROPIC_LOOP_MESSAGES - 1):]
+                    log_info(f"Trimmed messages to {len(messages)} (window={MAX_ANTHROPIC_LOOP_MESSAGES})")
+
+                # Check abort threshold after tool execution
+                if self.consecutive_error_count >= MAX_CONSECUTIVE_ERRORS:
+                    return (
+                        f"Task aborted: {self.consecutive_error_count} consecutive errors. "
+                        "Last batch had failures."
+                    )
+
+            else:
+                # No tool calls — extract text content as final answer
+                log_info("Anthropic LLM provided final answer")
+                text_content = None
+                for block in response.get("content", []):
+                    if block.get("type") == "text":
+                        text_content = block.get("text", "")
+                        log_info(f"LLM text: {text_content[:100]}...")
+                        break
+
+                if text_content:
+                    return text_content
+                return "No content in response"
+
+        return "Task incomplete: Maximum rounds reached"
+
+    async def _run_autonomous_dispatch(
+        self,
+        dispatcher,
+        openai_tools: list[dict],
+        task: str,
+        max_rounds: int,
+        max_tokens: int,
+        model: Optional[str] = None,
+        parallel_tools: bool = False,
+        api_format: str = DEFAULT_AUTONOMOUS_FORMAT,
+    ) -> str:
+        """Dispatch to the correct autonomous loop based on api_format.
+
+        Routes to _autonomous_loop_anthropic() for FORMAT_ANTHROPIC,
+        and to _autonomous_loop() for all other formats (preserves backward compat).
+
+        Args:
+            dispatcher: Tool dispatcher instance
+            openai_tools: List of tools in OpenAI format
+            task: Task description for the LLM
+            max_rounds: Maximum autonomous loop iterations
+            max_tokens: Maximum tokens per LLM response
+            model: Optional model name override
+            parallel_tools: If True, execute multiple tool calls in parallel
+            api_format: API format string (FORMAT_RESPONSES, FORMAT_ANTHROPIC, etc.)
+        """
+        if api_format == FORMAT_ANTHROPIC:
+            return await self._autonomous_loop_anthropic(
+                dispatcher=dispatcher,
+                openai_tools=openai_tools,
+                task=task,
+                max_rounds=max_rounds,
+                max_tokens=max_tokens,
+                model=model,
+                parallel_tools=parallel_tools,
+            )
+        return await self._autonomous_loop(
+            dispatcher=dispatcher,
+            openai_tools=openai_tools,
+            task=task,
+            max_rounds=max_rounds,
+            max_tokens=max_tokens,
+            model=model,
+            parallel_tools=parallel_tools,
+        )
 
 
 __all__ = [

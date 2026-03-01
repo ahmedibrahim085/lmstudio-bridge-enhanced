@@ -75,7 +75,7 @@ class LMSCircuitBreaker:
         )
         if self.failure_count >= self.failure_threshold and self.state == "CLOSED":
             self.state = "OPEN"
-            self.circuit_open_time = time.time()
+            self.circuit_open_time = time.monotonic()
             logger.error(
                 f"Circuit breaker: OPENED after {self.failure_count} failures. "
                 f"Will attempt recovery after {self.recovery_timeout}s"
@@ -83,12 +83,12 @@ class LMSCircuitBreaker:
 
     def call(self, func: Callable, *args, **kwargs) -> Any:
         if self.is_open():
-            if time.time() - self.circuit_open_time > self.recovery_timeout:
+            if time.monotonic() - self.circuit_open_time > self.recovery_timeout:
                 logger.info("Circuit breaker: Attempting recovery (HALF_OPEN)")
                 self.state = "HALF_OPEN"
             else:
                 time_remaining = int(
-                    self.recovery_timeout - (time.time() - self.circuit_open_time)
+                    self.recovery_timeout - (time.monotonic() - self.circuit_open_time)
                 )
                 raise CircuitBreakerOpenError(
                     f"LMS CLI circuit breaker is open. Retry after {time_remaining}s"

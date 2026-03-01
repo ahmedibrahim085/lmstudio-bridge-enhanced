@@ -6,61 +6,62 @@ This module provides a generic interface to interact with ANY local LLM
 running in LM Studio, not specific to any particular model.
 """
 
+import logging
+import time
+from typing import Any, Dict, List, NoReturn, Optional, Union
+
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
-import json
-import time
-import logging
-from typing import List, Dict, Any, Optional, Union
+
 from config import get_config
+from config.constants import (
+    ANTHROPIC_MESSAGES_ENDPOINT,
+    DEFAULT_ANTHROPIC_API_VERSION,
+    DEFAULT_ANTHROPIC_MAX_TOKENS,
+    DEFAULT_LLM_TIMEOUT,
+    DEFAULT_MAX_RETRIES,
+    DEFAULT_MAX_TOKENS,
+    DEFAULT_RETRY_BASE_DELAY,
+    DEFAULT_THINKING_BUDGET_TOKENS,
+    HEALTH_CHECK_TIMEOUT,
+    HTTP_RETRY_BACKOFF_FACTOR,
+    HTTP_RETRY_TOTAL,
+    JIT_TTL_DEFAULT,
+    JIT_TTL_EMBEDDING,
+    LLM_POOL_CONNECTIONS,
+    LLM_POOL_MAXSIZE,
+    MAX_THINKING_BUDGET_TOKENS,
+    MIN_THINKING_BUDGET_TOKENS,
+    MODEL_LIST_TIMEOUT,
+    STREAM_READ_TIMEOUT,
+)
 from llm.exceptions import (
-    LLMError,
-    LLMTimeoutError,
     LLMConnectionError,
-    LLMResponseError,
+    LLMError,
     LLMRateLimitError,
+    LLMResponseError,
+    LLMTimeoutError,
+)
+from llm.format_adapter import FormatAdapter
+from llm.sse_parser import parse_sse_stream
+from llm.thinking_parser import (
+    estimate_thinking_tokens,
+    parse_thinking_blocks,
+    strip_thinking_blocks,
 )
 from utils.error_handling import retry_with_backoff
 from utils.lms_helper import LMSHelper
-from config.constants import (
-    JIT_TTL_DEFAULT,
-    JIT_TTL_EMBEDDING,
-    ANTHROPIC_MESSAGES_ENDPOINT,
-    DEFAULT_ANTHROPIC_MAX_TOKENS,
-    DEFAULT_ANTHROPIC_API_VERSION,
-)
 
 # Configure logging
 logger = logging.getLogger(__name__)
 
-# Default timeout for all LLM API calls
-# Set to 58 seconds to accommodate slower models like Magistral (45-46s response time)
-# Still safely under Claude Code's 60-second MCP timeout limit
-# See: https://github.com/anthropics/claude-code/issues/7575
-DEFAULT_LLM_TIMEOUT = 58
-
-# Health check timeout - fast check for API availability
-# Health checks should be quick, so we use a shorter timeout
-HEALTH_CHECK_TIMEOUT = 5
-
-# Default max rounds for AutonomousLLMClient
-# For consistency with main autonomous tools (10000 rounds default)
-DEFAULT_AUTONOMOUS_ROUNDS = 10000
-
-# Default max tokens for LLM responses
-# Based on Claude Code's 30K character limit for tool responses
-# 8192 tokens ≈ 24K-32K chars, safely under the limit
-DEFAULT_MAX_TOKENS = 8192
-
-# Retry configuration for transient errors
-# Based on investigation findings: HTTP 500 errors are rare and transient
-DEFAULT_MAX_RETRIES = 2  # Retry up to 2 times (3 total attempts)
-DEFAULT_RETRY_DELAY = 1.0  # Initial delay in seconds
-DEFAULT_RETRY_BACKOFF = 2.0  # Exponential backoff multiplier
+# All constants imported from config.constants — single source of truth.
+# DEFAULT_RETRY_BASE_DELAY replaces former DEFAULT_RETRY_BASE_DELAY.
+# Former DEFAULT_RETRY_BACKOFF removed (was dead — retry_with_backoff has no backoff param).
 
 
-def _handle_request_exception(e: Exception, operation: str = "LLM request") -> None:
+def _handle_request_exception(e: Exception, operation: str = "LLM request") -> NoReturn:
     """Convert requests exceptions to our custom exception hierarchy.
 
     Args:
@@ -135,30 +136,79 @@ class LLMClient:
     This client works with ANY model loaded in LM Studio.
     """
 
-    def __init__(self, api_base: Optional[str] = None, model: Optional[str] = None):
+    def __init__(
+        self,
+        api_base: Optional[str] = None,
+        model: Optional[str] = None,
+        session: Optional["requests.Session"] = None,
+    ):
         """Initialize LLM client.
 
         Args:
             api_base: Optional API base URL (uses config if None)
             model: Optional model name (uses currently loaded model if None)
+            session: Optional pre-configured requests.Session (uses new session if None).
+                     When provided, LLMClient does NOT own the session lifecycle.
         """
         config = get_config()
         self.api_base = api_base or config.lmstudio.api_base
         self.model = model or config.lmstudio.default_model
 
-        # HTTP connection pooling for better performance
-        self.session = requests.Session()
-        adapter = HTTPAdapter(
-            pool_connections=10,
-            pool_maxsize=20,
-            max_retries=Retry(total=3, backoff_factor=0.3)
-        )
-        self.session.mount('http://', adapter)
-        self.session.mount('https://', adapter)
+        if session is not None:
+            self.session = session
+            self._owns_session = False
+        else:
+            # HTTP connection pooling for better performance
+            self.session = requests.Session()
+            self._owns_session = True
+            adapter = HTTPAdapter(
+                pool_connections=LLM_POOL_CONNECTIONS,
+                pool_maxsize=LLM_POOL_MAXSIZE,
+                max_retries=Retry(total=HTTP_RETRY_TOTAL, backoff_factor=HTTP_RETRY_BACKOFF_FACTOR)
+            )
+            self.session.mount('http://', adapter)
+            self.session.mount('https://', adapter)
 
         # Native MCP support cache (OPP-16)
         self._native_mcp_supported: Optional[bool] = None
         self._native_mcp_checked_at: float = 0.0
+
+    # ------------------------------------------------------------------
+    # Resource management — BUG 1 fix (resource leak)
+    # ------------------------------------------------------------------
+
+    def close(self) -> None:
+        """Close the HTTP session and release connection pool resources.
+
+        Only closes the session if this LLMClient created it (_owns_session=True).
+        Injected sessions are the caller's responsibility to close.
+        Safe to call multiple times (idempotent).
+        """
+        if self.session is not None and self._owns_session:
+            self.session.close()
+            self.session = None
+            logger.debug("LLMClient HTTP session closed")
+
+    def __del__(self) -> None:
+        """Ensure session is closed on garbage collection (safety net)."""
+        try:
+            self.close()
+        except Exception:
+            pass
+
+    def __enter__(self) -> "LLMClient":
+        """Support usage as a context manager."""
+        return self
+
+    def __exit__(
+        self,
+        exc_type: object,
+        exc_val: object,
+        exc_tb: object,
+    ) -> bool:
+        """Close session on context manager exit; never suppress exceptions."""
+        self.close()
+        return False
 
     def _get_endpoint(self, path: str) -> str:
         """Get full URL for an endpoint.
@@ -195,7 +245,9 @@ class LLMClient:
 
             if is_loaded is False:
                 logger.warning(f"{label} '{target_model}' not loaded, attempting to load...")
-                load_success = LMSHelper.ensure_model_loaded_with_verification(target_model, ttl=ttl)
+                load_success = LMSHelper.ensure_model_loaded_with_verification(
+                    target_model, ttl=ttl, skip_initial_check=True
+                )
 
                 if not load_success:
                     raise LLMConnectionError(
@@ -212,8 +264,8 @@ class LLMClient:
             logger.warning(f"Could not verify {label.lower()} load state: {e}. Proceeding anyway...")
 
     @retry_with_backoff(
-        max_retries=DEFAULT_MAX_RETRIES + 1,  # +1 for initial attempt = 3 total
-        base_delay=DEFAULT_RETRY_DELAY,
+        max_retries=DEFAULT_MAX_RETRIES,  # +1 for initial attempt = 3 total
+        base_delay=DEFAULT_RETRY_BASE_DELAY,
         exceptions=(LLMResponseError, LLMTimeoutError)  # Only retry these
     )
     def chat_completion(
@@ -225,7 +277,9 @@ class LLMClient:
         tool_choice: str = "auto",
         timeout: int = DEFAULT_LLM_TIMEOUT,
         response_format: Optional[Dict[str, Any]] = None,
-        model: Optional[str] = None
+        model: Optional[str] = None,
+        min_p: Optional[float] = None,
+        top_k: Optional[int] = None,
     ) -> Dict[str, Any]:
         """Generate a chat completion from the local LLM.
 
@@ -302,6 +356,12 @@ class LLMClient:
         if response_format is not None:
             payload["response_format"] = response_format
 
+        # Advanced sampling parameters (OPP-26)
+        if min_p is not None:
+            payload["min_p"] = min_p
+        if top_k is not None:
+            payload["top_k"] = top_k
+
         try:
             response = self.session.post(
                 self._get_endpoint("chat/completions"),
@@ -315,8 +375,8 @@ class LLMClient:
             _handle_request_exception(e, "Chat completion")
 
     @retry_with_backoff(
-        max_retries=DEFAULT_MAX_RETRIES + 1,
-        base_delay=DEFAULT_RETRY_DELAY,
+        max_retries=DEFAULT_MAX_RETRIES,
+        base_delay=DEFAULT_RETRY_BASE_DELAY,
         exceptions=(LLMResponseError, LLMTimeoutError)
     )
     def text_completion(
@@ -326,7 +386,9 @@ class LLMClient:
         max_tokens: int = DEFAULT_MAX_TOKENS,
         stop_sequences: Optional[List[str]] = None,
         model: Optional[str] = None,
-        timeout: int = DEFAULT_LLM_TIMEOUT
+        timeout: int = DEFAULT_LLM_TIMEOUT,
+        min_p: Optional[float] = None,
+        top_k: Optional[int] = None,
     ) -> Dict[str, Any]:
         """Generate a raw text completion from the local LLM.
 
@@ -369,6 +431,12 @@ class LLMClient:
         if stop_sequences:
             payload["stop"] = stop_sequences
 
+        # Advanced sampling parameters (OPP-26)
+        if min_p is not None:
+            payload["min_p"] = min_p
+        if top_k is not None:
+            payload["top_k"] = top_k
+
         try:
             response = self.session.post(
                 self._get_endpoint("completions"),
@@ -385,42 +453,27 @@ class LLMClient:
     def convert_tools_to_responses_format(tools: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Convert OpenAI tool format to LM Studio /v1/responses format.
 
+        Delegates to FormatAdapter.openai_tools_to_responses for centralized logic.
+
         OpenAI format (for /v1/chat/completions):
             {"type": "function", "function": {"name": "...", "description": "...", ...}}
 
         LM Studio format (for /v1/responses):
             {"type": "function", "name": "...", "description": "...", ...}
 
-        The key difference: LM Studio uses a flattened structure without the nested
-        "function" object.
-
         Args:
             tools: List of tools in OpenAI format
 
         Returns:
             List of tools in LM Studio flattened format
-
-        Example:
-            >>> tools = [{"type": "function", "function": {"name": "test", "description": "..."}}]
-            >>> LLMClient.convert_tools_to_responses_format(tools)
-            [{"type": "function", "name": "test", "description": "..."}]
         """
-        flattened = []
-        for tool in tools:
-            if tool.get("type") == "function" and "function" in tool:
-                # Flatten: move function contents to top level
-                flattened.append({
-                    "type": "function",
-                    **tool["function"]  # Spread name, description, parameters
-                })
-            else:
-                # Already flat or different type
-                flattened.append(tool)
-        return flattened
+        return FormatAdapter.openai_tools_to_responses(tools)
 
     @staticmethod
     def convert_tools_to_anthropic_format(tools: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Convert OpenAI tool format to Anthropic tool format.
+
+        Delegates to FormatAdapter.openai_tools_to_anthropic for centralized logic.
 
         OpenAI: {"type": "function", "function": {"name": "...", "parameters": {...}}}
         Anthropic: {"name": "...", "description": "...", "input_schema": {...}}
@@ -431,24 +484,13 @@ class LLMClient:
         Returns:
             List of tools in Anthropic format
         """
-        converted = []
-        for tool in tools:
-            if tool.get("type") == "function" and "function" in tool:
-                func = tool["function"]
-                anthropic_tool = {
-                    "name": func["name"],
-                    "description": func.get("description", ""),
-                }
-                if "parameters" in func:
-                    anthropic_tool["input_schema"] = func["parameters"]
-                converted.append(anthropic_tool)
-            else:
-                converted.append(tool)
-        return converted
+        return FormatAdapter.openai_tools_to_anthropic(tools)
 
     @staticmethod
     def extract_anthropic_tool_calls(response: Dict[str, Any]) -> List[Dict[str, Any]]:
         """Extract tool_use blocks from an Anthropic response.
+
+        Delegates to FormatAdapter.extract_anthropic_tool_calls for centralized logic.
 
         Args:
             response: Anthropic API response dict
@@ -456,15 +498,7 @@ class LLMClient:
         Returns:
             List of dicts with id, name, input for each tool call
         """
-        calls = []
-        for block in response.get("content", []):
-            if block.get("type") == "tool_use":
-                calls.append({
-                    "id": block.get("id"),
-                    "name": block.get("name"),
-                    "input": block.get("input", {}),
-                })
-        return calls
+        return FormatAdapter.extract_anthropic_tool_calls(response)
 
     @staticmethod
     def build_anthropic_tool_result(
@@ -474,6 +508,8 @@ class LLMClient:
     ) -> Dict[str, Any]:
         """Build an Anthropic tool_result message.
 
+        Delegates to FormatAdapter.build_anthropic_tool_result for centralized logic.
+
         Args:
             tool_use_id: The id from the tool_use block
             content: Result content (str, dict auto-serialized, None -> "")
@@ -482,28 +518,11 @@ class LLMClient:
         Returns:
             Message dict with role=user and tool_result content block
         """
-        if content is None:
-            content_str = ""
-        elif isinstance(content, dict):
-            content_str = json.dumps(content)
-        else:
-            content_str = str(content)
-
-        block: Dict[str, Any] = {
-            "type": "tool_result",
-            "tool_use_id": tool_use_id,
-            "content": content_str,
-        }
-        if is_error:
-            block["is_error"] = True
-
-        return {"role": "user", "content": [block]}
-
-    # TODO(OPP-10): Extract to anthropic_adapter.py
+        return FormatAdapter.build_anthropic_tool_result(tool_use_id, content, is_error)
 
     @retry_with_backoff(
-        max_retries=DEFAULT_MAX_RETRIES + 1,
-        base_delay=DEFAULT_RETRY_DELAY,
+        max_retries=DEFAULT_MAX_RETRIES,
+        base_delay=DEFAULT_RETRY_BASE_DELAY,
         exceptions=(LLMResponseError, LLMTimeoutError)
     )
     def generate_embeddings(
@@ -566,8 +585,8 @@ class LLMClient:
             _handle_request_exception(e, "Generate embeddings")
 
     @retry_with_backoff(
-        max_retries=DEFAULT_MAX_RETRIES + 1,
-        base_delay=DEFAULT_RETRY_DELAY,
+        max_retries=DEFAULT_MAX_RETRIES,
+        base_delay=DEFAULT_RETRY_BASE_DELAY,
         exceptions=(LLMResponseError, LLMTimeoutError)
     )
     def create_response(
@@ -583,6 +602,8 @@ class LLMClient:
         ttl: Optional[int] = None,
         timeout: int = DEFAULT_LLM_TIMEOUT,
         draft_model: Optional[str] = None,
+        min_p: Optional[float] = None,
+        top_k: Optional[int] = None,
     ) -> Dict[str, Any]:
         """Create a stateful response with optional function calling.
 
@@ -668,6 +689,12 @@ class LLMClient:
         # Always include TTL for JIT model loading
         payload["ttl"] = resolved_ttl
 
+        # Advanced sampling parameters (OPP-26)
+        if min_p is not None:
+            payload["min_p"] = min_p
+        if top_k is not None:
+            payload["top_k"] = top_k
+
         try:
             response = self.session.post(
                 self._get_endpoint("responses"),
@@ -739,7 +766,7 @@ class LLMClient:
                 images="https://example.com/image.jpg"
             )
         """
-        from utils.image_utils import process_image_input, build_vision_content, ImageInput
+        from utils.image_utils import ImageInput, build_vision_content, process_image_input
 
         # Normalize to list
         if isinstance(images, str):
@@ -781,8 +808,8 @@ class LLMClient:
         )
 
     @retry_with_backoff(
-        max_retries=DEFAULT_MAX_RETRIES + 1,
-        base_delay=DEFAULT_RETRY_DELAY,
+        max_retries=DEFAULT_MAX_RETRIES,
+        base_delay=DEFAULT_RETRY_BASE_DELAY,
         exceptions=(LLMResponseError, LLMTimeoutError)
     )
     def anthropic_messages(
@@ -795,6 +822,8 @@ class LLMClient:
         tool_choice: Optional[Dict[str, Any]] = None,
         model: Optional[str] = None,
         timeout: int = DEFAULT_LLM_TIMEOUT,
+        min_p: Optional[float] = None,
+        top_k: Optional[int] = None,
     ) -> Dict[str, Any]:
         """Send a request to LM Studio's Anthropic-compatible /v1/messages endpoint.
 
@@ -842,6 +871,12 @@ class LLMClient:
         if tool_choice is not None:
             payload["tool_choice"] = tool_choice
 
+        # Advanced sampling parameters (OPP-26)
+        if min_p is not None:
+            payload["min_p"] = min_p
+        if top_k is not None:
+            payload["top_k"] = top_k
+
         headers = {
             "anthropic-version": DEFAULT_ANTHROPIC_API_VERSION,
         }
@@ -859,6 +894,260 @@ class LLMClient:
         except Exception as e:
             _handle_request_exception(e, "Anthropic messages")
 
+    def stream_chat_completion(
+        self,
+        messages: List[Dict[str, Any]],
+        temperature: float = 0.7,
+        max_tokens: int = DEFAULT_MAX_TOKENS,
+        tools: Optional[List[Dict[str, Any]]] = None,
+        tool_choice: str = "auto",
+        timeout: float = STREAM_READ_TIMEOUT,
+        response_format: Optional[Dict[str, Any]] = None,
+        model: Optional[str] = None,
+        min_p: Optional[float] = None,
+        top_k: Optional[int] = None,
+    ):
+        """Stream a chat completion from the local LLM via SSE.
+
+        This is the streaming counterpart to ``chat_completion()``.  It opens
+        a streaming connection to ``/v1/chat/completions`` and yields each
+        parsed SSE event as a dict.  The ``[DONE]`` sentinel is consumed
+        internally and never yielded.
+
+        Args:
+            messages: List of message dicts with ``role`` and ``content``.
+            temperature: Controls randomness (0.0 to 1.0).
+            max_tokens: Maximum tokens to generate.
+            tools: Optional list of tools in OpenAI format.
+            tool_choice: Tool selection strategy (``"auto"``, ``"none"``, etc.).
+            timeout: Read timeout in seconds (default ``STREAM_READ_TIMEOUT``).
+            response_format: Optional structured output format dict.
+            model: Optional per-request model override.
+
+        Yields:
+            dict: Parsed SSE event payload, or ``{"error": "..."}`` on
+            network/parse failures.
+
+        Raises:
+            LLMTimeoutError: If the connection times out.
+            LLMConnectionError: If LM Studio cannot be reached.
+            LLMRateLimitError: If HTTP 429 is returned.
+            LLMResponseError: If LM Studio returns another HTTP error.
+        """
+        target_model = model if model is not None else self.model
+        self._ensure_model_loaded(target_model, ttl=JIT_TTL_DEFAULT)
+
+        payload: Dict[str, Any] = {
+            "messages": messages,
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+            "stream": True,
+        }
+
+        if target_model and target_model != "default":
+            payload["model"] = target_model
+
+        if tools:
+            payload["tools"] = tools
+            payload["tool_choice"] = tool_choice
+
+        if response_format is not None:
+            payload["response_format"] = response_format
+
+        # Advanced sampling parameters (OPP-26)
+        if min_p is not None:
+            payload["min_p"] = min_p
+        if top_k is not None:
+            payload["top_k"] = top_k
+
+        try:
+            response = self.session.post(
+                self._get_endpoint("chat/completions"),
+                json=payload,
+                stream=True,
+                timeout=timeout,
+            )
+            response.raise_for_status()
+        except Exception as e:
+            _handle_request_exception(e, "Stream chat completion")
+
+        yield from parse_sse_stream(response)
+
+    def stream_create_response(
+        self,
+        input_text: str,
+        tools: Optional[List[Dict[str, Any]]] = None,
+        previous_response_id: Optional[str] = None,
+        model: Optional[str] = None,
+        max_tokens: Optional[int] = None,
+        tool_choice: Optional[str] = None,
+        temperature: Optional[float] = None,
+        ttl: Optional[int] = None,
+        timeout: float = STREAM_READ_TIMEOUT,
+        draft_model: Optional[str] = None,
+        min_p: Optional[float] = None,
+        top_k: Optional[int] = None,
+    ):
+        """Stream a stateful response via SSE from ``/v1/responses``.
+
+        This is the streaming counterpart to ``create_response()``.  It
+        always sets ``stream=True`` in the payload and yields each parsed
+        SSE event.
+
+        Args:
+            input_text: User input text.
+            tools: Optional list of tools in OpenAI format.
+            previous_response_id: Optional previous response ID for continuity.
+            model: Optional per-request model override.
+            max_tokens: Maximum tokens to generate.
+            tool_choice: Tool selection strategy.
+            temperature: Sampling temperature.
+            ttl: JIT model loading TTL in seconds.
+            timeout: Read timeout in seconds.
+            draft_model: Optional draft model for speculative decoding.
+
+        Yields:
+            dict: Parsed SSE event payload, or ``{"error": "..."}`` on failure.
+
+        Raises:
+            LLMTimeoutError: If the connection times out.
+            LLMConnectionError: If LM Studio cannot be reached.
+            LLMRateLimitError: If HTTP 429 is returned.
+            LLMResponseError: If LM Studio returns another HTTP error.
+        """
+        model_to_use = self.model if model == "default" or model is None else model
+        resolved_ttl = ttl if ttl is not None else JIT_TTL_DEFAULT
+        self._ensure_model_loaded(model_to_use, ttl=resolved_ttl)
+
+        payload: Dict[str, Any] = {
+            "input": input_text,
+            "model": model_to_use,
+            "stream": True,
+            "ttl": resolved_ttl,
+        }
+
+        if max_tokens is not None:
+            payload["max_tokens"] = max_tokens
+
+        if previous_response_id:
+            payload["previous_response_id"] = previous_response_id
+
+        if tools:
+            payload["tools"] = self.convert_tools_to_responses_format(tools)
+            if tool_choice:
+                payload["tool_choice"] = tool_choice
+
+        if temperature is not None:
+            payload["temperature"] = temperature
+
+        if draft_model is not None:
+            payload["draft_model"] = draft_model
+
+        # Advanced sampling parameters (OPP-26)
+        if min_p is not None:
+            payload["min_p"] = min_p
+        if top_k is not None:
+            payload["top_k"] = top_k
+
+        try:
+            response = self.session.post(
+                self._get_endpoint("responses"),
+                json=payload,
+                stream=True,
+                timeout=timeout,
+            )
+            response.raise_for_status()
+        except Exception as e:
+            _handle_request_exception(e, "Stream create response")
+
+        yield from parse_sse_stream(response)
+
+    def stream_anthropic_messages(
+        self,
+        messages: List[Dict[str, Any]],
+        system: str = "",
+        max_tokens: int = DEFAULT_ANTHROPIC_MAX_TOKENS,
+        temperature: float = 0.7,
+        tools: Optional[List[Dict[str, Any]]] = None,
+        tool_choice: Optional[Dict[str, Any]] = None,
+        model: Optional[str] = None,
+        timeout: float = STREAM_READ_TIMEOUT,
+        min_p: Optional[float] = None,
+        top_k: Optional[int] = None,
+    ):
+        """Stream an Anthropic-compatible messages response via SSE.
+
+        This is the streaming counterpart to ``anthropic_messages()``.  It
+        targets ``/v1/messages`` and always sets ``stream=True``.  System-role
+        messages are filtered from the array (same rule as the non-streaming
+        method).
+
+        Args:
+            messages: List of message dicts (no ``system`` role).
+            system: Top-level system prompt in Anthropic format.
+            max_tokens: Maximum tokens to generate.
+            temperature: Sampling temperature.
+            tools: Optional tools in Anthropic format.
+            tool_choice: Optional tool selection strategy dict.
+            model: Optional per-request model override.
+            timeout: Read timeout in seconds.
+
+        Yields:
+            dict: Parsed SSE event payload, or ``{"error": "..."}`` on failure.
+
+        Raises:
+            LLMTimeoutError: If the connection times out.
+            LLMConnectionError: If LM Studio cannot be reached.
+            LLMRateLimitError: If HTTP 429 is returned.
+            LLMResponseError: If LM Studio returns another HTTP error.
+        """
+        target_model = model if model is not None else self.model
+        self._ensure_model_loaded(target_model, ttl=JIT_TTL_DEFAULT)
+
+        filtered_messages = [m for m in messages if m.get("role") != "system"]
+
+        payload: Dict[str, Any] = {
+            "messages": filtered_messages,
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+            "stream": True,
+        }
+
+        if target_model and target_model != "default":
+            payload["model"] = target_model
+
+        if system:
+            payload["system"] = system
+
+        if tools:
+            payload["tools"] = tools
+        if tool_choice is not None:
+            payload["tool_choice"] = tool_choice
+
+        # Advanced sampling parameters (OPP-26)
+        if min_p is not None:
+            payload["min_p"] = min_p
+        if top_k is not None:
+            payload["top_k"] = top_k
+
+        headers = {
+            "anthropic-version": DEFAULT_ANTHROPIC_API_VERSION,
+        }
+
+        try:
+            response = self.session.post(
+                self._get_endpoint(ANTHROPIC_MESSAGES_ENDPOINT),
+                json=payload,
+                headers=headers,
+                stream=True,
+                timeout=timeout,
+            )
+            response.raise_for_status()
+        except Exception as e:
+            _handle_request_exception(e, "Stream anthropic messages")
+
+        yield from parse_sse_stream(response)
+
     def supports_native_mcp(self) -> bool:
         """Check if LM Studio supports native MCP in API requests.
 
@@ -871,14 +1160,18 @@ class LLMClient:
             return self._native_mcp_supported
 
         try:
+            # Native REST API lives at /api/v1/*, NOT under the OpenAI-compat /v1 prefix.
+            # Bypass _get_endpoint which prepends api_base (includes /v1).
+            base_url = self.api_base.rsplit("/v1", 1)[0]
             resp = self.session.get(
-                self._get_endpoint("api/v1/server/info"),
+                f"{base_url}/api/v1/server/info",
                 timeout=HEALTH_CHECK_TIMEOUT,
             )
             resp.raise_for_status()
             data = resp.json()
             supported = bool(data.get("capabilities", {}).get("mcp", False))
         except Exception:
+            logger.warning("Native MCP support check failed", exc_info=True)
             supported = False
 
         self._native_mcp_supported = supported
@@ -894,6 +1187,8 @@ class LLMClient:
         max_tokens: int = DEFAULT_MAX_TOKENS,
         timeout: int = DEFAULT_LLM_TIMEOUT,
         require_native: bool = False,
+        min_p: Optional[float] = None,
+        top_k: Optional[int] = None,
     ) -> Dict[str, Any]:
         """Send chat completion with native MCP server configuration.
 
@@ -905,6 +1200,8 @@ class LLMClient:
             max_tokens: Maximum tokens in response
             timeout: Request timeout in seconds
             require_native: If True, raises LLMResponseError when native MCP unsupported
+            min_p: Minimum probability threshold for token sampling (OPP-26)
+            top_k: Top-k tokens to consider during sampling (OPP-26)
 
         Returns:
             Chat completion response dict
@@ -932,9 +1229,15 @@ class LLMClient:
         if target_model and target_model != "default":
             payload["model"] = target_model
 
+        # Advanced sampling parameters (OPP-26)
+        if min_p is not None:
+            payload["min_p"] = min_p
+        if top_k is not None:
+            payload["top_k"] = top_k
+
         try:
             response = self.session.post(
-                self._get_endpoint("v1/chat/completions"),
+                self._get_endpoint("chat/completions"),
                 json=payload,
                 timeout=timeout,
             )
@@ -956,7 +1259,7 @@ class LLMClient:
             LLMError: For other unexpected errors
         """
         try:
-            response = self.session.get(self._get_endpoint("models"))
+            response = self.session.get(self._get_endpoint("models"), timeout=MODEL_LIST_TIMEOUT)
             response.raise_for_status()
             models = response.json().get("data", [])
             return [model["id"] for model in models]
@@ -978,9 +1281,14 @@ class LLMClient:
             base_url = base_url[:-3]
 
         try:
-            response = self.session.get(f"{base_url}/api/v1/models")
+            response = self.session.get(f"{base_url}/api/v1/models", timeout=MODEL_LIST_TIMEOUT)
             response.raise_for_status()
-            raw_list = response.json()
+            raw_data = response.json()
+            # Handle both list and dict-wrapped responses ({"models": [...]})
+            if isinstance(raw_data, dict):
+                raw_list = raw_data.get("models", raw_data.get("data", []))
+            else:
+                raw_list = raw_data
             if isinstance(raw_list, list) and raw_list:
                 return [
                     {
@@ -999,7 +1307,7 @@ class LLMClient:
                     for entry in raw_list
                 ]
         except Exception:
-            logger.debug("Native /api/v1/models unavailable, falling back to /v1/models")
+            logger.warning("Native /api/v1/models unavailable, falling back to /v1/models", exc_info=True)
 
         # Fallback
         return [{"model_id": m} for m in self.list_models()]
@@ -1024,7 +1332,7 @@ class LLMClient:
             ValueError: If model not found
         """
         try:
-            response = self.session.get(self._get_endpoint("models"))
+            response = self.session.get(self._get_endpoint("models"), timeout=MODEL_LIST_TIMEOUT)
             response.raise_for_status()
             models = response.json().get("data", [])
 
@@ -1070,6 +1378,192 @@ class LLMClient:
         # 8192 tokens ≈ 24K-32K chars, safely under the limit
         return 8192
 
+    # ------------------------------------------------------------------
+    # OPP-14: Extended Thinking
+    # ------------------------------------------------------------------
+
+    def thinking_completion(
+        self,
+        messages: List[Dict[str, Any]],
+        temperature: float = 0.7,
+        max_tokens: int = DEFAULT_MAX_TOKENS,
+        thinking_budget: Optional[int] = None,
+        timeout: int = DEFAULT_LLM_TIMEOUT,
+        response_format: Optional[Dict[str, Any]] = None,
+        model: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Generate a chat completion with extended thinking support.
+
+        Like :meth:`chat_completion` but reserves a token budget for the
+        model's chain-of-thought reasoning and enriches the returned dict with
+        parsed thinking blocks.
+
+        Unlike :meth:`chat_completion` this method has **no retry decorator**
+        because thinking completions are expensive and retrying them
+        automatically could waste significant compute.
+
+        Args:
+            messages: List of message dicts with ``role`` and ``content``.
+            temperature: Controls randomness (0.0 to 1.0).
+            max_tokens: Tokens to allocate for the *visible* response.  The
+                actual ``max_tokens`` sent to the API will be
+                ``thinking_budget + max_tokens`` so reasoning tokens do not
+                eat into the response budget.
+            thinking_budget: Tokens to reserve for reasoning.  Must be in
+                ``[MIN_THINKING_BUDGET_TOKENS, MAX_THINKING_BUDGET_TOKENS]``.
+                Defaults to :data:`~config.constants.DEFAULT_THINKING_BUDGET_TOKENS`
+                when ``None``.
+            timeout: Request timeout in seconds.
+            response_format: Optional structured output format dict.
+            model: Optional per-request model override.
+
+        Returns:
+            Standard chat completion response dict **plus** three extra keys:
+
+            - ``thinking_blocks`` (list[dict]): Each item has at minimum a
+              ``"content"`` key holding the raw thinking text.
+            - ``thinking_tokens_estimated`` (int): Rough token count across
+              all thinking blocks.
+            - ``content_without_thinking`` (str): The assistant reply with all
+              thinking blocks stripped and whitespace trimmed.
+
+        Raises:
+            ValueError: If *thinking_budget* is outside the allowed range.
+            LLMTimeoutError: If request times out.
+            LLMConnectionError: If cannot connect to LM Studio.
+            LLMRateLimitError: If rate limit exceeded.
+            LLMResponseError: If LM Studio returns an error.
+            LLMError: For other unexpected errors.
+        """
+        # Resolve and validate budget
+        budget = thinking_budget if thinking_budget is not None else DEFAULT_THINKING_BUDGET_TOKENS
+
+        if budget < MIN_THINKING_BUDGET_TOKENS or budget > MAX_THINKING_BUDGET_TOKENS:
+            raise ValueError(
+                f"thinking_budget must be between {MIN_THINKING_BUDGET_TOKENS} and "
+                f"{MAX_THINKING_BUDGET_TOKENS}, got {budget}."
+            )
+
+        # Bump max_tokens so the thinking budget doesn't consume response tokens
+        effective_max_tokens = budget + max_tokens
+
+        # Determine target model and JIT-load if needed
+        target_model = model if model is not None else self.model
+        self._ensure_model_loaded(target_model, ttl=JIT_TTL_DEFAULT)
+
+        # Delegate to chat_completion (single attempt — no retry wrapper)
+        response = self.chat_completion(
+            messages=messages,
+            temperature=temperature,
+            max_tokens=effective_max_tokens,
+            timeout=timeout,
+            response_format=response_format,
+            model=model,
+        )
+
+        # Extract the assistant text from the response
+        assistant_text: str = ""
+        try:
+            assistant_text = response["choices"][0]["message"]["content"] or ""
+        except (KeyError, IndexError, TypeError):
+            assistant_text = ""
+
+        # Parse thinking blocks and build enrichment
+        blocks = parse_thinking_blocks(assistant_text)
+        thinking_token_total = sum(
+            estimate_thinking_tokens(b.content) for b in blocks
+        )
+
+        response["thinking_blocks"] = [{"content": b.content} for b in blocks]
+        response["thinking_tokens_estimated"] = thinking_token_total
+        response["content_without_thinking"] = strip_thinking_blocks(assistant_text)
+
+        return response
+
+    def stream_thinking_completion(
+        self,
+        messages: List[Dict[str, Any]],
+        temperature: float = 0.7,
+        max_tokens: int = DEFAULT_MAX_TOKENS,
+        thinking_budget: Optional[int] = None,
+        timeout: float = STREAM_READ_TIMEOUT,
+        response_format: Optional[Dict[str, Any]] = None,
+        model: Optional[str] = None,
+    ):
+        """Stream a chat completion for a thinking-capable model.
+
+        Streaming counterpart to :meth:`thinking_completion`.  Validates the
+        thinking budget, then delegates to :meth:`stream_chat_completion` and
+        yields SSE chunks as-is.  Callers should accumulate the streamed text
+        and call :func:`~llm.thinking_parser.parse_thinking_blocks` post-hoc
+        to extract thinking blocks from the full response.
+
+        Args:
+            messages: List of message dicts with ``role`` and ``content``.
+            temperature: Controls randomness (0.0 to 1.0).
+            max_tokens: Tokens for the visible response portion.
+            thinking_budget: Tokens reserved for reasoning.  Must be in
+                ``[MIN_THINKING_BUDGET_TOKENS, MAX_THINKING_BUDGET_TOKENS]``.
+                Defaults to :data:`~config.constants.DEFAULT_THINKING_BUDGET_TOKENS`.
+            timeout: Read timeout in seconds.
+            response_format: Optional structured output format dict.
+            model: Optional per-request model override.
+
+        Yields:
+            dict: Parsed SSE event payload from :meth:`stream_chat_completion`.
+
+        Raises:
+            ValueError: If *thinking_budget* is outside the allowed range.
+            LLMTimeoutError: If the connection times out.
+            LLMConnectionError: If LM Studio cannot be reached.
+            LLMRateLimitError: If HTTP 429 is returned.
+            LLMResponseError: If LM Studio returns another HTTP error.
+        """
+        # Resolve and validate budget (eager — before any network call)
+        budget = thinking_budget if thinking_budget is not None else DEFAULT_THINKING_BUDGET_TOKENS
+
+        if budget < MIN_THINKING_BUDGET_TOKENS or budget > MAX_THINKING_BUDGET_TOKENS:
+            raise ValueError(
+                f"thinking_budget must be between {MIN_THINKING_BUDGET_TOKENS} and "
+                f"{MAX_THINKING_BUDGET_TOKENS}, got {budget}."
+            )
+
+        effective_max_tokens = budget + max_tokens
+
+        yield from self.stream_chat_completion(
+            messages=messages,
+            temperature=temperature,
+            max_tokens=effective_max_tokens,
+            timeout=timeout,
+            response_format=response_format,
+            model=model,
+        )
+
+    @staticmethod
+    def is_thinking_capable(model_id: str) -> bool:
+        """Check whether *model_id* is a thinking / reasoning model.
+
+        Delegates to :meth:`~model_registry.schemas.ModelMetadata._is_thinking_model`
+        which matches against known reasoning-model name patterns (qwq, deepseek-r1,
+        thinking, o1, r1, …).
+
+        Args:
+            model_id: Model identifier string to test.
+
+        Returns:
+            ``True`` if the model appears to be a thinking/reasoning model,
+            ``False`` otherwise.
+
+        Examples:
+            >>> LLMClient.is_thinking_capable("qwen/qwq-32b")
+            True
+            >>> LLMClient.is_thinking_capable("qwen/qwen3-coder-30b")
+            False
+        """
+        from model_registry.schemas import ModelMetadata
+
+        return ModelMetadata._is_thinking_model(model_id)
+
     def health_check(self) -> bool:
         """Check if LM Studio API is accessible.
 
@@ -1088,95 +1582,6 @@ class LLMClient:
             return False
 
 
-class AutonomousLLMClient:
-    """LLM client with autonomous tool calling capabilities.
-
-    This client manages the autonomous loop where the LLM can make
-    multiple tool calls without manual intervention.
-    """
-
-    def __init__(
-        self,
-        llm_client: Optional[LLMClient] = None,
-        max_rounds: int = DEFAULT_AUTONOMOUS_ROUNDS
-    ):
-        """Initialize autonomous LLM client.
-
-        Args:
-            llm_client: Optional LLM client (creates default if None)
-            max_rounds: Maximum autonomous rounds before stopping (default: 10000)
-        """
-        self.llm = llm_client or LLMClient()
-        self.max_rounds = max_rounds
-
-    async def autonomous_execution(
-        self,
-        task: str,
-        tools: List[Dict[str, Any]],
-        tool_executor,  # From mcp_client.executor
-        system_prompt: Optional[str] = None
-    ) -> str:
-        """Execute task autonomously with tool calling.
-
-        Args:
-            task: Task description for the LLM
-            tools: Available tools in OpenAI format
-            tool_executor: Tool executor instance for executing tools
-            system_prompt: Optional system instructions
-
-        Returns:
-            Final answer from LLM
-
-        Raises:
-            Exception: If autonomous execution fails
-        """
-        # Initialize messages
-        messages = []
-        if system_prompt:
-            messages.append({"role": "system", "content": system_prompt})
-        messages.append({"role": "user", "content": task})
-
-        # Autonomous loop
-        for round_num in range(self.max_rounds):
-            # Call LLM with tools
-            response = self.llm.chat_completion(
-                messages=messages,
-                tools=tools,
-                tool_choice="auto"
-            )
-
-            message = response["choices"][0]["message"]
-
-            # Check for tool calls
-            if message.get("tool_calls"):
-                # Add assistant message
-                messages.append(message)
-
-                # Execute each tool
-                for tool_call in message["tool_calls"]:
-                    tool_name = tool_call["function"]["name"]
-                    tool_args = json.loads(tool_call["function"]["arguments"])
-
-                    # Execute tool via MCP
-                    result = await tool_executor.execute_tool(tool_name, tool_args)
-
-                    # Add tool result to messages
-                    from mcp_client.executor import ToolExecutor
-                    content = ToolExecutor.extract_text_content(result)
-
-                    messages.append({
-                        "role": "tool",
-                        "tool_call_id": tool_call["id"],
-                        "content": content
-                    })
-            else:
-                # LLM has final answer
-                return message.get("content", "No content in response")
-
-        return "Max rounds reached without final answer"
-
-
 __all__ = [
     "LLMClient",
-    "AutonomousLLMClient"
 ]
