@@ -29,7 +29,7 @@ from config.constants import (
     MIN_TEMPERATURE,
     MIN_TOP_K,
 )
-from llm.exceptions import LLMResponseError
+from core.exceptions import LLMResponseError
 from llm.llm_client import LLMClient
 
 logger = logging.getLogger(__name__)

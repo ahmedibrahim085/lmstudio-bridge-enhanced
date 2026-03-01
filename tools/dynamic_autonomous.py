@@ -38,7 +38,7 @@ from config.constants import (
     MAX_ANTHROPIC_LOOP_MESSAGES,
     MAX_CONSECUTIVE_ERRORS,
 )
-from llm.exceptions import ModelNotFoundError
+from core.exceptions import ModelNotFoundError
 from llm.format_adapter import FormatAdapter
 from llm.llm_client import LLMClient
 from llm.model_validator import ModelValidator

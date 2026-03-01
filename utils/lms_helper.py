@@ -43,7 +43,7 @@ from config.constants import (
     MODEL_LOADING_DELAY,
     MODEL_REACTIVATION_DELAY,
 )
-from llm.exceptions import LLMError
+from core.exceptions import LLMError
 from utils.retry import run_with_retry
 from utils.validation import validate_model_name, ValidationError
 
@@ -453,7 +453,7 @@ ALTERNATIVE:
         if rest_client is not None:
             rest_result = rest_client.load_model(model_name)
             if rest_result["memory_error"]:
-                from llm.exceptions import ModelMemoryError
+                from core.exceptions import ModelMemoryError
                 raise ModelMemoryError(model_name)
             if rest_result["success"]:
                 logger.info(f"Model '{model_name}' loaded via REST API")
@@ -492,7 +492,7 @@ ALTERNATIVE:
                 import re
                 memory_match = re.search(r'requires approximately ([\d.]+\s*GB)', error_msg, re.IGNORECASE)
                 if memory_match or 'memory' in error_msg.lower() or 'insufficient' in error_msg.lower():
-                    from llm.exceptions import ModelMemoryError
+                    from core.exceptions import ModelMemoryError
                     required_memory = memory_match.group(1) if memory_match else None
                     raise ModelMemoryError(model_name, required_memory)
 
@@ -500,7 +500,7 @@ ALTERNATIVE:
 
         except Exception as e:
             # Re-raise ModelMemoryError to allow proper handling upstream
-            from llm.exceptions import ModelMemoryError
+            from core.exceptions import ModelMemoryError
             if isinstance(e, ModelMemoryError):
                 raise
             logger.error(f"Error loading model with LMS: {e}")
