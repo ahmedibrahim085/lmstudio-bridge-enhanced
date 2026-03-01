@@ -1183,6 +1183,8 @@ class LLMClient:
         max_tokens: int = DEFAULT_MAX_TOKENS,
         timeout: int = DEFAULT_LLM_TIMEOUT,
         require_native: bool = False,
+        min_p: Optional[float] = None,
+        top_k: Optional[int] = None,
     ) -> Dict[str, Any]:
         """Send chat completion with native MCP server configuration.
 
@@ -1194,6 +1196,8 @@ class LLMClient:
             max_tokens: Maximum tokens in response
             timeout: Request timeout in seconds
             require_native: If True, raises LLMResponseError when native MCP unsupported
+            min_p: Minimum probability threshold for token sampling (OPP-26)
+            top_k: Top-k tokens to consider during sampling (OPP-26)
 
         Returns:
             Chat completion response dict
@@ -1220,6 +1224,12 @@ class LLMClient:
 
         if target_model and target_model != "default":
             payload["model"] = target_model
+
+        # Advanced sampling parameters (OPP-26)
+        if min_p is not None:
+            payload["min_p"] = min_p
+        if top_k is not None:
+            payload["top_k"] = top_k
 
         try:
             response = self.session.post(

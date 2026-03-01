@@ -122,3 +122,62 @@ class TestSamplingParamsInPayload:
         payload = client.session.post.call_args[1]["json"]
         assert payload["min_p"] == 0.05
         assert payload["top_k"] == 50
+
+
+class TestNativeMCPSamplingParams:
+    """Tests for min_p/top_k in chat_completion_with_native_mcp payload (F-8)."""
+
+    def _make_native_mcp_client(self):
+        """Create LLMClient with mocked session and native MCP support enabled."""
+        from unittest.mock import patch
+
+        from llm.llm_client import LLMClient
+
+        client = LLMClient.__new__(LLMClient)
+        client.model = "test-model"
+        client.api_base = "http://localhost:1234/v1"
+        client.session = MagicMock()
+        client._native_mcp_supported = True
+        client._native_mcp_checked_at = float("inf")
+        mock_response = MagicMock()
+        mock_response.json.return_value = {
+            "choices": [{"message": {"content": "test"}}]
+        }
+        mock_response.raise_for_status = MagicMock()
+        client.session.post.return_value = mock_response
+        return client
+
+    def test_min_p_in_native_mcp_payload(self):
+        """min_p=0.1 appears in chat_completion_with_native_mcp payload."""
+        client = self._make_native_mcp_client()
+        client.chat_completion_with_native_mcp(
+            messages=[{"role": "user", "content": "hi"}],
+            mcp_servers=[{"name": "test-server", "transport": "stdio"}],
+            min_p=0.1,
+        )
+        payload = client.session.post.call_args[1]["json"]
+        assert payload["min_p"] == 0.1
+
+    def test_top_k_in_native_mcp_payload(self):
+        """top_k=40 appears in chat_completion_with_native_mcp payload."""
+        client = self._make_native_mcp_client()
+        client.chat_completion_with_native_mcp(
+            messages=[{"role": "user", "content": "hi"}],
+            mcp_servers=[{"name": "test-server", "transport": "stdio"}],
+            top_k=40,
+        )
+        payload = client.session.post.call_args[1]["json"]
+        assert payload["top_k"] == 40
+
+    def test_none_not_in_native_mcp_payload(self):
+        """None values are NOT included in chat_completion_with_native_mcp payload."""
+        client = self._make_native_mcp_client()
+        client.chat_completion_with_native_mcp(
+            messages=[{"role": "user", "content": "hi"}],
+            mcp_servers=[{"name": "test-server", "transport": "stdio"}],
+            min_p=None,
+            top_k=None,
+        )
+        payload = client.session.post.call_args[1]["json"]
+        assert "min_p" not in payload
+        assert "top_k" not in payload
