@@ -86,7 +86,9 @@ class CompletionTools:
         system_prompt: str = "",
         temperature: float = 0.7,
         max_tokens: int = DEFAULT_MAX_TOKENS,
-        response_format: Optional[Dict[str, Any]] = None
+        response_format: Optional[Dict[str, Any]] = None,
+        min_p: Optional[float] = None,
+        top_k: Optional[int] = None,
     ) -> str:
         """Generate a completion from the current LM Studio model.
 
@@ -98,11 +100,13 @@ class CompletionTools:
             response_format: Optional structured output format (LM Studio v0.3.32+)
                 - {"type": "json_object"} for valid JSON output
                 - {"type": "json_schema", "json_schema": {...}} for schema-conforming JSON
+            min_p: Minimum probability threshold for token sampling (0.0 to 1.0)
+            top_k: Number of top tokens to consider during sampling (1 to 1000)
 
         Returns:
             The model's response to the prompt
         """
-        _validate_generation_params(temperature, max_tokens)
+        _validate_generation_params(temperature, max_tokens, min_p=min_p, top_k=top_k)
         messages = []
 
         # Add system message if provided
@@ -116,7 +120,9 @@ class CompletionTools:
             messages=messages,
             temperature=temperature,
             max_tokens=max_tokens,
-            response_format=response_format
+            response_format=response_format,
+            min_p=min_p,
+            top_k=top_k,
         )
 
         # Extract the assistant's message
@@ -137,7 +143,9 @@ class CompletionTools:
         prompt: str,
         temperature: float = 0.7,
         max_tokens: int = DEFAULT_MAX_TOKENS,
-        stop_sequences: Optional[List[str]] = None
+        stop_sequences: Optional[List[str]] = None,
+        min_p: Optional[float] = None,
+        top_k: Optional[int] = None,
     ) -> str:
         """Generate a raw text completion (non-chat format) from LM Studio.
 
@@ -149,16 +157,20 @@ class CompletionTools:
             temperature: Controls randomness (0.0 to 2.0, default 0.7)
             max_tokens: Maximum number of tokens to generate (default 8192)
             stop_sequences: Optional list of sequences where generation will stop
+            min_p: Minimum probability threshold for token sampling (0.0 to 1.0)
+            top_k: Number of top tokens to consider during sampling (1 to 1000)
 
         Returns:
             The completed text from the model
         """
-        _validate_generation_params(temperature, max_tokens)
+        _validate_generation_params(temperature, max_tokens, min_p=min_p, top_k=top_k)
         response = self.llm.text_completion(
             prompt=prompt,
             temperature=temperature,
             max_tokens=max_tokens,
-            stop_sequences=stop_sequences
+            stop_sequences=stop_sequences,
+            min_p=min_p,
+            top_k=top_k,
         )
 
         # Extract the completion text
@@ -220,6 +232,8 @@ class CompletionTools:
         max_tokens: int = DEFAULT_ANTHROPIC_MAX_TOKENS,
         temperature: float = 0.7,
         model: Optional[str] = None,
+        min_p: Optional[float] = None,
+        top_k: Optional[int] = None,
     ) -> str:
         """Send a message using Anthropic format via LM Studio.
 
@@ -229,12 +243,14 @@ class CompletionTools:
             max_tokens: Maximum tokens (required by Anthropic protocol)
             temperature: Controls randomness
             model: Optional model override
+            min_p: Minimum probability threshold for token sampling (0.0 to 1.0)
+            top_k: Number of top tokens to consider during sampling (1 to 1000)
 
         Returns:
             JSON string with Anthropic-format response
         """
         try:
-            _validate_generation_params(temperature, max_tokens)
+            _validate_generation_params(temperature, max_tokens, min_p=min_p, top_k=top_k)
             parsed_messages = json.loads(messages) if isinstance(messages, str) else messages
             if not isinstance(parsed_messages, list):
                 raise ValueError(
@@ -248,6 +264,8 @@ class CompletionTools:
                 max_tokens=max_tokens,
                 temperature=temperature,
                 model=model,
+                min_p=min_p,
+                top_k=top_k,
             )
             return json.dumps(result, indent=2)
 
@@ -274,7 +292,9 @@ def register_completion_tools(mcp, llm_client: Optional[LLMClient] = None):
         system_prompt: str = "",
         temperature: float = 0.7,
         max_tokens: int = DEFAULT_MAX_TOKENS,
-        response_format: Optional[Dict[str, Any]] = None
+        response_format: Optional[Dict[str, Any]] = None,
+        min_p: Optional[float] = None,
+        top_k: Optional[int] = None,
     ) -> str:
         """
         Delegate a task to the local LLM running in LM Studio.
@@ -409,14 +429,18 @@ def register_completion_tools(mcp, llm_client: Optional[LLMClient] = None):
 
         Note: This creates a SECOND LLM call. Only use when delegation is truly beneficial.
         """
-        return await tools.chat_completion(prompt, system_prompt, temperature, max_tokens, response_format)
+        return await tools.chat_completion(
+            prompt, system_prompt, temperature, max_tokens, response_format, min_p, top_k
+        )
 
     @mcp.tool()
     async def text_completion(
         prompt: str,
         temperature: float = 0.7,
         max_tokens: int = DEFAULT_MAX_TOKENS,
-        stop_sequences: Optional[List[str]] = None
+        stop_sequences: Optional[List[str]] = None,
+        min_p: Optional[float] = None,
+        top_k: Optional[int] = None,
     ) -> str:
         """
         Generate raw text/code completion from local LLM (non-chat format).
@@ -484,7 +508,9 @@ def register_completion_tools(mcp, llm_client: Optional[LLMClient] = None):
 
         Note: Faster than chat_completion but no conversation context.
         """
-        return await tools.text_completion(prompt, temperature, max_tokens, stop_sequences)
+        return await tools.text_completion(
+            prompt, temperature, max_tokens, stop_sequences, min_p, top_k
+        )
 
     @mcp.tool()
     async def create_response(
@@ -625,6 +651,8 @@ def register_completion_tools(mcp, llm_client: Optional[LLMClient] = None):
         max_tokens: int = DEFAULT_ANTHROPIC_MAX_TOKENS,
         temperature: float = 0.7,
         model: Optional[str] = None,
+        min_p: Optional[float] = None,
+        top_k: Optional[int] = None,
     ) -> str:
         """
         Send a message using Anthropic's /v1/messages format via LM Studio.
@@ -650,6 +678,8 @@ def register_completion_tools(mcp, llm_client: Optional[LLMClient] = None):
             max_tokens=max_tokens,
             temperature=temperature,
             model=model,
+            min_p=min_p,
+            top_k=top_k,
         )
 
 
