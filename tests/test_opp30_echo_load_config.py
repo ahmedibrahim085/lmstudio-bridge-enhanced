@@ -6,7 +6,6 @@ import pytest
 
 from utils.lms_helper import LMSRestClient
 
-
 SAMPLE_CONFIG = {
     "gpu_offload": "max",
     "context_length": 4096,
