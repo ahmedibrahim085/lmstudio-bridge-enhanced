@@ -4,6 +4,7 @@ Completion tools for LM Studio (chat and text completions).
 """
 
 import json
+import logging
 from typing import Any, Dict, List, Optional
 
 from config.constants import (
@@ -30,6 +31,8 @@ from config.constants import (
 )
 from llm.exceptions import LLMResponseError
 from llm.llm_client import LLMClient
+
+logger = logging.getLogger(__name__)
 
 
 def _validate_generation_params(
@@ -220,6 +223,7 @@ class CompletionTools:
             return json.dumps(response)
 
         except Exception as e:
+            logger.error("Failed to create response: %s", e, exc_info=True)
             error_response = {
                 "error": f"Failed to create response: {str(e)}"
             }
@@ -270,6 +274,7 @@ class CompletionTools:
             return json.dumps(result, indent=2)
 
         except Exception as e:
+            logger.error("Failed to send Anthropic message: %s", e, exc_info=True)
             error_response = {
                 "error": f"Failed to send Anthropic message: {str(e)}"
             }
