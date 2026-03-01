@@ -37,7 +37,7 @@ import json
 import logging
 from collections.abc import Generator
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Optional
 
 import requests
 
@@ -140,14 +140,14 @@ class StreamUsage:
 
 def parse_sse_stream_with_usage(
     response: requests.Response,
-) -> Generator[dict[str, Any], None, StreamUsage | None]:
+) -> Generator[dict[str, Any], None, Optional[StreamUsage]]:
     """Wrap parse_sse_stream and capture usage from the final chunk.
 
     Yields all chunks normally. The generator's return value (accessible
     via ``StopIteration.value``) is a :class:`StreamUsage` if usage was
     found, or ``None`` otherwise.
     """
-    usage: StreamUsage | None = None
+    usage: Optional[StreamUsage] = None
     for chunk in parse_sse_stream(response):
         chunk_usage = chunk.get(SSE_USAGE_KEY)
         if chunk_usage is not None:
