@@ -26,10 +26,10 @@ Requirements:
   Installation: brew install lmstudio-ai/lms/lms
 """
 
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, Optional
 
 from utils.lms_helper import LMSHelper
-from utils.model_fallback import get_fallback_manager, ModelAlternative
+from utils.model_fallback import get_fallback_manager
 
 
 def lms_list_loaded_models() -> Dict[str, Any]:

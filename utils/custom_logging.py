@@ -7,8 +7,6 @@ Provides structured logging with proper context and levels.
 
 import sys
 import logging
-from typing import Optional
-from datetime import datetime
 
 
 # Logging levels

@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 from typing import Optional, List, Dict, Any
 from llm.llm_client import LLMClient
-from config.constants import VISION_MODEL_WARNING, DEFAULT_VISION_DETAIL
+from config.constants import DEFAULT_VISION_DETAIL
 import json
 
 

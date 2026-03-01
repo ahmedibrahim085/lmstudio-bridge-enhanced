@@ -32,7 +32,6 @@ import logging
 import threading
 import time
 from typing import Optional, Dict, List, Any
-from pathlib import Path
 
 from config.constants import (
     LMS_CLI_CHECK_TIMEOUT,
