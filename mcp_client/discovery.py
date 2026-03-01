@@ -8,9 +8,12 @@ ANY MCP that's configured in either:
 - Any other .mcp.json file specified by path
 """
 
+import glob
 import json
 import os
-from typing import Dict, List, Optional, Any
+import platform
+import shutil
+from typing import Dict, List, Optional, Any, Tuple
 from pathlib import Path
 
 
@@ -152,6 +155,65 @@ class MCPDiscovery:
 
         return config
 
+    @staticmethod
+    def _resolve_node_and_npx() -> Tuple[Optional[str], Optional[str]]:
+        """Find node and npx executables using platform-appropriate resolution.
+
+        Strategy 1: shutil.which (works on all platforms)
+        Strategy 2: Platform-specific fallbacks (macOS Homebrew)
+
+        Returns:
+            Tuple of (node_path, npx_path), either may be None.
+        """
+        node_path = shutil.which("node") or None
+        npx_path = shutil.which("npx") or None
+
+        # If both found, done
+        if node_path and npx_path:
+            return node_path, npx_path
+
+        # Platform-specific fallback
+        if platform.system() == "Darwin":
+            hb_node, hb_npx = MCPDiscovery._resolve_homebrew_node()
+            node_path = node_path or hb_node
+            npx_path = npx_path or hb_npx
+
+        return node_path, npx_path
+
+    @staticmethod
+    def _resolve_homebrew_node() -> Tuple[Optional[str], Optional[str]]:
+        """macOS Homebrew fallback for node/npx resolution.
+
+        Searches Homebrew Cellar first (actual binaries), then symlink dirs.
+
+        Returns:
+            Tuple of (node_path, npx_path), either may be None.
+        """
+        node_path: Optional[str] = None
+        npx_path: Optional[str] = None
+
+        # Strategy 1: Homebrew Cellar (actual binaries, not symlinks)
+        node_matches = glob.glob("/opt/homebrew/Cellar/node/*/bin/node")
+        if node_matches:
+            node_path = sorted(node_matches)[-1]  # Latest version
+
+        npx_matches = glob.glob("/opt/homebrew/Cellar/node/*/bin/npx")
+        if npx_matches:
+            npx_path = sorted(npx_matches)[-1]
+
+        # Strategy 2: Standard symlink dirs
+        for search_dir in ["/opt/homebrew/bin", "/usr/local/bin"]:
+            if not node_path:
+                candidate = os.path.join(search_dir, "node")
+                if os.path.isfile(candidate):
+                    node_path = candidate
+            if not npx_path:
+                candidate = os.path.join(search_dir, "npx")
+                if os.path.isfile(candidate):
+                    npx_path = candidate
+
+        return node_path, npx_path
+
     def get_connection_params(self, mcp_name: str) -> Dict[str, Any]:
         """
         Get connection parameters for a specific MCP.
@@ -177,94 +239,19 @@ class MCPDiscovery:
         # Get env from config, or start with empty dict
         env = config.get("env", {}).copy()
 
-        # CRITICAL FIX: Add system PATH to subprocess environment
-        # This ensures Node.js and other binaries can be found
+        # Add system PATH to subprocess environment
         if "PATH" not in env:
             env["PATH"] = os.environ.get("PATH", "")
 
-        # Ensure homebrew bin is in PATH (common Node.js location on macOS)
-        # Also add the actual Cellar bin directory where node binaries are located
-        homebrew_paths = [
-            "/opt/homebrew/Cellar/node/*/bin",  # Actual node binaries
-            "/opt/homebrew/bin",                # Homebrew symlinks
-            "/usr/local/bin"                    # System binaries
-        ]
-        current_path = env.get("PATH", "")
-
-        # Add Cellar bin dirs first (highest priority)
-        import glob
-        for pattern in ["/opt/homebrew/Cellar/node/*/bin"]:
-            matches = glob.glob(pattern)
-            if matches:
-                # Add all matching directories (usually just one)
-                for cellar_bin in sorted(matches, reverse=True):  # Latest version first
-                    if cellar_bin not in current_path:
-                        env["PATH"] = f"{cellar_bin}:{current_path}" if current_path else cellar_bin
-                        current_path = env["PATH"]
-
-        # Then add standard paths
-        for homebrew_path in ["/opt/homebrew/bin", "/usr/local/bin"]:
-            if homebrew_path not in current_path:
-                env["PATH"] = f"{homebrew_path}:{current_path}" if current_path else homebrew_path
-                current_path = env["PATH"]
-
-        # CRITICAL FIX #2: Handle npx shebang issue
-        # npx starts with #!/usr/bin/env node
-        # When Python subprocess runs it, the shebang's 'env' command can't find 'node'
-        # even though we set PATH in the env dict (shebang uses system env, not subprocess env)
-        # Solution: Call node directly with npx script as argument
         command = config["command"]
         args = config["args"].copy()
 
         if command == "npx":
-            # Find absolute paths to node and npx
-            # Check Cellar directly for actual binaries (symlinks may be broken)
-            node_path = None
-            npx_path = None
-
-            # Search paths for binaries
-            search_locations = [
-                # Homebrew Cellar (actual binaries)
-                "/opt/homebrew/Cellar/node/*/bin",
-                # Standard bin dirs
-                "/opt/homebrew/bin",
-                "/usr/local/bin"
-            ]
-
-            # Find node binary
-            if not node_path:
-                import glob
-                for pattern in ["/opt/homebrew/Cellar/node/*/bin/node"]:
-                    matches = glob.glob(pattern)
-                    if matches:
-                        # Use the latest version (last in sorted list)
-                        node_path = sorted(matches)[-1]
-                        break
-
-                # Fallback to symlink paths
-                if not node_path:
-                    for search_path in ["/opt/homebrew/bin", "/usr/local/bin"]:
-                        candidate = os.path.join(search_path, "node")
-                        if os.path.isfile(candidate):
-                            node_path = candidate
-                            break
-
-            # Find npx binary
-            if not npx_path:
-                for pattern in ["/opt/homebrew/Cellar/node/*/bin/npx"]:
-                    matches = glob.glob(pattern)
-                    if matches:
-                        npx_path = sorted(matches)[-1]
-                        break
-
-                if not npx_path:
-                    for search_path in ["/opt/homebrew/bin", "/usr/local/bin"]:
-                        candidate = os.path.join(search_path, "npx")
-                        if os.path.isfile(candidate):
-                            npx_path = candidate
-                            break
+            # Resolve node/npx via platform-abstract strategy
+            node_path, npx_path = self._resolve_node_and_npx()
 
             # Replace: npx <args> -> node /path/to/npx <args>
+            # This bypasses the shebang issue where env can't find node
             if node_path and npx_path:
                 command = node_path
                 args = [npx_path] + args
