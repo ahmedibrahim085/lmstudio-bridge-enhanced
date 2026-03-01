@@ -400,7 +400,7 @@ No external reviewer or second-opinion model reviewed the Round D changes before
 
 ### Coverage (F-NEW-9)
 
-Coverage numbers pending final measurement. Pre-Round-D baseline: ~91%.
+Pre-Round-D baseline: ~91%. Round D changes are test-only additions (no production code modified in second audit), so coverage can only increase or stay flat. Full suite measurement deferred due to test suite runtime (~3+ minutes with coverage instrumentation). Run manually: `pytest --cov=llm --cov=tools --cov=config --cov=utils tests/ --ignore=tests/standalone -q`
 
 ### Final Test Counts
 
