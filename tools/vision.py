@@ -41,13 +41,13 @@ class VisionTools:
         """
         choices = response.get("choices", [])
         if not choices:
-            return "Error: No response generated"
+            return json.dumps({"error": "No response generated"})
 
         message = choices[0].get("message", {})
         content = message.get("content", "")
 
         if not content:
-            return "Error: Empty response from model"
+            return json.dumps({"error": "Empty response from model"})
 
         return content
 
@@ -75,9 +75,9 @@ class VisionTools:
             )
             return self._extract_response(response)
         except ValueError as e:
-            return f"Error: {str(e)}"
+            return json.dumps({"error": str(e)})
         except Exception as e:
-            return f"Error analyzing image: {str(e)}"
+            return json.dumps({"error": f"Error analyzing image: {str(e)}"})
 
     async def describe_image(
         self,
@@ -112,9 +112,9 @@ class VisionTools:
             )
             return self._extract_response(response)
         except ValueError as e:
-            return f"Error: {str(e)}"
+            return json.dumps({"error": str(e)})
         except Exception as e:
-            return f"Error describing image: {str(e)}"
+            return json.dumps({"error": f"Error describing image: {str(e)}"})
 
     async def compare_images(
         self,
@@ -133,7 +133,7 @@ class VisionTools:
             Comparison analysis of the images
         """
         if len(images) < 2:
-            return "Error: At least 2 images required for comparison"
+            return json.dumps({"error": "At least 2 images required for comparison"})
 
         comparison_prompts = {
             "differences": f"Compare these {len(images)} images and identify all the differences between them. List each difference clearly.",
@@ -151,9 +151,9 @@ class VisionTools:
             )
             return self._extract_response(response)
         except ValueError as e:
-            return f"Error: {str(e)}"
+            return json.dumps({"error": str(e)})
         except Exception as e:
-            return f"Error comparing images: {str(e)}"
+            return json.dumps({"error": f"Error comparing images: {str(e)}"})
 
     async def extract_text_from_image(
         self,
@@ -186,9 +186,9 @@ If no text is visible, state that clearly."""
             )
             return self._extract_response(response)
         except ValueError as e:
-            return f"Error: {str(e)}"
+            return json.dumps({"error": str(e)})
         except Exception as e:
-            return f"Error extracting text: {str(e)}"
+            return json.dumps({"error": f"Error extracting text: {str(e)}"})
 
     async def identify_objects(
         self,
@@ -220,9 +220,9 @@ Format the response as a structured list."""
             )
             return self._extract_response(response)
         except ValueError as e:
-            return f"Error: {str(e)}"
+            return json.dumps({"error": str(e)})
         except Exception as e:
-            return f"Error identifying objects: {str(e)}"
+            return json.dumps({"error": f"Error identifying objects: {str(e)}"})
 
     async def answer_about_image(
         self,
@@ -250,9 +250,9 @@ Format the response as a structured list."""
             )
             return self._extract_response(response)
         except ValueError as e:
-            return f"Error: {str(e)}"
+            return json.dumps({"error": str(e)})
         except Exception as e:
-            return f"Error answering question: {str(e)}"
+            return json.dumps({"error": f"Error answering question: {str(e)}"})
 
 
 def register_vision_tools(mcp, llm_client: Optional[LLMClient] = None):

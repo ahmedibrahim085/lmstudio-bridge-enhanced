@@ -340,14 +340,16 @@ class TestVisionToolsErrorPaths(unittest.TestCase):
         from tools.vision import VisionTools
         tools = VisionTools(llm_client=MagicMock())
         result = tools._extract_response({"choices": []})
-        self.assertIn("Error", result)
-        self.assertIn("No response", result)
+        parsed = json.loads(result)
+        self.assertIn("error", parsed)
+        self.assertIn("No response", parsed["error"])
 
     def test_extract_response_missing_choices_key(self):
         from tools.vision import VisionTools
         tools = VisionTools(llm_client=MagicMock())
         result = tools._extract_response({})
-        self.assertIn("Error", result)
+        parsed = json.loads(result)
+        self.assertIn("error", parsed)
 
     def test_extract_response_empty_content(self):
         from tools.vision import VisionTools
@@ -355,8 +357,9 @@ class TestVisionToolsErrorPaths(unittest.TestCase):
         result = tools._extract_response({
             "choices": [{"message": {"content": ""}}]
         })
-        self.assertIn("Error", result)
-        self.assertIn("Empty response", result)
+        parsed = json.loads(result)
+        self.assertIn("error", parsed)
+        self.assertIn("Empty response", parsed["error"])
 
     def test_extract_response_none_content(self):
         from tools.vision import VisionTools
@@ -364,7 +367,8 @@ class TestVisionToolsErrorPaths(unittest.TestCase):
         result = tools._extract_response({
             "choices": [{"message": {"content": None}}]
         })
-        self.assertIn("Error", result)
+        parsed = json.loads(result)
+        self.assertIn("error", parsed)
 
     def test_analyze_image_value_error(self):
         from tools.vision import VisionTools
@@ -372,8 +376,9 @@ class TestVisionToolsErrorPaths(unittest.TestCase):
         mock_llm.vision_completion.side_effect = ValueError("bad image")
         tools = VisionTools(llm_client=mock_llm)
         result = _run(tools.analyze_image("bad_input"))
-        self.assertIn("Error", result)
-        self.assertIn("bad image", result)
+        parsed = json.loads(result)
+        self.assertIn("error", parsed)
+        self.assertIn("bad image", parsed["error"])
 
     def test_analyze_image_generic_exception(self):
         from tools.vision import VisionTools
@@ -381,8 +386,9 @@ class TestVisionToolsErrorPaths(unittest.TestCase):
         mock_llm.vision_completion.side_effect = RuntimeError("connection failed")
         tools = VisionTools(llm_client=mock_llm)
         result = _run(tools.analyze_image("some_image"))
-        self.assertIn("Error", result)
-        self.assertIn("analyzing image", result.lower())
+        parsed = json.loads(result)
+        self.assertIn("error", parsed)
+        self.assertIn("analyzing image", parsed["error"].lower())
 
     def test_describe_image_value_error(self):
         from tools.vision import VisionTools
@@ -390,8 +396,9 @@ class TestVisionToolsErrorPaths(unittest.TestCase):
         mock_llm.vision_completion.side_effect = ValueError("invalid input")
         tools = VisionTools(llm_client=mock_llm)
         result = _run(tools.describe_image("bad_input"))
-        self.assertIn("Error", result)
-        self.assertIn("invalid input", result)
+        parsed = json.loads(result)
+        self.assertIn("error", parsed)
+        self.assertIn("invalid input", parsed["error"])
 
     def test_describe_image_generic_exception(self):
         from tools.vision import VisionTools
@@ -399,8 +406,9 @@ class TestVisionToolsErrorPaths(unittest.TestCase):
         mock_llm.vision_completion.side_effect = OSError("disk error")
         tools = VisionTools(llm_client=mock_llm)
         result = _run(tools.describe_image("some_image"))
-        self.assertIn("Error", result)
-        self.assertIn("describing image", result.lower())
+        parsed = json.loads(result)
+        self.assertIn("error", parsed)
+        self.assertIn("describing image", parsed["error"].lower())
 
     def test_extract_text_value_error(self):
         from tools.vision import VisionTools
@@ -408,8 +416,9 @@ class TestVisionToolsErrorPaths(unittest.TestCase):
         mock_llm.vision_completion.side_effect = ValueError("no data")
         tools = VisionTools(llm_client=mock_llm)
         result = _run(tools.extract_text_from_image("bad_input"))
-        self.assertIn("Error", result)
-        self.assertIn("no data", result)
+        parsed = json.loads(result)
+        self.assertIn("error", parsed)
+        self.assertIn("no data", parsed["error"])
 
     def test_extract_text_generic_exception(self):
         from tools.vision import VisionTools
@@ -417,8 +426,9 @@ class TestVisionToolsErrorPaths(unittest.TestCase):
         mock_llm.vision_completion.side_effect = RuntimeError("timeout")
         tools = VisionTools(llm_client=mock_llm)
         result = _run(tools.extract_text_from_image("some_image"))
-        self.assertIn("Error", result)
-        self.assertIn("extracting text", result.lower())
+        parsed = json.loads(result)
+        self.assertIn("error", parsed)
+        self.assertIn("extracting text", parsed["error"].lower())
 
     def test_answer_about_image_value_error(self):
         from tools.vision import VisionTools
@@ -426,8 +436,9 @@ class TestVisionToolsErrorPaths(unittest.TestCase):
         mock_llm.vision_completion.side_effect = ValueError("bad image data")
         tools = VisionTools(llm_client=mock_llm)
         result = _run(tools.answer_about_image("bad_input", "what is this?"))
-        self.assertIn("Error", result)
-        self.assertIn("bad image data", result)
+        parsed = json.loads(result)
+        self.assertIn("error", parsed)
+        self.assertIn("bad image data", parsed["error"])
 
     def test_answer_about_image_generic_exception(self):
         from tools.vision import VisionTools
@@ -435,8 +446,9 @@ class TestVisionToolsErrorPaths(unittest.TestCase):
         mock_llm.vision_completion.side_effect = ConnectionError("network error")
         tools = VisionTools(llm_client=mock_llm)
         result = _run(tools.answer_about_image("some_image", "how many?"))
-        self.assertIn("Error", result)
-        self.assertIn("answering question", result.lower())
+        parsed = json.loads(result)
+        self.assertIn("error", parsed)
+        self.assertIn("answering question", parsed["error"].lower())
 
 
 # ---------------------------------------------------------------------------
@@ -481,7 +493,9 @@ class TestVisionToolsCompareImages(unittest.TestCase):
         from tools.vision import VisionTools
         tools = VisionTools(llm_client=MagicMock())
         result = _run(tools.compare_images([]))
-        self.assertIn("at least 2", result.lower())
+        parsed = json.loads(result)
+        self.assertIn("error", parsed)
+        self.assertIn("at least 2", parsed["error"].lower())
 
     def test_compare_images_value_error(self):
         from tools.vision import VisionTools
@@ -489,7 +503,8 @@ class TestVisionToolsCompareImages(unittest.TestCase):
         mock_llm.vision_completion.side_effect = ValueError("bad images")
         tools = VisionTools(llm_client=mock_llm)
         result = _run(tools.compare_images(["img1.jpg", "img2.jpg"]))
-        self.assertIn("Error", result)
+        parsed = json.loads(result)
+        self.assertIn("error", parsed)
 
     def test_compare_images_generic_exception(self):
         from tools.vision import VisionTools
@@ -497,8 +512,9 @@ class TestVisionToolsCompareImages(unittest.TestCase):
         mock_llm.vision_completion.side_effect = RuntimeError("api down")
         tools = VisionTools(llm_client=mock_llm)
         result = _run(tools.compare_images(["img1.jpg", "img2.jpg"]))
-        self.assertIn("Error", result)
-        self.assertIn("comparing images", result.lower())
+        parsed = json.loads(result)
+        self.assertIn("error", parsed)
+        self.assertIn("comparing images", parsed["error"].lower())
 
     def test_compare_images_calls_vision_completion_with_list(self):
         from tools.vision import VisionTools
@@ -544,8 +560,9 @@ class TestVisionToolsIdentifyObjects(unittest.TestCase):
         mock_llm.vision_completion.side_effect = ValueError("bad image")
         tools = VisionTools(llm_client=mock_llm)
         result = _run(tools.identify_objects("bad_image"))
-        self.assertIn("Error", result)
-        self.assertIn("bad image", result)
+        parsed = json.loads(result)
+        self.assertIn("error", parsed)
+        self.assertIn("bad image", parsed["error"])
 
     def test_identify_objects_generic_exception(self):
         from tools.vision import VisionTools
@@ -553,8 +570,9 @@ class TestVisionToolsIdentifyObjects(unittest.TestCase):
         mock_llm.vision_completion.side_effect = RuntimeError("model crashed")
         tools = VisionTools(llm_client=mock_llm)
         result = _run(tools.identify_objects("some_image"))
-        self.assertIn("Error", result)
-        self.assertIn("identifying objects", result.lower())
+        parsed = json.loads(result)
+        self.assertIn("error", parsed)
+        self.assertIn("identifying objects", parsed["error"].lower())
 
     def test_identify_objects_calls_vision_completion(self):
         from tools.vision import VisionTools

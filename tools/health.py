@@ -6,6 +6,7 @@ OPP-18: Extended with server type detection (GUI vs headless llmster),
 comprehensive health status, and graceful degradation when server is unavailable.
 """
 
+import json
 import logging
 from enum import Enum
 from typing import Any, Optional
@@ -93,7 +94,7 @@ class HealthTools:
             else:
                 return "LM Studio API is not responding."
         except Exception as e:
-            return f"Error connecting to LM Studio API: {str(e)}"
+            return json.dumps({"error": f"Error connecting to LM Studio API: {str(e)}"})
 
     async def list_models(self) -> str:
         """List all available models in LM Studio.
@@ -113,7 +114,7 @@ class HealthTools:
 
             return result
         except Exception as e:
-            return f"Error listing models: {str(e)}"
+            return json.dumps({"error": f"Error listing models: {str(e)}"})
 
     async def get_current_model(self) -> str:
         """Get the currently loaded model in LM Studio.
@@ -133,7 +134,7 @@ class HealthTools:
             model_info = response.get("model", "Unknown")
             return f"Currently loaded model: {model_info}"
         except Exception as e:
-            return f"Error identifying current model: {str(e)}"
+            return json.dumps({"error": f"Error identifying current model: {str(e)}"})
 
     async def check_server_type(self) -> ServerType:
         """Detect whether the server is GUI LM Studio, llmster (headless), or unknown.
