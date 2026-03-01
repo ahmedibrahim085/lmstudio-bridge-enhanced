@@ -644,6 +644,11 @@ SELECTION_ERROR_INTERNAL = "selection_error"
 # Used in: llm/sse_parser.py, llm/llm_client.py streaming methods
 SSE_DONE_SENTINEL = "[DONE]"
 
+# Key in SSE chunks that contains token usage statistics
+# LM Studio includes this in the final data chunk before [DONE]
+# Used in: llm/sse_parser.py (parse_sse_stream_with_usage)
+SSE_USAGE_KEY = "usage"
+
 # Prefix used by SSE protocol for data lines
 # Every SSE data line begins with this prefix followed by the payload
 # Used in: llm/sse_parser.py (parse_sse_stream)

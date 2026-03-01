@@ -36,16 +36,19 @@ Usage
 import json
 import logging
 from collections.abc import Generator
+from dataclasses import dataclass
 from typing import Any
 
 import requests
 
-from config.constants import SSE_DATA_PREFIX, SSE_DONE_SENTINEL
+from config.constants import SSE_DATA_PREFIX, SSE_DONE_SENTINEL, SSE_USAGE_KEY
 
 logger = logging.getLogger(__name__)
 
 __all__ = [
     "parse_sse_stream",
+    "parse_sse_stream_with_usage",
+    "StreamUsage",
 ]
 
 
@@ -115,3 +118,39 @@ def parse_sse_stream(
     ) as exc:
         logger.error("SSE stream connection error: %s", exc)
         yield {"error": str(exc)}
+
+
+@dataclass(frozen=True)
+class StreamUsage:
+    """Immutable token usage statistics from a streaming response."""
+
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    total_tokens: int = 0
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "StreamUsage":
+        """Construct from a usage dict (as returned by LM Studio API)."""
+        return cls(
+            prompt_tokens=data.get("prompt_tokens", 0),
+            completion_tokens=data.get("completion_tokens", 0),
+            total_tokens=data.get("total_tokens", 0),
+        )
+
+
+def parse_sse_stream_with_usage(
+    response: requests.Response,
+) -> Generator[dict[str, Any], None, StreamUsage | None]:
+    """Wrap parse_sse_stream and capture usage from the final chunk.
+
+    Yields all chunks normally. The generator's return value (accessible
+    via ``StopIteration.value``) is a :class:`StreamUsage` if usage was
+    found, or ``None`` otherwise.
+    """
+    usage: StreamUsage | None = None
+    for chunk in parse_sse_stream(response):
+        chunk_usage = chunk.get(SSE_USAGE_KEY)
+        if chunk_usage is not None:
+            usage = StreamUsage.from_dict(chunk_usage)
+        yield chunk
+    return usage
