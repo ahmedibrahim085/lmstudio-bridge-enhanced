@@ -27,7 +27,7 @@ class TestGetModel:
     def test_get_model_cache_hit(self, client):
         """Found in valid cache, no HTTP call needed."""
         client._models_cache = SAMPLE_MODELS.copy()
-        client._models_cache_time = time.time()
+        client._models_cache_time = time.monotonic()
 
         with patch.object(client, "list_all_models") as mock_fetch:
             result = client.get_model("qwen/qwen3-coder-next")
@@ -49,7 +49,7 @@ class TestGetModel:
     def test_get_model_not_found(self, client):
         """Model not in cache or API returns None."""
         client._models_cache = SAMPLE_MODELS.copy()
-        client._models_cache_time = time.time()
+        client._models_cache_time = time.monotonic()
 
         result = client.get_model("nonexistent/model")
         assert result is None
@@ -57,7 +57,7 @@ class TestGetModel:
     def test_get_model_cache_expired(self, client):
         """Stale cache triggers re-fetch."""
         client._models_cache = SAMPLE_MODELS.copy()
-        client._models_cache_time = time.time() - LMS_REST_MODELS_CACHE_TTL - 1
+        client._models_cache_time = time.monotonic() - LMS_REST_MODELS_CACHE_TTL - 1
 
         with patch.object(client, "list_all_models", return_value=SAMPLE_MODELS) as mock_fetch:
             result = client.get_model("qwen/qwen3-coder-next")
@@ -69,7 +69,7 @@ class TestGetModel:
     def test_get_model_key_matching(self, client):
         """Exact key match, not substring."""
         client._models_cache = SAMPLE_MODELS.copy()
-        client._models_cache_time = time.time()
+        client._models_cache_time = time.monotonic()
 
         # "qwen/qwen3-4b" should NOT match "qwen/qwen3-4b-thinking"
         result = client.get_model("qwen/qwen3-4b-thinking")
@@ -83,7 +83,7 @@ class TestGetModel:
     def test_get_model_empty_string_key(self, client):
         """Empty string key returns None when no model has empty key."""
         client._models_cache = SAMPLE_MODELS.copy()
-        client._models_cache_time = time.time()
+        client._models_cache_time = time.monotonic()
 
         result = client.get_model("")
         assert result is None
@@ -91,7 +91,7 @@ class TestGetModel:
     def test_get_model_partial_key_no_match(self, client):
         """Partial key 'qwen/qwen3' does not match 'qwen/qwen3-coder-next'."""
         client._models_cache = SAMPLE_MODELS.copy()
-        client._models_cache_time = time.time()
+        client._models_cache_time = time.monotonic()
 
         result = client.get_model("qwen/qwen3")
         assert result is None
@@ -120,7 +120,7 @@ class TestIsModelLoadedRefactored:
     def test_is_model_loaded_loaded_true(self, client):
         """Model with non-empty loaded_instances returns True."""
         client._models_cache = SAMPLE_MODELS.copy()
-        client._models_cache_time = time.time()
+        client._models_cache_time = time.monotonic()
 
         result = client.is_model_loaded("qwen/qwen3-coder-next")
         assert result is True
@@ -128,7 +128,7 @@ class TestIsModelLoadedRefactored:
     def test_is_model_loaded_unloaded_false(self, client):
         """Model with empty loaded_instances returns False."""
         client._models_cache = SAMPLE_MODELS.copy()
-        client._models_cache_time = time.time()
+        client._models_cache_time = time.monotonic()
 
         result = client.is_model_loaded("mistralai/magistral-small")
         assert result is False

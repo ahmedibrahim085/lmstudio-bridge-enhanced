@@ -422,7 +422,7 @@ class TestLMSRestClientCache:
             client.list_all_models()  # call 1 — populates cache
 
             # Manually expire the cache by backdating the cache timestamp
-            client._models_cache_time = time.time() - 9999.0
+            client._models_cache_time = time.monotonic() - 9999.0
 
             client.list_all_models()  # call 2 — TTL expired, must hit network
 
