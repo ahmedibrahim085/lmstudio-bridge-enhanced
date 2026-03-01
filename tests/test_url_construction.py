@@ -8,6 +8,7 @@ RED phase: written BEFORE fixes — these tests must fail first, then pass
 after the 3 fixes are applied.
 """
 
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 
@@ -103,7 +104,7 @@ class TestGetEndpointNoPrefixDoubling:
         """
         import ast
 
-        with open("/Users/ahmedmaged/ai_storage/MyMCPs/lmstudio-bridge-enhanced/llm/llm_client.py") as f:
+        with open(Path(__file__).parent.parent / "llm" / "llm_client.py") as f:
             tree = ast.parse(f.read())
 
         # Find chat_completion_with_native_mcp function body
@@ -146,7 +147,7 @@ class TestGetEndpointNoPrefixDoubling:
         """
         import ast
 
-        with open("/Users/ahmedmaged/ai_storage/MyMCPs/lmstudio-bridge-enhanced/llm/llm_client.py") as f:
+        with open(Path(__file__).parent.parent / "llm" / "llm_client.py") as f:
             tree = ast.parse(f.read())
 
         for node in ast.walk(tree):
@@ -180,7 +181,7 @@ class TestGetEndpointNoPrefixDoubling:
         """
         import ast
 
-        with open("/Users/ahmedmaged/ai_storage/MyMCPs/lmstudio-bridge-enhanced/llm/llm_client.py") as f:
+        with open(Path(__file__).parent.parent / "llm" / "llm_client.py") as f:
             source = f.read()
             tree = ast.parse(source)
 
