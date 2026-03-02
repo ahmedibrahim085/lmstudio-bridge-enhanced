@@ -172,7 +172,16 @@ class LMSRestClient:
             logger.warning("LM Studio server availability check failed", exc_info=True)
             return False
 
-    def load_model(self, model_key: str, context_length=None, flash_attention=None):
+    def load_model(
+        self,
+        model_key: str,
+        context_length=None,
+        flash_attention=None,
+        gpu_layers=None,
+        max_concurrent_predictions=None,
+        ttl=None,
+        draft_model=None,
+    ):
         """
         Load model via REST. Check-before-load to prevent duplicates.
 
@@ -190,12 +199,28 @@ class LMSRestClient:
                 "config": self._fetch_model_config(model_key),
             }
 
+        # Validate new load parameters
+        if gpu_layers is not None and gpu_layers < -1:
+            raise ValueError(f"gpu_layers must be >= -1, got {gpu_layers}")
+        if max_concurrent_predictions is not None and max_concurrent_predictions < 1:
+            raise ValueError(
+                f"max_concurrent_predictions must be >= 1, got {max_concurrent_predictions}"
+            )
+
         try:
             body = {"model": model_key}
             if context_length is not None:
                 body["context_length"] = context_length
             if flash_attention is not None:
                 body["flash_attention"] = flash_attention
+            if gpu_layers is not None:
+                body["gpu_layers"] = gpu_layers
+            if max_concurrent_predictions is not None:
+                body["max_concurrent_predictions"] = max_concurrent_predictions
+            if ttl is not None:
+                body["ttl"] = ttl
+            if draft_model is not None:
+                body["draft_model"] = draft_model
 
             response = self._get_client().post(
                 f"{self.base_url}{self._load_endpoint}",
