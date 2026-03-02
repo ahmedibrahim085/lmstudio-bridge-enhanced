@@ -5,5 +5,5 @@ __all__ = [
     "MIN_PYTHON_VERSION",
 ]
 
-VERSION = "4.0.0"
+VERSION = "4.1.0"
 MIN_PYTHON_VERSION = "3.9"
