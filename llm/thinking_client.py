@@ -2,16 +2,19 @@
 
 import logging
 import warnings
-from typing import Any, Dict, Generator, List, Optional
+from typing import Any, Dict, Generator, List, Optional, Tuple
 
 from config.constants import (
     DEFAULT_LLM_TIMEOUT,
     DEFAULT_MAX_TOKENS,
+    DEFAULT_REASONING_EFFORT,
     DEFAULT_THINKING_BUDGET_TOKENS,
     JIT_TTL_DEFAULT,
     MAX_THINKING_BUDGET_TOKENS,
     MIN_THINKING_BUDGET_TOKENS,
+    REASONING_EFFORT_TOKEN_MAP,
     STREAM_READ_TIMEOUT,
+    VALID_REASONING_EFFORTS,
 )
 from llm.http_transport import HTTPTransport
 from llm.jit_loader import ensure_model_loaded
@@ -35,12 +38,59 @@ class ThinkingClient:
     def __init__(self, transport: HTTPTransport) -> None:
         self._transport = transport
 
+    def _resolve_reasoning(
+        self,
+        reasoning: Optional[Dict[str, str]],
+        thinking_budget: Optional[int],
+    ) -> Tuple[Optional[str], int]:
+        """Resolve reasoning config to (effort_string, token_budget).
+
+        Priority: reasoning dict > thinking_budget (deprecated) > default.
+
+        Args:
+            reasoning: Optional dict with 'effort' key ('low'|'medium'|'high').
+            thinking_budget: Deprecated integer budget (kept for backward compat).
+
+        Returns:
+            Tuple of (effort_string_or_None, token_budget_int).
+
+        Raises:
+            TypeError: If reasoning is not a dict.
+            ValueError: If 'effort' key is missing or has an invalid value.
+        """
+        if reasoning is not None:
+            if not isinstance(reasoning, dict):
+                raise TypeError(
+                    f"reasoning must be a dict, e.g. {{'effort': 'medium'}}, "
+                    f"got {type(reasoning).__name__!r}"
+                )
+            effort = reasoning.get("effort")
+            if effort is None:
+                raise ValueError(
+                    "reasoning dict must contain 'effort' key; "
+                    f"valid efforts: {VALID_REASONING_EFFORTS}"
+                )
+            if effort not in VALID_REASONING_EFFORTS:
+                raise ValueError(
+                    f"reasoning effort must be one of {VALID_REASONING_EFFORTS}, "
+                    f"got {effort!r}"
+                )
+            return effort, REASONING_EFFORT_TOKEN_MAP[effort]
+
+        if thinking_budget is not None:
+            warnings.warn(_THINKING_BUDGET_DEPRECATION_MSG, DeprecationWarning, stacklevel=4)
+            return None, thinking_budget
+
+        # Default: medium effort
+        return DEFAULT_REASONING_EFFORT, REASONING_EFFORT_TOKEN_MAP[DEFAULT_REASONING_EFFORT]
+
     def thinking_completion(
         self,
         messages: List[Dict[str, Any]],
         temperature: float = 0.7,
         max_tokens: int = DEFAULT_MAX_TOKENS,
         thinking_budget: Optional[int] = None,
+        reasoning: Optional[Dict[str, str]] = None,
         timeout: int = DEFAULT_LLM_TIMEOUT,
         response_format: Optional[Dict[str, Any]] = None,
         model: Optional[str] = None,
@@ -50,16 +100,12 @@ class ThinkingClient:
         """Generate a chat completion with extended thinking support.
 
         Args:
+            reasoning: Optional dict e.g. {'effort': 'medium'} (OPP-21).
+                       Takes precedence over thinking_budget when both are given.
+            thinking_budget: Deprecated integer token budget. Use reasoning instead.
             _chat_fn: Injectable chat_completion callable (used by Facade).
         """
-        if thinking_budget is not None:
-            warnings.warn(
-                _THINKING_BUDGET_DEPRECATION_MSG,
-                DeprecationWarning,
-                stacklevel=3,
-            )
-
-        budget = thinking_budget if thinking_budget is not None else DEFAULT_THINKING_BUDGET_TOKENS
+        effort, budget = self._resolve_reasoning(reasoning, thinking_budget)
 
         if budget < MIN_THINKING_BUDGET_TOKENS or budget > MAX_THINKING_BUDGET_TOKENS:
             raise ValueError(
@@ -78,7 +124,7 @@ class ThinkingClient:
 
             _chat_fn = ChatClient(self._transport).chat_completion
 
-        response = _chat_fn(
+        kwargs: Dict[str, Any] = dict(
             messages=messages,
             temperature=temperature,
             max_tokens=effective_max_tokens,
@@ -86,6 +132,10 @@ class ThinkingClient:
             response_format=response_format,
             model=model,
         )
+        if effort is not None:
+            kwargs["reasoning"] = {"effort": effort}
+
+        response = _chat_fn(**kwargs)
 
         assistant_text: str = ""
         try:
@@ -108,6 +158,7 @@ class ThinkingClient:
         temperature: float = 0.7,
         max_tokens: int = DEFAULT_MAX_TOKENS,
         thinking_budget: Optional[int] = None,
+        reasoning: Optional[Dict[str, str]] = None,
         timeout: float = STREAM_READ_TIMEOUT,
         response_format: Optional[Dict[str, Any]] = None,
         model: Optional[str] = None,
@@ -117,16 +168,12 @@ class ThinkingClient:
         """Stream a chat completion for a thinking-capable model.
 
         Args:
+            reasoning: Optional dict e.g. {'effort': 'medium'} (OPP-21).
+                       Takes precedence over thinking_budget when both are given.
+            thinking_budget: Deprecated integer token budget. Use reasoning instead.
             _stream_fn: Injectable stream_chat_completion callable (used by Facade).
         """
-        if thinking_budget is not None:
-            warnings.warn(
-                _THINKING_BUDGET_DEPRECATION_MSG,
-                DeprecationWarning,
-                stacklevel=3,
-            )
-
-        budget = thinking_budget if thinking_budget is not None else DEFAULT_THINKING_BUDGET_TOKENS
+        effort, budget = self._resolve_reasoning(reasoning, thinking_budget)
 
         if budget < MIN_THINKING_BUDGET_TOKENS or budget > MAX_THINKING_BUDGET_TOKENS:
             raise ValueError(
@@ -141,7 +188,7 @@ class ThinkingClient:
 
             _stream_fn = StreamingClient(self._transport).stream_chat_completion
 
-        yield from _stream_fn(
+        stream_kwargs: Dict[str, Any] = dict(
             messages=messages,
             temperature=temperature,
             max_tokens=effective_max_tokens,
@@ -149,6 +196,10 @@ class ThinkingClient:
             response_format=response_format,
             model=model,
         )
+        if effort is not None:
+            stream_kwargs["reasoning"] = {"effort": effort}
+
+        yield from _stream_fn(**stream_kwargs)
 
     @staticmethod
     def is_thinking_capable(model_id: str) -> bool:
