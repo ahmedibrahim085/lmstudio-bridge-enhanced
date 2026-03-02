@@ -814,7 +814,7 @@ Starting with v5.0.0, the bridge offers **Agent Profiles** as a higher-level alt
 | Manual `model=` parameter | One-off tasks, quick experiments |
 | Agent Profiles | Repeatable workflows, team setups, role-based routing |
 
-**Agent Profile tools**: `create_agent`, `list_agents`, `remove_agent`, `send_to_agent`, `list_roles`
+**Agent Profile tools**: `create_agent`, `list_agents`, `remove_agent`, `list_roles`, `create_role`
 
 See the [API Reference](API_REFERENCE.md) for full agent profile tool documentation.
 

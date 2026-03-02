@@ -606,13 +606,13 @@ Available models: mistralai/magistral-small-2509, deepseek/deepseek-coder-33b
 **Symptoms**: Task uses default model instead of specified model
 
 **Causes**:
-1. Using old version of lmstudio-bridge-enhanced (< v5.0.0) (< v5.0.0)
+1. Using old version of lmstudio-bridge-enhanced (< v5.0.0)
 2. Model parameter not specified correctly
 3. Positional argument instead of named parameter
 
 **Solutions**:
 
-1. **Update to v2.0.0+**:
+1. **Update to v5.0.0+**:
    ```bash
    cd lmstudio-bridge-enhanced
    git pull

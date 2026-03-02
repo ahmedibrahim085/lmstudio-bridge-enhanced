@@ -1,6 +1,6 @@
 # LM Studio Bridge Enhanced — OPP Roadmap
 
-> Updated: 2026-03-02 | LM Studio target: 0.4.4+ | Baseline: ~1966 tests passing, 91% coverage
+> Updated: 2026-03-02 | LM Studio target: 0.4.4+ | Baseline: ~1969 tests passing, 91% coverage
 
 ---
 
