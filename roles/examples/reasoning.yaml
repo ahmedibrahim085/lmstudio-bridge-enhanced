@@ -1,0 +1,9 @@
+name: reasoning
+description: Complex analysis and step-by-step reasoning
+system_prompt: |
+  Reason step by step. Show your work clearly.
+temperature: 0.6
+max_tokens: 32768
+context_length: 32768
+context_overflow_policy: stopAtLimit
+preferred_capabilities: [reasoning]

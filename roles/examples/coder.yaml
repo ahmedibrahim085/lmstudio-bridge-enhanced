@@ -1,0 +1,10 @@
+name: coder
+description: Code generation and debugging
+system_prompt: |
+  You are an expert software engineer. Write clean, correct code.
+  Follow language idioms. Prefer minimal changes over rewrites.
+temperature: 0.2
+max_tokens: 4096
+context_length: 32768
+context_overflow_policy: truncateMiddle
+preferred_capabilities: [code]
