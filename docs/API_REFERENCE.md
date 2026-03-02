@@ -6,17 +6,20 @@ Complete reference for all tools provided by LM Studio Bridge Enhanced.
 
 ## Tool Categories
 
-- **[Core LM Studio Tools](#core-lm-studio-tools)** (7 tools) - Direct LM Studio HTTP API access
-- **[LMS CLI Tools](#lms-cli-tools-optional)** (5 tools) - Advanced model management (optional)
-- **[Dynamic Autonomous Tools](#dynamic-autonomous-tools)** (4 tools) - Dynamic MCP integration
+- **[Core Completions & Health](#core-lm-studio-tools)** (11 tools) - Chat, text, responses, Anthropic, embeddings, health, vision schema
+- **[Vision Tools](#vision-tools)** (6 tools) - Image analysis, comparison, OCR, object ID
+- **[Dynamic Autonomous Tools](#dynamic-autonomous-tools)** (5 tools) - Dynamic MCP integration + image autonomy
+- **[Agent Profile Tools](#agent-profile-tools)** (5 tools) - Role-based model routing (v5.0.0)
+- **[Smart Model Selection](#smart-model-selection)** (1 tool) - Capability-based model picking
+- **[LMS CLI Tools](#lms-cli-tools-optional)** (9 tools) - Advanced model management (optional)
 
-**Total**: 16 tools (11 core + 5 optional LMS CLI)
+**Total**: 37 tools (28 core + 9 optional LMS CLI)
 
 ---
 
 ## Core LM Studio Tools
 
-Direct access to LM Studio API functions.
+Direct access to LM Studio API functions. Includes completions (chat, text, responses, Anthropic), embeddings, health checks, and structured output validation.
 
 ### 1. health_check
 
@@ -85,6 +88,11 @@ Generate a chat completion from the current LM Studio model.
 - `system_prompt` (str, optional): System instructions (default: "")
 - `temperature` (float, optional): Randomness (0.0-1.0, default: 0.7)
 - `max_tokens` (int, optional): Max tokens to generate (default: 1024)
+- `model` (str, optional): Specific model to use
+- `reasoning_effort` (str, optional): Reasoning depth — "low", "medium", or "high" (v5.0.0)
+- `logprobs` (bool, optional): Return log-probabilities (v5.0.0)
+- `top_logprobs` (int, optional): Number of top log-probs per token, 1-20 (v5.0.0)
+- `api_key` (str, optional): API authentication key (v5.0.0)
 
 **Returns**: `str` - Model's response
 
@@ -186,6 +194,133 @@ generate_embeddings([
 ```
 
 **Use case**: RAG systems, semantic search, text similarity, clustering.
+
+---
+
+## Vision Tools
+
+Image analysis tools powered by vision-capable models in LM Studio.
+
+### 1. analyze_image
+
+Analyze an image with a custom prompt.
+
+**Parameters**:
+- `image_source` (str, required): URL or local file path to image
+- `prompt` (str, optional): Analysis prompt (default: "Describe this image")
+- `model` (str, optional): Vision model to use
+- `max_tokens` (int, optional): Max response tokens (default: 1024)
+
+### 2. describe_image
+
+Get a natural language description of an image.
+
+**Parameters**:
+- `image_source` (str, required): URL or local file path
+- `detail_level` (str, optional): "brief" | "detailed" (default: "detailed")
+
+### 3. compare_images
+
+Compare two images and describe differences.
+
+**Parameters**:
+- `image_source_1` (str, required): First image URL/path
+- `image_source_2` (str, required): Second image URL/path
+- `comparison_prompt` (str, optional): What to compare
+
+### 4. extract_text_from_image
+
+OCR - extract text content from an image.
+
+**Parameters**:
+- `image_source` (str, required): URL or local file path
+
+### 5. identify_objects
+
+Identify and list objects in an image.
+
+**Parameters**:
+- `image_source` (str, required): URL or local file path
+
+### 6. answer_about_image
+
+Answer a specific question about an image.
+
+**Parameters**:
+- `image_source` (str, required): URL or local file path
+- `question` (str, required): Question to answer about the image
+
+---
+
+## Agent Profile Tools (v5.0.0)
+
+Role-based model routing with auto-tuned parameters. Define named agent slots that map roles to models with optimized configuration.
+
+### 1. create_agent
+
+Create a named agent profile with a model assignment and role.
+
+**Parameters**:
+- `name` (str, required): Agent name (e.g., "coder", "reviewer")
+- `model` (str, required): Model to assign (e.g., "qwen/qwen3-coder-30b")
+- `role` (str, optional): Role template (e.g., "coding", "analysis", "general")
+- `system_prompt` (str, optional): Custom system prompt override
+- `temperature` (float, optional): Override temperature
+- `max_tokens` (int, optional): Override max tokens
+
+### 2. list_agents
+
+List all configured agent profiles.
+
+**Parameters**: None
+
+**Returns**: `str` - Formatted list of agents with their model assignments and roles.
+
+### 3. remove_agent
+
+Remove an agent profile by name.
+
+**Parameters**:
+- `name` (str, required): Agent name to remove
+
+### 4. list_roles
+
+List available role templates.
+
+**Parameters**: None
+
+**Returns**: `str` - Available roles with descriptions and default parameters.
+
+### 5. create_role
+
+Create a custom role template.
+
+**Parameters**:
+- `name` (str, required): Role name
+- `description` (str, required): What this role is for
+- `system_prompt` (str, optional): Default system prompt for this role
+- `temperature` (float, optional): Default temperature
+- `max_tokens` (int, optional): Default max tokens
+
+---
+
+## Smart Model Selection
+
+### 1. select_best_model
+
+Select the best available model for a given task based on capabilities and requirements.
+
+**Parameters**:
+- `task_type` (str, required): Type of task ("coding", "reasoning", "general", "vision", "embedding")
+- `requirements` (dict, optional): Specific requirements (context length, etc.)
+
+**Returns**: `dict` - Selected model with confidence score and reasoning.
+
+**Example**:
+```python
+select_best_model(task_type="coding")
+# Returns: {"model": "qwen/qwen3-coder-30b", "confidence": 0.92, "reason": "Best coding capability match"}
+```
 
 ---
 
@@ -404,7 +539,50 @@ if result["success"]:
 
 ---
 
-### 5. lms_server_status
+### 5. lms_search_models
+
+Search for models available to download from LM Studio's model repository.
+
+**Parameters**:
+- `query` (str, required): Search query (e.g., "qwen coder", "llama 70b")
+
+**Returns**: `dict` - Search results with model names, sizes, and descriptions.
+
+---
+
+### 6. lms_download_model
+
+Download a model from LM Studio's model repository.
+
+**Parameters**:
+- `model_name` (str, required): Model identifier to download (e.g., "qwen/qwen3-coder-30b")
+
+**Returns**: `dict` - Download status and progress.
+
+---
+
+### 7. lms_list_downloaded_models
+
+List all models downloaded locally (not just loaded).
+
+**Parameters**: None
+
+**Returns**: `dict` - List of all downloaded models with sizes and paths.
+
+---
+
+### 8. lms_resolve_model
+
+Resolve a partial model name to a full model identifier.
+
+**Parameters**:
+- `query` (str, required): Partial model name (e.g., "qwen coder")
+
+**Returns**: `dict` - Resolved model identifier.
+
+---
+
+### 9. lms_server_status
 
 Get LM Studio server status and diagnostics.
 
@@ -623,7 +801,32 @@ autonomous_discover_and_execute(
 
 ---
 
-### 4. list_available_mcps
+### 4. autonomous_with_images
+
+Execute autonomous task with image inputs alongside MCP tools.
+
+**Parameters**:
+- `mcp_name` (str, required): Name of MCP to use
+- `task` (str, required): Task description
+- `image_sources` (list[str], required): List of image URLs or file paths
+- `max_rounds` (int, optional): Max iterations (default: 10000)
+- `model` (str, optional): Vision-capable model to use
+
+**Returns**: `str` - Final answer from local LLM
+
+**Example**:
+```python
+autonomous_with_images(
+    mcp_name="filesystem",
+    task="Analyze these screenshots and create a summary document",
+    image_sources=["screenshot1.png", "screenshot2.png"],
+    model="llava/llava-1.6-mistral-7b"
+)
+```
+
+---
+
+### 5. list_available_mcps
 
 List all MCPs discovered from `.mcp.json`.
 

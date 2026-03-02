@@ -1,6 +1,6 @@
 # Multi-Model Support Guide
 
-**LM Studio Bridge Enhanced v2 - Multi-Model Feature**
+**LM Studio Bridge Enhanced v5 - Multi-Model Feature**
 
 Use different models for different tasks to maximize quality and performance.
 
@@ -594,7 +594,7 @@ model="qwen/qwen3-coder-30b"  # Must match exactly
 
 **Solutions**:
 
-**Solution 1**: Update to v2.0.0+
+**Solution 1**: Update to v5.0.0+
 ```bash
 cd lmstudio-bridge-enhanced
 git pull
@@ -800,6 +800,23 @@ docs = autonomous_with_mcp(
     4. README section"""
 )
 ```
+
+---
+
+## Agent Profiles (v5.0.0)
+
+Starting with v5.0.0, the bridge offers **Agent Profiles** as a higher-level alternative to manual model selection. Agent profiles let you define named roles (e.g., "coder", "reviewer", "tester") and assign models to them with auto-tuned parameters.
+
+**When to use Agent Profiles vs Manual Model Selection**:
+
+| Approach | Best For |
+|----------|----------|
+| Manual `model=` parameter | One-off tasks, quick experiments |
+| Agent Profiles | Repeatable workflows, team setups, role-based routing |
+
+**Agent Profile tools**: `create_agent`, `list_agents`, `remove_agent`, `send_to_agent`, `list_roles`
+
+See the [API Reference](API_REFERENCE.md) for full agent profile tool documentation.
 
 ---
 

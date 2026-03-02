@@ -1,6 +1,6 @@
 # LM Studio Bridge Enhanced — OPP Roadmap
 
-> Updated: 2026-03-01 | LM Studio target: 0.4.4+ | Baseline: ~1684 tests passing, 91% coverage
+> Updated: 2026-03-02 | LM Studio target: 0.4.4+ | Baseline: ~1966 tests passing, 91% coverage
 
 ---
 
@@ -106,18 +106,18 @@ Changes from original:
 | — | OPP-17 | Dual-Format Autonomous | 7 | 6 | 1.0 | 3 | 14 | C | DONE |
 | — | OPP-09 | Multi-Modal Loops | 6 | 6 | 1.0 | 3 | 12 | C | DONE |
 | — | OPP-15 | Conversation Branching | 5 | 5 | **0.8** | 5 | **4** | C | DONE |
-| 1 | OPP-19 | Native Chat API (`/api/v1/chat`) | 8 | 10 | 0.8 | 4 | **16** | F | PROPOSED |
+| — | OPP-19 | Native Chat API (`/api/v1/chat`) | 8 | 10 | 0.8 | 4 | **16** | v5-C | DONE |
 | — | OPP-22 | Single-Model Lookup | 8 | 7 | 1.0 | 1 | **56** | D | DONE |
 | — | OPP-23 | Streaming Usage Tracking | 7 | 7 | 0.9 | 1 | **44.1** | D | DONE |
 | — | OPP-26 | Advanced Sampling (min_p, top_k) | 4 | 5 | 1.0 | 1 | **20** | D | DONE |
 | — | OPP-30 | Echo Load Config | 4 | 5 | 0.9 | 1 | **18** | D | DONE |
-| 6 | OPP-21 | Native Reasoning Parameter | 9 | 8 | 0.9 | 1 | **64.8** | v5-B | PROPOSED |
-| 7 | OPP-27 | Advanced Model Load Params | 5 | 6 | 0.9 | 1 | **27** | v5-B | PROPOSED |
-| 8 | OPP-29 | Log-Probabilities | 5 | 6 | 0.8 | 1 | **24** | v5-B | PROPOSED |
-| 9 | OPP-28 | API Authentication | 4 | 6 | 0.8 | 1 | **19.2** | v5-B | PROPOSED |
-| 10 | OPP-24 | Model Auto-Download (REST) | 6 | 7 | 0.8 | 2 | **16.8** | v5-B | PROPOSED |
-| 11 | OPP-25 | Ephemeral MCP Servers | 5 | 9 | 0.7 | 4 | **7.9** | v5-C | PROPOSED |
-| 5 | OPP-31 | Model Profiles | 9 | 9 | 0.9 | 3 | **24.3** | v5-B | PROPOSED |
+| — | OPP-21 | Native Reasoning Parameter | 9 | 8 | 0.9 | 1 | **64.8** | v5-B | DONE |
+| — | OPP-27 | Advanced Model Load Params | 5 | 6 | 0.9 | 1 | **27** | v5-B | DONE |
+| — | OPP-29 | Log-Probabilities | 5 | 6 | 0.8 | 1 | **24** | v5-B | DONE |
+| — | OPP-28 | API Authentication | 4 | 6 | 0.8 | 1 | **19.2** | v5-B | DONE |
+| — | OPP-24 | Model Auto-Download (REST) | 6 | 7 | 0.8 | 2 | **16.8** | v5-B | DONE |
+| — | OPP-25 | Ephemeral MCP Servers | 5 | 9 | 0.7 | 4 | **7.9** | v5-C | DONE |
+| — | OPP-31 | Model Profiles | 9 | 9 | 0.9 | 3 | **24.3** | v5-B | DONE |
 
 **Completed round totals**:
 - Round A (Phases 2+3 parallel): **309.6** — 6 OPPs — **DONE**
@@ -302,15 +302,10 @@ v5.0.0 Phase C ────┐
 | Error Audit | 10 bug fixes | — | ~50 |
 | Code Quality Audit | 12 findings fixed | — | ~75 |
 | Round D (Quick Wins) | OPP-22, 23, 26, 30 | 138.1 | ~90 |
-| **TOTAL DONE** | **22 OPPs + 22 fixes** | **776.1** | **~590** |
+| Round D (Quick Wins) through v4.0.0 subtotal | **22 OPPs + 22 fixes** | **776.1** | **~590** |
+| v5.0.0 Phase A (Architecture) | ARCH-1..5 | — | ~30 |
+| v5.0.0 Phase B (Features) | OPP-21, 24, 27, 28, 29, 31 | 176.1 | ~100 |
+| v5.0.0 Phase C (Major) | OPP-19, 25 | 23.9 | ~60 |
+| **GRAND TOTAL** | **30 OPPs + 5 ARCH + 22 fixes** | **976.1** | **~780** |
 
-Final completed state: ~1684 tests, 91% coverage, VERSION 4.0.0.
-
-**Proposed totals**:
-
-| Round | OPPs | RICE Total |
-|-------|------|-----------|
-| v5.0.0 Phase A (Architecture) | ARCH-1..5 | — |
-| v5.0.0 Phase B (Features) | OPP-21, 24, 27, 28, 29 | 151.8 |
-| v5.0.0 Phase C (Major) | OPP-19, 25 | 23.9 |
-| **TOTAL PROPOSED** | **7 OPPs + 5 ARCH** | **175.7** |
+Final completed state: ~1969 tests, 91% coverage, VERSION 5.0.0.
