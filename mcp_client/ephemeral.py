@@ -7,7 +7,7 @@ data structures and utilities for building that parameter.
 
 import logging
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Optional
 
 from config.constants import (
     INTEGRATION_TYPE_MCP,
@@ -36,7 +36,7 @@ class EphemeralIntegration:
 
     server_id: str
     type: str = INTEGRATION_TYPE_MCP
-    allowed_tools: Optional[Tuple[str, ...]] = None
+    allowed_tools: Optional[tuple[str, ...]] = None
 
 
 def validate_integration(integration: EphemeralIntegration) -> None:
@@ -60,8 +60,8 @@ def validate_integration(integration: EphemeralIntegration) -> None:
 
 
 def build_integrations_payload(
-    integrations: List[EphemeralIntegration],
-) -> List[Dict[str, Any]]:
+    integrations: list[EphemeralIntegration],
+) -> list[dict[str, Any]]:
     """Convert EphemeralIntegration objects to the API payload format.
 
     Validates each integration, deduplicates by server_id (last wins),
@@ -90,14 +90,14 @@ def build_integrations_payload(
         validate_integration(integration)
 
     # Deduplicate by server_id (last wins)
-    seen: Dict[str, EphemeralIntegration] = {}
+    seen: dict[str, EphemeralIntegration] = {}
     for integration in integrations:
         seen[integration.server_id] = integration
 
     # Build payload
-    result: List[Dict[str, Any]] = []
+    result: list[dict[str, Any]] = []
     for integration in seen.values():
-        entry: Dict[str, Any] = {
+        entry: dict[str, Any] = {
             "type": integration.type,
             "id": integration.server_id,
         }

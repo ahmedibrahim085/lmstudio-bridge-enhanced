@@ -5,7 +5,8 @@ parse_native_sse_stream().
 """
 
 import logging
-from typing import Any, Dict, Generator, List, Optional
+from collections.abc import Generator
+from typing import Any, Optional
 
 from config.constants import (
     DEFAULT_MAX_TOKENS,
@@ -46,13 +47,13 @@ class NativeChatClient:
 
     def native_chat(
         self,
-        messages: List[Dict[str, Any]],
+        messages: list[dict[str, Any]],
         model: Optional[str] = None,
         temperature: float = 0.7,
         max_tokens: int = DEFAULT_MAX_TOKENS,
         stream: bool = True,
         timeout: float = STREAM_READ_TIMEOUT,
-        integrations: Optional[List[EphemeralIntegration]] = None,
+        integrations: Optional[list[EphemeralIntegration]] = None,
     ) -> Generator[NativeSSEEvent, None, None]:
         """Stream a native chat via /api/v1/chat.
 
@@ -77,7 +78,7 @@ class NativeChatClient:
         target_model = model if model is not None else self._transport.model
         self._ensure_model_loaded(target_model, ttl=JIT_TTL_DEFAULT)
 
-        payload: Dict[str, Any] = {
+        payload: dict[str, Any] = {
             "messages": messages,
             "model": target_model,
             "temperature": temperature,
