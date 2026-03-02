@@ -13,6 +13,7 @@ from config.constants import (
     JIT_TTL_DEFAULT,
     NATIVE_CHAT_ENDPOINT,
     STREAM_READ_TIMEOUT,
+    is_model_sentinel,
 )
 from llm.http_transport import HTTPTransport, handle_request_exception
 from llm.jit_loader import ensure_model_loaded
@@ -80,11 +81,12 @@ class NativeChatClient:
 
         payload: dict[str, Any] = {
             "messages": messages,
-            "model": target_model,
             "temperature": temperature,
             "max_tokens": max_tokens,
             "stream": stream,
         }
+        if not is_model_sentinel(target_model):
+            payload["model"] = target_model
 
         if integrations:
             payload["integrations"] = build_integrations_payload(integrations)
