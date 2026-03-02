@@ -74,7 +74,7 @@ class ChatClient:
             "temperature": temperature,
             "max_tokens": max_tokens,
         }
-        if target_model and target_model != "default":
+        if not is_model_sentinel(target_model):
             payload["model"] = target_model
         if tools:
             payload["tools"] = tools

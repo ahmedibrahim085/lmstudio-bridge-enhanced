@@ -11,6 +11,7 @@ from config.constants import (
     DEFAULT_MAX_RETRIES,
     DEFAULT_RETRY_BASE_DELAY,
     JIT_TTL_DEFAULT,
+    is_model_sentinel,
 )
 from llm.exceptions import LLMResponseError, LLMTimeoutError
 from llm.http_transport import HTTPTransport, handle_request_exception
@@ -56,7 +57,7 @@ class AnthropicClient:
             "max_tokens": max_tokens,
             "temperature": temperature,
         }
-        if target_model and target_model != "default":
+        if not is_model_sentinel(target_model):
             payload["model"] = target_model
         if system:
             payload["system"] = system

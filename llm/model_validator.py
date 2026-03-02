@@ -18,6 +18,7 @@ import httpx
 from config import get_config
 from config.constants import (
     DEFAULT_MAX_RETRIES,
+    DEFAULT_MODEL_KEYWORD,
     DEFAULT_RETRY_BASE_DELAY,
     MODEL_LIST_TIMEOUT,
     MODELS_FETCH_CACHE_TTL,
@@ -194,7 +195,7 @@ class ModelValidator:
             ModelNotFoundError: Model 'nonexistent-model' not found. Available: ...
         """
         # None or "default" means use default model (always valid)
-        if model_name is None or model_name == "default":
+        if model_name is None or model_name == DEFAULT_MODEL_KEYWORD:
             logger.debug("Model name is None or 'default', using default model")
             return True
 

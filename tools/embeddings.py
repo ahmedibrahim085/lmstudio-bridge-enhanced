@@ -7,6 +7,7 @@ import json
 import logging
 from typing import List, Optional, Union
 
+from config.constants import is_model_sentinel
 from llm.llm_client import LLMClient
 
 logger = logging.getLogger(__name__)
@@ -43,7 +44,7 @@ class EmbeddingsTools:
         try:
             response = self.llm.generate_embeddings(
                 text=text,
-                model=model if model != "default" else None
+                model=model if not is_model_sentinel(model) else None
             )
 
             # Return as JSON string

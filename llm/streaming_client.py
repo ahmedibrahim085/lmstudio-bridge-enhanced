@@ -55,7 +55,7 @@ class StreamingClient:
             "max_tokens": max_tokens,
             "stream": True,
         }
-        if target_model and target_model != "default":
+        if not is_model_sentinel(target_model):
             payload["model"] = target_model
         if tools:
             payload["tools"] = tools
@@ -166,7 +166,7 @@ class StreamingClient:
             "temperature": temperature,
             "stream": True,
         }
-        if target_model and target_model != "default":
+        if not is_model_sentinel(target_model):
             payload["model"] = target_model
         if system:
             payload["system"] = system

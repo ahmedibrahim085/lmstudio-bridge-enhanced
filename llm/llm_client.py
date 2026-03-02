@@ -20,6 +20,7 @@ from config.constants import (
     HEALTH_CHECK_TIMEOUT,
     JIT_TTL_EMBEDDING,
     STREAM_READ_TIMEOUT,
+    is_model_sentinel,
 )
 from llm.anthropic_client import AnthropicClient
 from llm.chat_client import ChatClient
@@ -288,15 +289,15 @@ class LLMClient:
         timeout: int = DEFAULT_LLM_TIMEOUT,
     ) -> Dict[str, Any]:
         """Generate vector embeddings for text."""
-        target_model = model if model and model != "default" else self._transport.model
+        target_model = model if not is_model_sentinel(model) else self._transport.model
         resolved_ttl = ttl if ttl is not None else JIT_TTL_EMBEDDING
 
         self._ensure_model_loaded(target_model, ttl=resolved_ttl, label="Embedding model")
 
         payload: Dict[str, Any] = {"input": text}
-        if model and model != "default":
+        if not is_model_sentinel(model):
             payload["model"] = model
-        elif self._transport.model and self._transport.model != "default":
+        elif not is_model_sentinel(self._transport.model):
             payload["model"] = self._transport.model
         payload["ttl"] = resolved_ttl
 
@@ -616,7 +617,7 @@ class LLMClient:
             "temperature": temperature,
             "max_tokens": max_tokens,
         }
-        if target_model and target_model != "default":
+        if not is_model_sentinel(target_model):
             payload["model"] = target_model
         if min_p is not None:
             payload["min_p"] = min_p
