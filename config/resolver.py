@@ -103,21 +103,20 @@ class DynamicResolver:
         # 1. Look up role template (raises KeyError if unknown)
         role = self._registry.get(role_name)
 
-        # 2. Resolve model
+        # 2. Infer task type (used for both auto-resolve and overlay lookup)
+        task_type = infer_task_type(role)
+
+        # 3. Resolve model
         if model_id is None:
             if self._selector is None:
                 raise ValueError(
                     "Cannot auto-resolve model: no model_selector configured. "
                     "Provide an explicit model_id or configure a SmartModelSelector."
                 )
-            task_type = infer_task_type(role)
             model_id = self._selector.select(task_type)
 
-        # 3. Detect family
+        # 4. Detect family
         family = detect_family(model_id)
-
-        # 4. Infer task type for knowledge base lookup
-        task_type = infer_task_type(role)
 
         # 5. Layer config: role defaults → family overlay → user overrides → constraints
         temperature = role.temperature

@@ -46,7 +46,7 @@ class RoleTemplate:
 
 def _parse_role_yaml(path: Path) -> RoleTemplate:
     """Parse a single YAML file into a RoleTemplate."""
-    with open(path, "r") as f:
+    with open(path, "r", encoding="utf-8") as f:
         data = yaml.safe_load(f)
 
     if not isinstance(data, dict):
