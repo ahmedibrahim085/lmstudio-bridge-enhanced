@@ -63,6 +63,7 @@ class LMSRestClient:
     def __init__(self, base_url=None):
         from config.constants import (  # noqa: PLC0415
             DEFAULT_LMSTUDIO_BASE_URL,
+            LMS_DOWNLOAD_MODEL_ENDPOINT,
             LMS_LOAD_MODEL_ENDPOINT,
             LMS_REST_DEFAULT_TIMEOUT,
             LMS_REST_LOAD_TIMEOUT,
@@ -73,6 +74,7 @@ class LMSRestClient:
         self._models_endpoint = NATIVE_MODELS_ENDPOINT
         self._load_endpoint = LMS_LOAD_MODEL_ENDPOINT
         self._unload_endpoint = LMS_UNLOAD_MODEL_ENDPOINT
+        self._download_endpoint = LMS_DOWNLOAD_MODEL_ENDPOINT
         self._load_timeout = LMS_REST_LOAD_TIMEOUT
         self._default_timeout = LMS_REST_DEFAULT_TIMEOUT
         self._client: "httpx.Client | None" = None
@@ -271,6 +273,86 @@ class LMSRestClient:
         except Exception as e:
             logger.error(f"Failed to unload model: {e}")
             return False
+
+    def download_model(self, model_key: str) -> dict:
+        """Download a model via REST API.
+
+        POST to the download endpoint. Returns structured dict.
+        """
+        if not model_key or not model_key.strip():
+            raise ValueError("model_key cannot be empty")
+
+        try:
+            response = self._get_client().post(
+                f"{self.base_url}{self._download_endpoint}",
+                json={"model": model_key},
+                timeout=self._default_timeout,
+            )
+
+            if response.status_code == 200:
+                data = response.json()
+                result = {
+                    "success": True,
+                    "model": model_key,
+                    "message": f"Download started for '{model_key}'",
+                }
+                if data.get("already_exists"):
+                    result["already_exists"] = True
+                    result["message"] = f"Model '{model_key}' already downloaded"
+                return result
+            elif response.status_code == 409:
+                return {
+                    "success": False,
+                    "model": model_key,
+                    "message": response.text or "Download conflict",
+                    "conflict": True,
+                }
+            else:
+                return {
+                    "success": False,
+                    "model": model_key,
+                    "message": response.text or f"HTTP {response.status_code}",
+                }
+        except Exception as e:
+            return {
+                "success": False,
+                "model": model_key,
+                "message": str(e),
+            }
+
+    def get_download_status(self, model_key: str) -> dict:
+        """Get download progress via REST API.
+
+        GET to the download status endpoint. Returns structured dict.
+        """
+        try:
+            response = self._get_client().get(
+                f"{self.base_url}{self._download_endpoint}/status",
+                params={"model": model_key},
+                timeout=self._default_timeout,
+            )
+
+            if response.status_code == 200:
+                data = response.json()
+                return {
+                    "success": True,
+                    "model": model_key,
+                    "progress": data.get("progress"),
+                    "status": data.get("status"),
+                    "message": f"Download status for '{model_key}'",
+                }
+            else:
+                return {
+                    "success": False,
+                    "model": model_key,
+                    "message": response.text or f"HTTP {response.status_code}",
+                }
+        except Exception as e:
+            return {
+                "success": False,
+                "model": model_key,
+                "message": str(e),
+            }
 
 
 class LMSHelper:
