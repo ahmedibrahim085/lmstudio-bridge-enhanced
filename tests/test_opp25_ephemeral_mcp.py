@@ -182,3 +182,16 @@ def test_ephemeral_integration_is_frozen():
     integration = EphemeralIntegration(server_id="immutable-server")
     with pytest.raises((AttributeError, TypeError)):
         integration.server_id = "modified"  # type: ignore[misc]
+
+
+@pytest.mark.unit
+def test_build_exceeds_max_integrations_raises():
+    """Boundary: more than MAX_INTEGRATIONS_PER_REQUEST raises ValueError."""
+    from config.constants import MAX_INTEGRATIONS_PER_REQUEST
+
+    integrations = [
+        EphemeralIntegration(server_id=f"server-{i}")
+        for i in range(MAX_INTEGRATIONS_PER_REQUEST + 1)
+    ]
+    with pytest.raises(ValueError, match="Too many integrations"):
+        build_integrations_payload(integrations)

@@ -118,7 +118,8 @@ def mock_transport(mock_session):
         {
             "model": "test-model",
             "session": mock_session,
-            "get_endpoint": lambda self, path: f"http://localhost:1234/{path.lstrip('/')}",
+            "api_base": "http://localhost:1234/v1",
+            "get_endpoint": lambda self, path: f"http://localhost:1234/v1/{path.lstrip('/')}",
         },
     )()
     return transport

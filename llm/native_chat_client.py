@@ -88,9 +88,12 @@ class NativeChatClient:
         if integrations:
             payload["integrations"] = build_integrations_payload(integrations)
 
+        base_url = self._transport.api_base.rsplit("/v1", 1)[0]
+        url = f"{base_url}{NATIVE_CHAT_ENDPOINT}"
+
         try:
             response = self._transport.session.post(
-                self._transport.get_endpoint(NATIVE_CHAT_ENDPOINT.lstrip("/")),
+                url,
                 json=payload,
                 stream=True,
                 timeout=timeout,
@@ -100,4 +103,7 @@ class NativeChatClient:
             handle_request_exception(e, "Native chat completion")
             return  # unreachable — handle_request_exception is NoReturn
 
-        yield from parse_native_sse_stream(response)
+        try:
+            yield from parse_native_sse_stream(response)
+        finally:
+            response.close()

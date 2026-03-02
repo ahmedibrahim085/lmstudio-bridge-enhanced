@@ -9,7 +9,11 @@ import logging
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 
-from config.constants import INTEGRATION_TYPE_MCP, SUPPORTED_INTEGRATION_TYPES
+from config.constants import (
+    INTEGRATION_TYPE_MCP,
+    MAX_INTEGRATIONS_PER_REQUEST,
+    SUPPORTED_INTEGRATION_TYPES,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -74,6 +78,12 @@ def build_integrations_payload(
     """
     if not integrations:
         return []
+
+    if len(integrations) > MAX_INTEGRATIONS_PER_REQUEST:
+        raise ValueError(
+            f"Too many integrations: {len(integrations)} exceeds "
+            f"maximum of {MAX_INTEGRATIONS_PER_REQUEST}"
+        )
 
     # Validate all first
     for integration in integrations:

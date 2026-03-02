@@ -113,7 +113,8 @@ def mock_transport(mock_session):
         {
             "model": "test-model",
             "session": mock_session,
-            "get_endpoint": lambda self, path: f"http://localhost:1234/{path.lstrip('/')}",
+            "api_base": "http://localhost:1234/v1",
+            "get_endpoint": lambda self, path: f"http://localhost:1234/v1/{path.lstrip('/')}",
         },
     )()
     return transport
@@ -174,9 +175,12 @@ class TestNativeChatClientHappy:
         list(client.native_chat(messages=[{"role": "user", "content": "hi"}]))
 
         captured_url = mock_session.captured.get("url", "")
-        assert NATIVE_CHAT_ENDPOINT.lstrip("/") in captured_url, (
+        assert NATIVE_CHAT_ENDPOINT in captured_url, (
             f"Expected NATIVE_CHAT_ENDPOINT path '{NATIVE_CHAT_ENDPOINT}' "
             f"in URL, got: {captured_url!r}"
+        )
+        assert "/v1/api/v1/chat" not in captured_url, (
+            f"URL must not double-prefix with /v1: got {captured_url!r}"
         )
 
     @pytest.mark.unit
