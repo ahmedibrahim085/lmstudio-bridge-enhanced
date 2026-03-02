@@ -9,8 +9,10 @@ from config.constants import (
     DEFAULT_ANTHROPIC_API_VERSION,
     DEFAULT_ANTHROPIC_MAX_TOKENS,
     DEFAULT_MAX_TOKENS,
+    DEFAULT_MODEL_KEYWORD,
     JIT_TTL_DEFAULT,
     STREAM_READ_TIMEOUT,
+    is_model_sentinel,
 )
 from llm.format_adapter import FormatAdapter
 from llm.http_transport import HTTPTransport, handle_request_exception
@@ -96,7 +98,7 @@ class StreamingClient:
         """Stream a stateful response via SSE."""
         model_to_use = (
             self._transport.model
-            if model == "default" or model is None
+            if model == DEFAULT_MODEL_KEYWORD or model is None
             else model
         )
         resolved_ttl = ttl if ttl is not None else JIT_TTL_DEFAULT
@@ -104,10 +106,11 @@ class StreamingClient:
 
         payload: Dict[str, Any] = {
             "input": input_text,
-            "model": model_to_use,
             "stream": True,
             "ttl": resolved_ttl,
         }
+        if not is_model_sentinel(model_to_use):
+            payload["model"] = model_to_use
         if max_tokens is not None:
             payload["max_tokens"] = max_tokens
         if previous_response_id:
