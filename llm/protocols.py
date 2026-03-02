@@ -146,7 +146,7 @@ class ThinkingProvider(Protocol):
         messages: List[Dict[str, Any]],
         temperature: float = 0.7,
         max_tokens: int = ...,
-        thinking_budget: Optional[int] = None,
+        reasoning: Optional[Dict[str, str]] = None,
         timeout: int = ...,
         response_format: Optional[Dict[str, Any]] = None,
         model: Optional[str] = None,
@@ -157,7 +157,7 @@ class ThinkingProvider(Protocol):
         messages: List[Dict[str, Any]],
         temperature: float = 0.7,
         max_tokens: int = ...,
-        thinking_budget: Optional[int] = None,
+        reasoning: Optional[Dict[str, str]] = None,
         timeout: float = ...,
         response_format: Optional[Dict[str, Any]] = None,
         model: Optional[str] = None,
@@ -167,6 +167,21 @@ class ThinkingProvider(Protocol):
     def is_thinking_capable(model_id: str) -> bool: ...
 
 
+@runtime_checkable
+class NativeChatProvider(Protocol):
+    """Contract for native /api/v1/chat streaming."""
+
+    def native_chat(
+        self,
+        messages: List[Dict[str, Any]],
+        model: Optional[str] = None,
+        temperature: float = 0.7,
+        max_tokens: int = ...,
+        stream: bool = True,
+        timeout: float = ...,
+    ) -> Generator[Any, None, None]: ...
+
+
 __all__ = [
     "ChatProvider",
     "ResponseProvider",
@@ -174,4 +189,5 @@ __all__ = [
     "StreamProvider",
     "ModelInfoProvider",
     "ThinkingProvider",
+    "NativeChatProvider",
 ]

@@ -22,6 +22,7 @@ from config.constants import (
 )
 from llm.anthropic_client import AnthropicClient
 from llm.chat_client import ChatClient
+from llm.native_chat_client import NativeChatClient
 from llm.exceptions import LLMResponseError
 from llm.format_adapter import FormatAdapter
 from llm.http_transport import HTTPTransport, handle_request_exception
@@ -31,6 +32,7 @@ from llm.protocols import (
     AnthropicProvider,
     ChatProvider,
     ModelInfoProvider,
+    NativeChatProvider,
     ResponseProvider,
     StreamProvider,
     ThinkingProvider,
@@ -88,6 +90,7 @@ class LLMClient:
         self._streaming: StreamProvider = StreamingClient(self._transport)
         self._thinking: ThinkingProvider = ThinkingClient(self._transport)
         self._model_info: ModelInfoProvider = ModelInfoClient(self._transport)
+        self._native_chat: NativeChatProvider = NativeChatClient(self._transport)
 
         # Native MCP support cache (OPP-16)
         self._native_mcp_supported: Optional[bool] = None
@@ -129,7 +132,7 @@ class LLMClient:
 
     _LAZY_ATTRS = frozenset({
         "_transport", "_chat", "_responses", "_anthropic",
-        "_streaming", "_thinking", "_model_info",
+        "_streaming", "_thinking", "_model_info", "_native_chat",
         "_native_mcp_supported", "_native_mcp_checked_at",
     })
 
@@ -164,6 +167,7 @@ class LLMClient:
         self._streaming = StreamingClient(transport)
         self._thinking = ThinkingClient(transport)
         self._model_info = ModelInfoClient(transport)
+        self._native_chat = NativeChatClient(transport)
         self._native_mcp_supported = None
         self._native_mcp_checked_at = 0.0
 
@@ -513,6 +517,44 @@ class LLMClient:
             timeout=timeout,
             min_p=min_p,
             top_k=top_k,
+        )
+
+    # ------------------------------------------------------------------
+    # Native Chat (OPP-19)
+    # ------------------------------------------------------------------
+
+    def native_chat(
+        self,
+        messages: List[Dict[str, Any]],
+        model: Optional[str] = None,
+        temperature: float = 0.7,
+        max_tokens: int = DEFAULT_MAX_TOKENS,
+        stream: bool = True,
+        timeout: float = STREAM_READ_TIMEOUT,
+    ) -> Generator[Any, None, None]:
+        """Stream a native chat via LM Studio /api/v1/chat.
+
+        Uses the native SSE format with 19 event types instead of
+        OpenAI-compat format. Returns NativeSSEEvent objects.
+
+        Args:
+            messages: Chat messages.
+            model: Model identifier. Uses default if None.
+            temperature: Sampling temperature.
+            max_tokens: Maximum output tokens.
+            stream: Always True for native streaming.
+            timeout: Request timeout.
+
+        Yields:
+            NativeSSEEvent for each server event.
+        """
+        yield from self._native_chat.native_chat(
+            messages=messages,
+            model=model,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            stream=stream,
+            timeout=timeout,
         )
 
     # ------------------------------------------------------------------
