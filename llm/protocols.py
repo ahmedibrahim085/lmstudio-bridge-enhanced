@@ -4,7 +4,10 @@ Each protocol defines the public interface for one responsibility domain.
 Sub-clients implement these protocols; the Facade delegates to them.
 """
 
-from typing import Any, Dict, Generator, List, Optional, Protocol, Union, runtime_checkable
+from typing import TYPE_CHECKING, Any, Dict, Generator, List, Optional, Protocol, Union, runtime_checkable
+
+if TYPE_CHECKING:
+    from mcp_client.ephemeral import EphemeralIntegration
 
 
 @runtime_checkable
@@ -179,6 +182,7 @@ class NativeChatProvider(Protocol):
         max_tokens: int = ...,
         stream: bool = True,
         timeout: float = ...,
+        integrations: Optional[List["EphemeralIntegration"]] = None,
     ) -> Generator[Any, None, None]: ...
 
 

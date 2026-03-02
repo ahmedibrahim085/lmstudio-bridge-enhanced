@@ -23,6 +23,7 @@ from config.constants import (
 from llm.anthropic_client import AnthropicClient
 from llm.chat_client import ChatClient
 from llm.native_chat_client import NativeChatClient
+from mcp_client.ephemeral import EphemeralIntegration
 from llm.exceptions import LLMResponseError
 from llm.format_adapter import FormatAdapter
 from llm.http_transport import HTTPTransport, handle_request_exception
@@ -531,6 +532,7 @@ class LLMClient:
         max_tokens: int = DEFAULT_MAX_TOKENS,
         stream: bool = True,
         timeout: float = STREAM_READ_TIMEOUT,
+        integrations: Optional[List[EphemeralIntegration]] = None,
     ) -> Generator[Any, None, None]:
         """Stream a native chat via LM Studio /api/v1/chat.
 
@@ -544,6 +546,7 @@ class LLMClient:
             max_tokens: Maximum output tokens.
             stream: Always True for native streaming.
             timeout: Request timeout.
+            integrations: Optional per-request MCP server integrations.
 
         Yields:
             NativeSSEEvent for each server event.
@@ -555,6 +558,7 @@ class LLMClient:
             max_tokens=max_tokens,
             stream=stream,
             timeout=timeout,
+            integrations=integrations,
         )
 
     # ------------------------------------------------------------------

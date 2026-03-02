@@ -16,6 +16,7 @@ from config.constants import (
 from llm.http_transport import HTTPTransport, handle_request_exception
 from llm.jit_loader import ensure_model_loaded
 from llm.native_sse_parser import NativeSSEEvent, parse_native_sse_stream
+from mcp_client.ephemeral import EphemeralIntegration, build_integrations_payload
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +52,7 @@ class NativeChatClient:
         max_tokens: int = DEFAULT_MAX_TOKENS,
         stream: bool = True,
         timeout: float = STREAM_READ_TIMEOUT,
+        integrations: Optional[List[EphemeralIntegration]] = None,
     ) -> Generator[NativeSSEEvent, None, None]:
         """Stream a native chat via /api/v1/chat.
 
@@ -61,6 +63,7 @@ class NativeChatClient:
             max_tokens: Maximum output tokens.
             stream: Always True for native streaming.
             timeout: Request timeout in seconds.
+            integrations: Optional per-request MCP server integrations.
 
         Yields:
             NativeSSEEvent for each SSE block from the server.
@@ -69,6 +72,7 @@ class NativeChatClient:
             LLMConnectionError: Connection to LM Studio failed.
             LLMTimeoutError: Request timed out.
             LLMResponseError: Server returned an error status.
+            ValueError: If any integration has an invalid configuration.
         """
         target_model = model if model is not None else self._transport.model
         self._ensure_model_loaded(target_model, ttl=JIT_TTL_DEFAULT)
@@ -80,6 +84,9 @@ class NativeChatClient:
             "max_tokens": max_tokens,
             "stream": stream,
         }
+
+        if integrations:
+            payload["integrations"] = build_integrations_payload(integrations)
 
         try:
             response = self._transport.session.post(
