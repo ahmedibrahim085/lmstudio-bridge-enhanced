@@ -1,4 +1,4 @@
-# LM Studio Bridge Enhanced v4.0.0
+# LM Studio Bridge Enhanced v4.1.0
 
 An autonomous middleware agent that lets any MCP client delegate tasks to local LLMs, which can then use any MCP tool — translating between all 3 API formats in real-time.
 
@@ -555,7 +555,12 @@ See [Troubleshooting Guide](docs/TROUBLESHOOTING.md) for more.
 
 ## Version History
 
-### v4.0.0 (March 2026) - Current
+### v4.1.0 (March 2026) - Current
+- **DeprecationWarning for thinking_budget** — migration bridge to v5.0.0 reasoning API
+- **CI enforcement** — coverage gate (89%), ruff lint, architecture guard
+- **Python 3.12 in CI matrix** — matches pyproject.toml classifiers
+
+### v4.0.0 (March 2026)
 - **Code quality audit** — 12-agent, 3-wave deep review with TDD fixes
 - **Hardcoded value extraction** — all magic numbers moved to config/constants.py
 - **Silent error catch elimination** — logging added to all 16 catch blocks
