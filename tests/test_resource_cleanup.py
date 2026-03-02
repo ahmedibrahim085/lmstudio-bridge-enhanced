@@ -29,7 +29,7 @@ class TestLLMClientResourceCleanup:
 
     def test_close_calls_session_close(self):
         """close() must call session.close() exactly once."""
-        with patch("llm.llm_client.get_config") as mock_config:
+        with patch("llm.http_transport.get_config") as mock_config:
             client = self._make_client(mock_config)
             mock_session = MagicMock()
             client.session = mock_session
@@ -40,7 +40,7 @@ class TestLLMClientResourceCleanup:
 
     def test_context_manager_closes_session_on_exit(self):
         """Using LLMClient as a context manager closes the session on __exit__."""
-        with patch("llm.llm_client.get_config") as mock_config:
+        with patch("llm.http_transport.get_config") as mock_config:
             mock_config.return_value.lmstudio.api_base = "http://localhost:1234/v1"
             mock_config.return_value.lmstudio.default_model = "test-model"
             from llm.llm_client import LLMClient
@@ -53,7 +53,7 @@ class TestLLMClientResourceCleanup:
 
     def test_context_manager_returns_self(self):
         """__enter__ must return the client instance."""
-        with patch("llm.llm_client.get_config") as mock_config:
+        with patch("llm.http_transport.get_config") as mock_config:
             mock_config.return_value.lmstudio.api_base = "http://localhost:1234/v1"
             mock_config.return_value.lmstudio.default_model = "test-model"
             from llm.llm_client import LLMClient
@@ -65,7 +65,7 @@ class TestLLMClientResourceCleanup:
 
     def test_close_is_idempotent(self):
         """Calling close() twice must not raise."""
-        with patch("llm.llm_client.get_config") as mock_config:
+        with patch("llm.http_transport.get_config") as mock_config:
             client = self._make_client(mock_config)
             # First close
             client.close()
@@ -74,7 +74,7 @@ class TestLLMClientResourceCleanup:
 
     def test_close_when_session_is_none(self):
         """close() must not raise when self.session is already None."""
-        with patch("llm.llm_client.get_config") as mock_config:
+        with patch("llm.http_transport.get_config") as mock_config:
             client = self._make_client(mock_config)
             client.session = None
             # Must not raise
@@ -82,7 +82,7 @@ class TestLLMClientResourceCleanup:
 
     def test_exit_returns_false(self):
         """__exit__ must return False (exceptions not suppressed)."""
-        with patch("llm.llm_client.get_config") as mock_config:
+        with patch("llm.http_transport.get_config") as mock_config:
             mock_config.return_value.lmstudio.api_base = "http://localhost:1234/v1"
             mock_config.return_value.lmstudio.default_model = "test-model"
             from llm.llm_client import LLMClient
@@ -93,7 +93,7 @@ class TestLLMClientResourceCleanup:
 
     def test_context_manager_closes_on_exception(self):
         """Session must be closed even when an exception occurs inside the with-block."""
-        with patch("llm.llm_client.get_config") as mock_config:
+        with patch("llm.http_transport.get_config") as mock_config:
             mock_config.return_value.lmstudio.api_base = "http://localhost:1234/v1"
             mock_config.return_value.lmstudio.default_model = "test-model"
             from llm.llm_client import LLMClient

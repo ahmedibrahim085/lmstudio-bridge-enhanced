@@ -24,8 +24,8 @@ class TestHardcodedTTLRemoved:
     """Verify ttl=600 hardcoded values are replaced with constants."""
 
     def test_no_ttl_600_in_source(self):
-        """No ttl=600 literal should appear in llm_client.py."""
-        source_path = os.path.join(os.path.dirname(__file__), "..", "llm", "llm_client.py")
+        """No ttl=600 literal should appear in chat_client.py."""
+        source_path = os.path.join(os.path.dirname(__file__), "..", "llm", "chat_client.py")
         with open(source_path) as f:
             source = f.read()
         # Check for ttl=600 literal in source
@@ -44,7 +44,7 @@ class TestJITGuardConsolidation:
 
     def test_single_call_site_for_ensure_model_loaded_with_verification(self):
         """ensure_model_loaded_with_verification should appear exactly ONCE (inside _ensure_model_loaded)."""
-        source_path = os.path.join(os.path.dirname(__file__), "..", "llm", "llm_client.py")
+        source_path = os.path.join(os.path.dirname(__file__), "..", "llm", "chat_client.py")
         with open(source_path) as f:
             source = f.read()
         count = source.count("ensure_model_loaded_with_verification")
@@ -77,7 +77,7 @@ class TestJITGuardBehavior:
         client.api_base = "http://localhost:1234/v1"
         client.session = MagicMock()
 
-        with patch("llm.llm_client.LMSHelper") as mock_lms:
+        with patch("llm.chat_client.LMSHelper") as mock_lms:
             mock_lms.is_installed.return_value = False
             # Should not raise
             client._ensure_model_loaded("test-model", ttl=1800)
@@ -92,7 +92,7 @@ class TestJITGuardBehavior:
         client.api_base = "http://localhost:1234/v1"
         client.session = MagicMock()
 
-        with patch("llm.llm_client.LMSHelper") as mock_lms:
+        with patch("llm.chat_client.LMSHelper") as mock_lms:
             mock_lms.is_installed.return_value = True
             # Should not call is_model_loaded
             client._ensure_model_loaded("default", ttl=1800)
@@ -108,7 +108,7 @@ class TestJITGuardBehavior:
         client.api_base = "http://localhost:1234/v1"
         client.session = MagicMock()
 
-        with patch("llm.llm_client.LMSHelper") as mock_lms:
+        with patch("llm.chat_client.LMSHelper") as mock_lms:
             mock_lms.is_installed.return_value = True
             client._ensure_model_loaded(None, ttl=1800)
             mock_lms.is_model_loaded.assert_not_called()
@@ -123,7 +123,7 @@ class TestJITGuardBehavior:
         client.api_base = "http://localhost:1234/v1"
         client.session = MagicMock()
 
-        with patch("llm.llm_client.LMSHelper") as mock_lms:
+        with patch("llm.chat_client.LMSHelper") as mock_lms:
             mock_lms.is_installed.return_value = True
             mock_lms.is_model_loaded.return_value = False
             mock_lms.ensure_model_loaded_with_verification.return_value = True
@@ -142,7 +142,7 @@ class TestJITGuardBehavior:
         client.api_base = "http://localhost:1234/v1"
         client.session = MagicMock()
 
-        with patch("llm.llm_client.LMSHelper") as mock_lms:
+        with patch("llm.chat_client.LMSHelper") as mock_lms:
             mock_lms.is_installed.return_value = True
             mock_lms.is_model_loaded.return_value = False
             mock_lms.ensure_model_loaded_with_verification.return_value = False
@@ -159,7 +159,7 @@ class TestJITGuardBehavior:
         client.api_base = "http://localhost:1234/v1"
         client.session = MagicMock()
 
-        with patch("llm.llm_client.LMSHelper") as mock_lms:
+        with patch("llm.chat_client.LMSHelper") as mock_lms:
             mock_lms.is_installed.return_value = True
             mock_lms.is_model_loaded.return_value = True
             client._ensure_model_loaded("my-model", ttl=1800)
@@ -175,7 +175,7 @@ class TestJITGuardBehavior:
         client.api_base = "http://localhost:1234/v1"
         client.session = MagicMock()
 
-        with patch("llm.llm_client.LMSHelper") as mock_lms:
+        with patch("llm.chat_client.LMSHelper") as mock_lms:
             mock_lms.is_installed.return_value = True
             mock_lms.is_model_loaded.side_effect = RuntimeError("unexpected")
             # Should NOT raise — just log warning and continue

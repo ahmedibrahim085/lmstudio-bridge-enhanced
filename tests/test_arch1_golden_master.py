@@ -12,8 +12,7 @@ Test categories (Req 07):
 - Boundary: Tests 20-24 — thinking budget bounds, model resolution
 """
 
-from unittest.mock import MagicMock, patch, PropertyMock
-from typing import Generator
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -23,6 +22,17 @@ from llm.llm_client import LLMClient, _handle_request_exception
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
+@pytest.fixture(autouse=True)
+def _skip_jit_loading():
+    """Prevent JIT model loading in all sub-clients.
+
+    All sub-clients delegate to ChatClient._ensure_model_loaded which calls
+    LMSHelper.is_installed(). Mocking it False makes all JIT checks no-op.
+    """
+    with patch("llm.chat_client.LMSHelper.is_installed", return_value=False):
+        yield
+
 
 @pytest.fixture
 def mock_session():
@@ -40,7 +50,7 @@ def mock_session():
 @pytest.fixture
 def client(mock_session):
     """LLMClient with injected mock session."""
-    with patch("llm.llm_client.get_config") as mock_config:
+    with patch("llm.http_transport.get_config") as mock_config:
         mock_config.return_value.lmstudio.api_base = "http://localhost:1234/v1"
         mock_config.return_value.lmstudio.default_model = "test-model"
         c = LLMClient(session=mock_session)
@@ -55,12 +65,11 @@ class TestChatCompletionPayload:
     """Happy: chat_completion sends correct payload."""
 
     def test_basic_payload(self, client, mock_session) -> None:
-        with patch.object(client, "_ensure_model_loaded"):
-            result = client.chat_completion(
-                messages=[{"role": "user", "content": "hi"}],
-                temperature=0.5,
-                max_tokens=100,
-            )
+        result = client.chat_completion(
+            messages=[{"role": "user", "content": "hi"}],
+            temperature=0.5,
+            max_tokens=100,
+        )
 
         call_args = mock_session.post.call_args
         payload = call_args.kwargs.get("json") or call_args[1].get("json")
@@ -73,12 +82,11 @@ class TestChatCompletionPayload:
 
     def test_with_tools(self, client, mock_session) -> None:
         tools = [{"type": "function", "function": {"name": "test"}}]
-        with patch.object(client, "_ensure_model_loaded"):
-            client.chat_completion(
-                messages=[{"role": "user", "content": "hi"}],
-                tools=tools,
-                tool_choice="required",
-            )
+        client.chat_completion(
+            messages=[{"role": "user", "content": "hi"}],
+            tools=tools,
+            tool_choice="required",
+        )
 
         payload = mock_session.post.call_args.kwargs.get("json") or mock_session.post.call_args[1]["json"]
         assert payload["tools"] == tools
@@ -86,22 +94,20 @@ class TestChatCompletionPayload:
 
     def test_with_response_format(self, client, mock_session) -> None:
         fmt = {"type": "json_object"}
-        with patch.object(client, "_ensure_model_loaded"):
-            client.chat_completion(
-                messages=[{"role": "user", "content": "hi"}],
-                response_format=fmt,
-            )
+        client.chat_completion(
+            messages=[{"role": "user", "content": "hi"}],
+            response_format=fmt,
+        )
 
         payload = mock_session.post.call_args.kwargs.get("json") or mock_session.post.call_args[1]["json"]
         assert payload["response_format"] == fmt
 
     def test_advanced_sampling_params(self, client, mock_session) -> None:
-        with patch.object(client, "_ensure_model_loaded"):
-            client.chat_completion(
-                messages=[{"role": "user", "content": "hi"}],
-                min_p=0.1,
-                top_k=40,
-            )
+        client.chat_completion(
+            messages=[{"role": "user", "content": "hi"}],
+            min_p=0.1,
+            top_k=40,
+        )
 
         payload = mock_session.post.call_args.kwargs.get("json") or mock_session.post.call_args[1]["json"]
         assert payload["min_p"] == 0.1
@@ -113,8 +119,7 @@ class TestTextCompletionPayload:
 
     def test_basic_payload(self, client, mock_session) -> None:
         mock_session.post.return_value.json.return_value = {"choices": [{"text": "world"}]}
-        with patch.object(client, "_ensure_model_loaded"):
-            result = client.text_completion(prompt="hello", temperature=0.3, max_tokens=50)
+        result = client.text_completion(prompt="hello", temperature=0.3, max_tokens=50)
 
         payload = mock_session.post.call_args.kwargs.get("json") or mock_session.post.call_args[1]["json"]
         assert payload["prompt"] == "hello"
@@ -123,8 +128,7 @@ class TestTextCompletionPayload:
         assert payload["model"] == "test-model"
 
     def test_with_stop_sequences(self, client, mock_session) -> None:
-        with patch.object(client, "_ensure_model_loaded"):
-            client.text_completion(prompt="hello", stop_sequences=["END"])
+        client.text_completion(prompt="hello", stop_sequences=["END"])
 
         payload = mock_session.post.call_args.kwargs.get("json") or mock_session.post.call_args[1]["json"]
         assert payload["stop"] == ["END"]
@@ -135,8 +139,7 @@ class TestCreateResponsePayload:
 
     def test_basic_payload(self, client, mock_session) -> None:
         mock_session.post.return_value.json.return_value = {"id": "resp_1", "output": []}
-        with patch.object(client, "_ensure_model_loaded"):
-            result = client.create_response(input_text="test input", model="test-model")
+        result = client.create_response(input_text="test input", model="test-model")
 
         payload = mock_session.post.call_args.kwargs.get("json") or mock_session.post.call_args[1]["json"]
         assert payload["input"] == "test input"
@@ -146,13 +149,12 @@ class TestCreateResponsePayload:
 
     def test_with_tools_and_previous_response(self, client, mock_session) -> None:
         tools = [{"type": "function", "function": {"name": "calc"}}]
-        with patch.object(client, "_ensure_model_loaded"):
-            client.create_response(
-                input_text="continue",
-                tools=tools,
-                previous_response_id="resp_0",
-                tool_choice="required",
-            )
+        client.create_response(
+            input_text="continue",
+            tools=tools,
+            previous_response_id="resp_0",
+            tool_choice="required",
+        )
 
         payload = mock_session.post.call_args.kwargs.get("json") or mock_session.post.call_args[1]["json"]
         assert payload["previous_response_id"] == "resp_0"
@@ -165,12 +167,11 @@ class TestAnthropicMessagesPayload:
     """Happy: anthropic_messages sends correct payload."""
 
     def test_basic_payload(self, client, mock_session) -> None:
-        with patch.object(client, "_ensure_model_loaded"):
-            client.anthropic_messages(
-                messages=[{"role": "user", "content": "hi"}],
-                system="You are helpful.",
-                max_tokens=1024,
-            )
+        client.anthropic_messages(
+            messages=[{"role": "user", "content": "hi"}],
+            system="You are helpful.",
+            max_tokens=1024,
+        )
 
         payload = mock_session.post.call_args.kwargs.get("json") or mock_session.post.call_args[1]["json"]
         assert payload["messages"] == [{"role": "user", "content": "hi"}]
@@ -182,13 +183,12 @@ class TestAnthropicMessagesPayload:
 
     def test_filters_system_messages(self, client, mock_session) -> None:
         """System role messages should be filtered from the messages array."""
-        with patch.object(client, "_ensure_model_loaded"):
-            client.anthropic_messages(
-                messages=[
-                    {"role": "system", "content": "should be removed"},
-                    {"role": "user", "content": "hi"},
-                ],
-            )
+        client.anthropic_messages(
+            messages=[
+                {"role": "system", "content": "should be removed"},
+                {"role": "user", "content": "hi"},
+            ],
+        )
 
         payload = mock_session.post.call_args.kwargs.get("json") or mock_session.post.call_args[1]["json"]
         assert len(payload["messages"]) == 1
@@ -200,8 +200,7 @@ class TestEmbeddingsPayload:
 
     def test_basic_payload(self, client, mock_session) -> None:
         mock_session.post.return_value.json.return_value = {"data": [{"embedding": [0.1]}]}
-        with patch.object(client, "_ensure_model_loaded"):
-            client.generate_embeddings(text="hello world")
+        client.generate_embeddings(text="hello world")
 
         payload = mock_session.post.call_args.kwargs.get("json") or mock_session.post.call_args[1]["json"]
         assert payload["input"] == "hello world"
@@ -318,10 +317,9 @@ class TestThinkingBudgetBounds:
 
     def test_default_budget_applied(self, client, mock_session) -> None:
         from config.constants import DEFAULT_THINKING_BUDGET_TOKENS
-        with patch.object(client, "_ensure_model_loaded"):
-            client.thinking_completion(
-                messages=[{"role": "user", "content": "think"}],
-            )
+        client.thinking_completion(
+            messages=[{"role": "user", "content": "think"}],
+        )
 
         payload = mock_session.post.call_args.kwargs.get("json") or mock_session.post.call_args[1]["json"]
         from config.constants import DEFAULT_MAX_TOKENS
@@ -346,18 +344,16 @@ class TestModelResolution:
     """Boundary: Per-request model override vs default."""
 
     def test_default_model_used(self, client, mock_session) -> None:
-        with patch.object(client, "_ensure_model_loaded"):
-            client.chat_completion(messages=[{"role": "user", "content": "hi"}])
+        client.chat_completion(messages=[{"role": "user", "content": "hi"}])
 
         payload = mock_session.post.call_args.kwargs.get("json") or mock_session.post.call_args[1]["json"]
         assert payload["model"] == "test-model"
 
     def test_per_request_model_override(self, client, mock_session) -> None:
-        with patch.object(client, "_ensure_model_loaded"):
-            client.chat_completion(
-                messages=[{"role": "user", "content": "hi"}],
-                model="override-model",
-            )
+        client.chat_completion(
+            messages=[{"role": "user", "content": "hi"}],
+            model="override-model",
+        )
 
         payload = mock_session.post.call_args.kwargs.get("json") or mock_session.post.call_args[1]["json"]
         assert payload["model"] == "override-model"
@@ -367,7 +363,7 @@ class TestContextManager:
     """Edge: LLMClient works as context manager."""
 
     def test_context_manager_closes_session(self) -> None:
-        with patch("llm.llm_client.get_config") as mock_config:
+        with patch("llm.http_transport.get_config") as mock_config:
             mock_config.return_value.lmstudio.api_base = "http://localhost:1234/v1"
             mock_config.return_value.lmstudio.default_model = "test"
             mock_session = MagicMock()
@@ -379,10 +375,10 @@ class TestContextManager:
             mock_session.close.assert_not_called()
 
     def test_owned_session_closes(self) -> None:
-        with patch("llm.llm_client.get_config") as mock_config:
+        with patch("llm.http_transport.get_config") as mock_config:
             mock_config.return_value.lmstudio.api_base = "http://localhost:1234/v1"
             mock_config.return_value.lmstudio.default_model = "test"
-            with patch("llm.llm_client.requests.Session") as mock_sess_cls:
+            with patch("llm.http_transport.requests.Session") as mock_sess_cls:
                 mock_sess = MagicMock()
                 mock_sess_cls.return_value = mock_sess
                 client = LLMClient()  # Creates own session

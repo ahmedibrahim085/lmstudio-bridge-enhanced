@@ -68,7 +68,7 @@ class TestBug8DictResponse:
 
     def _make_client(self):
         """Create LLMClient with mocked config."""
-        with patch("llm.llm_client.get_config") as mock_cfg:
+        with patch("llm.http_transport.get_config") as mock_cfg:
             mock_cfg.return_value.lmstudio.api_base = "http://localhost:1234/v1"
             mock_cfg.return_value.lmstudio.default_model = "test-model"
             from llm.llm_client import LLMClient

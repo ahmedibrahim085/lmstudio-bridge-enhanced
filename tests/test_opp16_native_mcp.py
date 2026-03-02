@@ -11,7 +11,7 @@ from llm.exceptions import LLMResponseError, LLMTimeoutError
 @pytest.fixture
 def client():
     """Create an LLMClient with mocked config."""
-    with patch("llm.llm_client.get_config") as mock_config:
+    with patch("llm.http_transport.get_config") as mock_config:
         mock_config.return_value.lmstudio.api_base = "http://localhost:1234"
         mock_config.return_value.lmstudio.default_model = "test-model"
         c = LLMClient()

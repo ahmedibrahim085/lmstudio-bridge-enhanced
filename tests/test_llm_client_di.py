@@ -24,7 +24,7 @@ class TestLLMClientSessionDI:
     def test_default_creates_real_session(self):
         """When no session is provided, LLMClient creates a real requests.Session and owns it."""
         import requests
-        with patch("llm.llm_client.get_config", _mock_config()):
+        with patch("llm.http_transport.get_config", _mock_config()):
             from llm.llm_client import LLMClient
             client = LLMClient()
             assert isinstance(client.session, requests.Session)
@@ -35,7 +35,7 @@ class TestLLMClientSessionDI:
     def test_injected_session_used(self):
         """When a session is provided, LLMClient uses it and does not own it."""
         mock_session = MagicMock()
-        with patch("llm.llm_client.get_config", _mock_config()):
+        with patch("llm.http_transport.get_config", _mock_config()):
             from llm.llm_client import LLMClient
             client = LLMClient(session=mock_session)
             assert client.session is mock_session
@@ -45,8 +45,8 @@ class TestLLMClientSessionDI:
     def test_injected_session_no_adapter_setup(self):
         """When a session is provided, HTTPAdapter is NOT instantiated."""
         mock_session = MagicMock()
-        with patch("llm.llm_client.get_config", _mock_config()), \
-             patch("llm.llm_client.HTTPAdapter") as mock_adapter:
+        with patch("llm.http_transport.get_config", _mock_config()), \
+             patch("llm.http_transport.HTTPAdapter") as mock_adapter:
             from llm.llm_client import LLMClient
             LLMClient(session=mock_session)
             mock_adapter.assert_not_called()
@@ -55,7 +55,7 @@ class TestLLMClientSessionDI:
     def test_none_session_creates_real(self):
         """Explicitly passing session=None creates a real session (same as default)."""
         import requests
-        with patch("llm.llm_client.get_config", _mock_config()):
+        with patch("llm.http_transport.get_config", _mock_config()):
             from llm.llm_client import LLMClient
             client = LLMClient(session=None)
             assert isinstance(client.session, requests.Session)
@@ -72,7 +72,7 @@ class TestLLMClientSessionDI:
         mock_response.raise_for_status = MagicMock()
         mock_session.post.return_value = mock_response
 
-        with patch("llm.llm_client.get_config", _mock_config()):
+        with patch("llm.http_transport.get_config", _mock_config()):
             from llm.llm_client import LLMClient
             client = LLMClient(session=mock_session)
             try:
@@ -85,7 +85,7 @@ class TestLLMClientSessionDI:
     def test_close_skips_injected_session(self):
         """close() does NOT close an injected session (_owns_session=False)."""
         mock_session = MagicMock()
-        with patch("llm.llm_client.get_config", _mock_config()):
+        with patch("llm.http_transport.get_config", _mock_config()):
             from llm.llm_client import LLMClient
             client = LLMClient(session=mock_session)
             client.close()
@@ -94,7 +94,7 @@ class TestLLMClientSessionDI:
     @pytest.mark.unit
     def test_close_closes_owned_session(self):
         """close() DOES close a session when _owns_session=True."""
-        with patch("llm.llm_client.get_config", _mock_config()):
+        with patch("llm.http_transport.get_config", _mock_config()):
             from llm.llm_client import LLMClient
             client = LLMClient()
             real_session = client.session
@@ -106,7 +106,7 @@ class TestLLMClientSessionDI:
     def test_context_manager_respects_ownership(self):
         """Context manager exit does NOT close an injected session."""
         mock_session = MagicMock()
-        with patch("llm.llm_client.get_config", _mock_config()):
+        with patch("llm.http_transport.get_config", _mock_config()):
             from llm.llm_client import LLMClient
             with LLMClient(session=mock_session) as client:
                 assert client.session is mock_session

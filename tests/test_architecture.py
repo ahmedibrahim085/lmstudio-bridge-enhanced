@@ -78,8 +78,8 @@ class TestPhase2Invariants:
         )
 
     def test_single_ensure_model_loaded_call_site(self):
-        """ensure_model_loaded_with_verification must appear exactly once in LLMClient (inside _ensure_model_loaded)."""
-        with open("llm/llm_client.py", "r") as f:
+        """ensure_model_loaded_with_verification must appear exactly once in ChatClient (inside _ensure_model_loaded)."""
+        with open("llm/chat_client.py", "r") as f:
             content = f.read()
         count = content.count("ensure_model_loaded_with_verification")
         assert count == 1, (
@@ -227,22 +227,22 @@ class TestRoundAInvariants:
 class TestSingleSourceOfTruth:
     """Guards for DEFAULT_MAX_RETRIES consolidation — single source of truth."""
 
-    def test_llm_client_does_not_define_local_default_max_retries(self):
-        """llm_client.py must NOT define its own DEFAULT_MAX_RETRIES assignment."""
-        with open("llm/llm_client.py", "r") as f:
+    def test_chat_client_does_not_define_local_default_max_retries(self):
+        """chat_client.py must NOT define its own DEFAULT_MAX_RETRIES assignment."""
+        with open("llm/chat_client.py", "r") as f:
             tree = ast.parse(f.read())
         for node in ast.walk(tree):
             if isinstance(node, ast.Assign):
                 for target in node.targets:
                     if isinstance(target, ast.Name) and target.id == "DEFAULT_MAX_RETRIES":
                         pytest.fail(
-                            "llm_client.py defines its own DEFAULT_MAX_RETRIES — "
+                            "chat_client.py defines its own DEFAULT_MAX_RETRIES — "
                             "must import from config.constants instead"
                         )
 
-    def test_llm_client_imports_default_max_retries_from_constants(self):
-        """llm_client.py must import DEFAULT_MAX_RETRIES from config.constants."""
-        with open("llm/llm_client.py", "r") as f:
+    def test_chat_client_imports_default_max_retries_from_constants(self):
+        """chat_client.py must import DEFAULT_MAX_RETRIES from config.constants."""
+        with open("llm/chat_client.py", "r") as f:
             tree = ast.parse(f.read())
         for node in ast.walk(tree):
             if isinstance(node, ast.ImportFrom):
@@ -252,15 +252,15 @@ class TestSingleSourceOfTruth:
                     if "DEFAULT_MAX_RETRIES" in names:
                         return  # Found the correct import
         pytest.fail(
-            "llm_client.py does not import DEFAULT_MAX_RETRIES from config.constants"
+            "chat_client.py does not import DEFAULT_MAX_RETRIES from config.constants"
         )
 
-    def test_llm_client_no_plus_one_at_retry_call_sites(self):
+    def test_chat_client_no_plus_one_at_retry_call_sites(self):
         """Call sites must not pass DEFAULT_MAX_RETRIES + 1 — the constant already encodes 3 total."""
-        with open("llm/llm_client.py", "r") as f:
+        with open("llm/chat_client.py", "r") as f:
             content = f.read()
         assert "DEFAULT_MAX_RETRIES + 1" not in content, (
-            "llm_client.py still uses DEFAULT_MAX_RETRIES + 1 at call sites — "
+            "chat_client.py still uses DEFAULT_MAX_RETRIES + 1 at call sites — "
             "after consolidation, pass DEFAULT_MAX_RETRIES directly (value=3 = total attempts)"
         )
 
