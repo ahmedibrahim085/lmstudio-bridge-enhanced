@@ -138,11 +138,14 @@ class TestReasoningParameterHappyPath:
         assert "choices" in result
 
     def test_reasoning_effort_in_payload(self, client):
-        """When reasoning is passed, _chat_fn receives reasoning dict in its call args.
+        """When reasoning is passed, effort maps to correct max_tokens in _chat_fn call.
 
-        The implementation must forward the reasoning dict to the underlying
-        chat_completion call so LM Studio 0.4+ can consume it natively.
+        The thinking_client resolves effort → token budget and passes
+        effective_max_tokens (budget + DEFAULT_MAX_TOKENS) to the underlying
+        chat_completion call.
         """
+        from config.constants import DEFAULT_MAX_TOKENS, REASONING_EFFORT_TOKEN_MAP
+
         chat_mock = _make_chat_mock()
         with patch.object(LLMClient, "chat_completion", chat_mock):
             client.thinking_completion(
@@ -152,13 +155,10 @@ class TestReasoningParameterHappyPath:
 
         assert chat_mock.called, "Expected chat_completion to be called"
         _, kwargs = chat_mock.call_args
-        assert "reasoning" in kwargs, (
-            "Expected 'reasoning' key to be forwarded to _chat_fn kwargs, "
-            f"but call_args kwargs were: {kwargs}"
-        )
-        assert kwargs["reasoning"] == {"effort": "medium"}, (
-            f"Expected reasoning={{'effort': 'medium'}} forwarded, "
-            f"but got: {kwargs.get('reasoning')!r}"
+        expected_max = REASONING_EFFORT_TOKEN_MAP["medium"] + DEFAULT_MAX_TOKENS
+        assert kwargs["max_tokens"] == expected_max, (
+            f"Expected max_tokens={expected_max} (medium budget + DEFAULT_MAX_TOKENS), "
+            f"but got: {kwargs.get('max_tokens')!r}"
         )
 
     def test_stream_reasoning_effort_medium_succeeds(self, client):

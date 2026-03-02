@@ -353,43 +353,43 @@ class TestThinkingCompletion:
 
     @patch("llm.thinking_client.ensure_model_loaded")
     @patch("llm.llm_client.LLMClient.chat_completion")
-    def test_budget_below_min_raises_value_error(
+    def test_invalid_reasoning_effort_raises_value_error(
         self, mock_chat: MagicMock, mock_load: MagicMock
     ):
-        """Budget below MIN_THINKING_BUDGET_TOKENS raises ValueError."""
+        """Invalid reasoning effort raises ValueError."""
         client = LLMClient()
-        with pytest.raises(ValueError, match="thinking_budget"):
+        with pytest.raises(ValueError, match="effort"):
             client.thinking_completion(
                 messages=[{"role": "user", "content": "test"}],
-                thinking_budget=MIN_THINKING_BUDGET_TOKENS - 1,
+                reasoning={"effort": "invalid"},
             )
 
     @patch("llm.thinking_client.ensure_model_loaded")
     @patch("llm.llm_client.LLMClient.chat_completion")
-    def test_budget_above_max_raises_value_error(
+    def test_reasoning_missing_effort_key_raises_value_error(
         self, mock_chat: MagicMock, mock_load: MagicMock
     ):
-        """Budget above MAX_THINKING_BUDGET_TOKENS raises ValueError."""
+        """reasoning={} (missing 'effort' key) raises ValueError."""
         client = LLMClient()
-        with pytest.raises(ValueError, match="thinking_budget"):
+        with pytest.raises(ValueError, match="effort"):
             client.thinking_completion(
                 messages=[{"role": "user", "content": "test"}],
-                thinking_budget=MAX_THINKING_BUDGET_TOKENS + 1,
+                reasoning={},
             )
 
     @patch("llm.thinking_client.ensure_model_loaded")
     @patch("llm.llm_client.LLMClient.chat_completion")
-    def test_none_budget_uses_default(
+    def test_none_reasoning_uses_default(
         self, mock_chat: MagicMock, mock_load: MagicMock
     ):
-        """When thinking_budget is None, DEFAULT_THINKING_BUDGET_TOKENS is used."""
+        """When reasoning is None, DEFAULT_THINKING_BUDGET_TOKENS is used."""
         mock_chat.return_value = _make_mock_response("No thinking here.")
 
         client = LLMClient()
         # Should not raise; uses DEFAULT
         result = client.thinking_completion(
             messages=[{"role": "user", "content": "Hello"}],
-            thinking_budget=None,
+            reasoning=None,
         )
 
         # Verify chat_completion was called with max_tokens >= DEFAULT_THINKING_BUDGET_TOKENS
@@ -507,13 +507,13 @@ class TestStreamThinkingCompletion:
     def test_budget_below_min_raises_value_error(
         self, mock_stream: MagicMock, mock_load: MagicMock
     ):
-        """Budget below MIN raises ValueError before streaming starts."""
+        """Invalid reasoning effort raises ValueError before streaming starts."""
         client = LLMClient()
-        with pytest.raises(ValueError, match="thinking_budget"):
+        with pytest.raises(ValueError, match="reasoning effort"):
             list(
                 client.stream_thinking_completion(
                     messages=[{"role": "user", "content": "test"}],
-                    thinking_budget=MIN_THINKING_BUDGET_TOKENS - 1,
+                    reasoning={"effort": "invalid"},
                 )
             )
 
@@ -522,13 +522,13 @@ class TestStreamThinkingCompletion:
     def test_budget_above_max_raises_value_error(
         self, mock_stream: MagicMock, mock_load: MagicMock
     ):
-        """Budget above MAX raises ValueError before streaming starts."""
+        """Empty reasoning dict raises ValueError before streaming starts."""
         client = LLMClient()
-        with pytest.raises(ValueError, match="thinking_budget"):
+        with pytest.raises(ValueError, match="reasoning dict must contain"):
             list(
                 client.stream_thinking_completion(
                     messages=[{"role": "user", "content": "test"}],
-                    thinking_budget=MAX_THINKING_BUDGET_TOKENS + 1,
+                    reasoning={},
                 )
             )
 
@@ -554,15 +554,15 @@ class TestStreamThinkingCompletion:
     def test_none_budget_uses_default_no_error(
         self, mock_stream: MagicMock, mock_load: MagicMock
     ):
-        """budget=None falls back to DEFAULT_THINKING_BUDGET_TOKENS without error."""
+        """reasoning=None falls back to DEFAULT_REASONING_EFFORT without error."""
         mock_stream.return_value = iter([])
 
         client = LLMClient()
-        # Should not raise
+        # Should not raise — uses default reasoning effort
         list(
             client.stream_thinking_completion(
                 messages=[{"role": "user", "content": "test"}],
-                thinking_budget=None,
+                reasoning=None,
             )
         )
         mock_stream.assert_called_once()

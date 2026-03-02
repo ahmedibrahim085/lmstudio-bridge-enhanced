@@ -608,7 +608,6 @@ class LLMClient:
         messages: List[Dict[str, Any]],
         temperature: float = 0.7,
         max_tokens: int = DEFAULT_MAX_TOKENS,
-        thinking_budget: Optional[int] = None,
         reasoning: Optional[Dict[str, Any]] = None,
         timeout: int = DEFAULT_LLM_TIMEOUT,
         response_format: Optional[Dict[str, Any]] = None,
@@ -618,14 +617,11 @@ class LLMClient:
 
         Args:
             reasoning: Optional dict e.g. {'effort': 'medium'} (OPP-21).
-                       Takes precedence over thinking_budget when both are given.
-            thinking_budget: Deprecated integer token budget. Use reasoning instead.
         """
         return self._thinking.thinking_completion(
             messages=messages,
             temperature=temperature,
             max_tokens=max_tokens,
-            thinking_budget=thinking_budget,
             reasoning=reasoning,
             timeout=timeout,
             response_format=response_format,
@@ -638,7 +634,6 @@ class LLMClient:
         messages: List[Dict[str, Any]],
         temperature: float = 0.7,
         max_tokens: int = DEFAULT_MAX_TOKENS,
-        thinking_budget: Optional[int] = None,
         reasoning: Optional[Dict[str, Any]] = None,
         timeout: float = STREAM_READ_TIMEOUT,
         response_format: Optional[Dict[str, Any]] = None,
@@ -648,14 +643,11 @@ class LLMClient:
 
         Args:
             reasoning: Optional dict e.g. {'effort': 'medium'} (OPP-21).
-                       Takes precedence over thinking_budget when both are given.
-            thinking_budget: Deprecated integer token budget. Use reasoning instead.
         """
         yield from self._thinking.stream_thinking_completion(
             messages=messages,
             temperature=temperature,
             max_tokens=max_tokens,
-            thinking_budget=thinking_budget,
             reasoning=reasoning,
             timeout=timeout,
             response_format=response_format,

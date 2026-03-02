@@ -312,31 +312,31 @@ class TestHealthCheck:
 # Boundary: Thinking budget and model resolution
 # ---------------------------------------------------------------------------
 
-class TestThinkingBudgetBounds:
-    """Boundary: thinking_completion validates budget range."""
+class TestReasoningBounds:
+    """Boundary: thinking_completion validates reasoning effort (OPP-21)."""
 
-    def test_default_budget_applied(self, client, mock_session) -> None:
-        from config.constants import DEFAULT_THINKING_BUDGET_TOKENS
+    def test_default_reasoning_applied(self, client, mock_session) -> None:
+        from config.constants import DEFAULT_MAX_TOKENS, REASONING_EFFORT_TOKEN_MAP
         client.thinking_completion(
             messages=[{"role": "user", "content": "think"}],
         )
 
         payload = mock_session.post.call_args.kwargs.get("json") or mock_session.post.call_args[1]["json"]
-        from config.constants import DEFAULT_MAX_TOKENS
-        assert payload["max_tokens"] == DEFAULT_THINKING_BUDGET_TOKENS + DEFAULT_MAX_TOKENS
+        expected = REASONING_EFFORT_TOKEN_MAP["medium"] + DEFAULT_MAX_TOKENS
+        assert payload["max_tokens"] == expected
 
-    def test_budget_too_low_raises(self, client) -> None:
-        with pytest.raises(ValueError, match="thinking_budget must be between"):
+    def test_invalid_effort_raises(self, client) -> None:
+        with pytest.raises(ValueError, match="reasoning effort"):
             client.thinking_completion(
                 messages=[{"role": "user", "content": "think"}],
-                thinking_budget=0,
+                reasoning={"effort": "extreme"},
             )
 
-    def test_budget_too_high_raises(self, client) -> None:
-        with pytest.raises(ValueError, match="thinking_budget must be between"):
+    def test_empty_reasoning_raises(self, client) -> None:
+        with pytest.raises(ValueError, match="reasoning dict must contain"):
             client.thinking_completion(
                 messages=[{"role": "user", "content": "think"}],
-                thinking_budget=999999999,
+                reasoning={},
             )
 
 
