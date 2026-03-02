@@ -23,6 +23,11 @@ from llm.thinking_parser import (
 
 logger = logging.getLogger(__name__)
 
+_THINKING_BUDGET_DEPRECATION_MSG = (
+    "thinking_budget is deprecated and will be removed in v5.0.0. "
+    "Use reasoning={'effort': 'low'|'medium'|'high'} instead."
+)
+
 
 class ThinkingClient:
     """Handles thinking/reasoning completions."""
@@ -49,8 +54,7 @@ class ThinkingClient:
         """
         if thinking_budget is not None:
             warnings.warn(
-                "thinking_budget is deprecated and will be removed in v5.0.0. "
-                "Use reasoning={'effort': 'low'|'medium'|'high'} instead.",
+                _THINKING_BUDGET_DEPRECATION_MSG,
                 DeprecationWarning,
                 stacklevel=3,
             )
@@ -117,8 +121,7 @@ class ThinkingClient:
         """
         if thinking_budget is not None:
             warnings.warn(
-                "thinking_budget is deprecated and will be removed in v5.0.0. "
-                "Use reasoning={'effort': 'low'|'medium'|'high'} instead.",
+                _THINKING_BUDGET_DEPRECATION_MSG,
                 DeprecationWarning,
                 stacklevel=3,
             )

@@ -209,10 +209,11 @@ class TestThinkingBudgetDeprecation:
     def test_deprecation_warning_stacklevel_points_to_caller(self, client):
         """Warning filename must reference this test file, not thinking_client.py.
 
-        stacklevel=2 in warnings.warn() makes Python attribute the warning to
-        the direct caller of the function that emits it.  If stacklevel is
-        wrong (e.g., 1), the warning points inside thinking_client.py and
-        users cannot find where in their code to fix the call.
+        stacklevel=3 in warnings.warn() walks up the Facade call chain
+        (user -> LLMClient -> ThinkingClient -> warnings.warn) so the warning
+        points to the caller's frame.  If stacklevel is wrong (e.g., 1 or 2),
+        the warning points inside thinking_client.py and users cannot find
+        where in their code to fix the call.
         """
         with patch.object(LLMClient, "chat_completion", _make_chat_mock()):
             with warnings.catch_warnings(record=True) as w:
@@ -339,4 +340,31 @@ class TestThinkingBudgetDeprecation:
         assert len(deprecation_warnings) == 0, (
             "Expected NO DeprecationWarning for stream thinking_budget=None, "
             f"but got: {[str(x.message) for x in deprecation_warnings]}"
+        )
+
+    def test_stream_deprecation_warning_stacklevel_points_to_caller(self, client):
+        """Streaming warning filename must reference this test file, not thinking_client.py."""
+        with patch.object(
+            LLMClient,
+            "stream_chat_completion",
+            return_value=iter([]),
+        ):
+            with warnings.catch_warnings(record=True) as w:
+                warnings.simplefilter("always")
+                list(
+                    client.stream_thinking_completion(
+                        messages=[{"role": "user", "content": "think"}],
+                        thinking_budget=512,
+                    )
+                )
+
+        deprecation_warnings = [
+            x for x in w if issubclass(x.category, DeprecationWarning)
+        ]
+        assert len(deprecation_warnings) >= 1
+        warning_filename = deprecation_warnings[0].filename
+        assert "test_v41_deprecation" in warning_filename, (
+            f"Expected warning to point to test_v41_deprecation (caller frame), "
+            f"but warning.filename was: {warning_filename!r}. "
+            "Check stacklevel= in warnings.warn() call."
         )
