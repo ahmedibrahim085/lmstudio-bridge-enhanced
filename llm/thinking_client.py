@@ -1,6 +1,7 @@
 """Thinking/reasoning sub-client."""
 
 import logging
+import warnings
 from typing import Any, Dict, Generator, List, Optional
 
 from config.constants import (
@@ -46,6 +47,14 @@ class ThinkingClient:
         Args:
             _chat_fn: Injectable chat_completion callable (used by Facade).
         """
+        if thinking_budget is not None:
+            warnings.warn(
+                "thinking_budget is deprecated and will be removed in v5.0.0. "
+                "Use reasoning={'effort': 'low'|'medium'|'high'} instead.",
+                DeprecationWarning,
+                stacklevel=3,
+            )
+
         budget = thinking_budget if thinking_budget is not None else DEFAULT_THINKING_BUDGET_TOKENS
 
         if budget < MIN_THINKING_BUDGET_TOKENS or budget > MAX_THINKING_BUDGET_TOKENS:
@@ -106,6 +115,14 @@ class ThinkingClient:
         Args:
             _stream_fn: Injectable stream_chat_completion callable (used by Facade).
         """
+        if thinking_budget is not None:
+            warnings.warn(
+                "thinking_budget is deprecated and will be removed in v5.0.0. "
+                "Use reasoning={'effort': 'low'|'medium'|'high'} instead.",
+                DeprecationWarning,
+                stacklevel=3,
+            )
+
         budget = thinking_budget if thinking_budget is not None else DEFAULT_THINKING_BUDGET_TOKENS
 
         if budget < MIN_THINKING_BUDGET_TOKENS or budget > MAX_THINKING_BUDGET_TOKENS:
