@@ -6,11 +6,11 @@ Provides exponential backoff retry logic for LMS CLI commands
 that may timeout due to server load or startup delays.
 """
 
-import os
-import time
-import random
 import logging
+import os
+import random
 import subprocess
+import time
 from typing import List
 
 logger = logging.getLogger(__name__)

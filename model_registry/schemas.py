@@ -8,8 +8,8 @@ metadata, capabilities, and benchmark information.
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Optional, List, Dict, Any
 from enum import Enum
+from typing import Any, Dict, List, Optional
 
 __all__ = [
     "BenchmarkData",

@@ -15,12 +15,13 @@ Usage:
         print(f"Errors: {result.errors}")
 """
 
-from typing import Dict, Any, List, Optional
 from dataclasses import dataclass, field
+from typing import Any, Dict, List, Optional
+
 from config.constants import (
     MAX_JSON_SCHEMA_DEPTH,
     MAX_JSON_SCHEMA_PROPERTIES,
-    STRUCTURED_OUTPUT_TYPES
+    STRUCTURED_OUTPUT_TYPES,
 )
 
 

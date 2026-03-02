@@ -1,7 +1,8 @@
 """Thinking/reasoning sub-client."""
 
 import logging
-from typing import Any, Dict, Generator, List, Optional, Tuple
+from collections.abc import Generator
+from typing import Any, Dict, List, Optional, Tuple
 
 from config.constants import (
     DEFAULT_LLM_TIMEOUT,

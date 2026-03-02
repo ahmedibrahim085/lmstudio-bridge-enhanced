@@ -13,8 +13,8 @@ Canonical location: core/exceptions.py
 Backward-compat shim: llm/exceptions.py re-exports everything from here.
 """
 
-from datetime import datetime, UTC
-from typing import Optional, List
+from datetime import UTC, datetime
+from typing import List, Optional
 
 
 class LLMError(Exception):

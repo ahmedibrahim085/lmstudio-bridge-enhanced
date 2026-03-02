@@ -6,13 +6,15 @@ This registers the truly dynamic MCP tools with FastMCP.
 """
 
 import logging
-from typing import List, Union, Optional, Annotated
+from typing import Annotated, List, Optional, Union
+
 from pydantic import Field
+
 from config.constants import DEFAULT_MAX_TOKENS, DEFAULT_VISION_DETAIL
 
 logger = logging.getLogger(__name__)
 from llm.llm_client import LLMClient
-from tools.dynamic_autonomous import DynamicAutonomousAgent, DEFAULT_MAX_ROUNDS
+from tools.dynamic_autonomous import DEFAULT_MAX_ROUNDS, DynamicAutonomousAgent
 
 
 def register_dynamic_autonomous_tools(mcp, llm_client: Optional[LLMClient] = None):
@@ -488,10 +490,10 @@ def register_dynamic_autonomous_tools(mcp, llm_client: Optional[LLMClient] = Non
                     result += f"   Env vars: {', '.join(mcp['env'].keys())}\n"
                 result += "\n"
 
-            result += f"To use any of these MCPs, call:\n"
-            result += f"  autonomous_with_mcp(mcp_name='<name>', task='<task>')\n"
-            result += f"  autonomous_with_multiple_mcps(mcp_names=['<name1>', '<name2>'], task='<task>')\n"
-            result += f"  autonomous_discover_and_execute(task='<task>')  # Uses ALL MCPs!\n"
+            result += "To use any of these MCPs, call:\n"
+            result += "  autonomous_with_mcp(mcp_name='<name>', task='<task>')\n"
+            result += "  autonomous_with_multiple_mcps(mcp_names=['<name1>', '<name2>'], task='<task>')\n"
+            result += "  autonomous_discover_and_execute(task='<task>')  # Uses ALL MCPs!\n"
 
             return result
 

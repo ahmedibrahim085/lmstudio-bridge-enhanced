@@ -1,7 +1,8 @@
 """Streaming sub-client for all SSE-based endpoints."""
 
 import logging
-from typing import Any, Dict, Generator, List, Optional
+from collections.abc import Generator
+from typing import Any, Dict, List, Optional
 
 from config.constants import (
     ANTHROPIC_MESSAGES_ENDPOINT,

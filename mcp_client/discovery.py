@@ -19,8 +19,7 @@ import json
 import os
 import platform
 import shutil
-from typing import Dict, List, Optional, Any, Tuple
-from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
 
 
 class MCPDiscovery:

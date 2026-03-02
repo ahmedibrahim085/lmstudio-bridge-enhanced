@@ -5,7 +5,8 @@ Embeddings generation tools for LM Studio.
 
 import json
 import logging
-from typing import Optional, Union, List
+from typing import List, Optional, Union
+
 from llm.llm_client import LLMClient
 
 logger = logging.getLogger(__name__)

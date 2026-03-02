@@ -6,10 +6,10 @@ This module handles maintaining conversation context, formatting messages,
 and managing tool calling history.
 """
 
-from typing import List, Dict, Any, Optional
+import json
 from dataclasses import dataclass, field
 from datetime import datetime
-import json
+from typing import Any, Dict, List, Optional
 
 
 @dataclass

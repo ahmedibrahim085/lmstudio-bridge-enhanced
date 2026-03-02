@@ -22,7 +22,6 @@ from config.constants import (
     HTTP_RETRY_TOTAL,
     LLM_POOL_CONNECTIONS,
     LLM_POOL_MAXSIZE,
-    MODEL_LIST_TIMEOUT,
 )
 from llm.exceptions import (
     LLMAuthenticationError,

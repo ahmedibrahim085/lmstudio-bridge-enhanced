@@ -4,7 +4,8 @@ Each protocol defines the public interface for one responsibility domain.
 Sub-clients implement these protocols; the Facade delegates to them.
 """
 
-from typing import TYPE_CHECKING, Any, Dict, Generator, List, Optional, Protocol, Union, runtime_checkable
+from collections.abc import Generator
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
     from mcp_client.ephemeral import EphemeralIntegration
