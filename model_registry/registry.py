@@ -15,32 +15,18 @@ Features:
 import asyncio
 import logging
 import threading
-from datetime import datetime
-from typing import Dict, List, Optional, Any
+from typing import Any, Dict, List, Optional
 
 # Enable nested asyncio.run() calls to prevent RuntimeError when called from
 # within an already-running event loop (e.g., from FastMCP async context)
 import nest_asyncio
+
 nest_asyncio.apply()
 
-from .schemas import (
-    ModelMetadata,
-    ModelCapabilities,
-    RegistryStats,
-    ResearchStatus,
-    ModelType
-)
-from .lms_integration import (
-    LMSIntegration,
-    LMSNotInstalledError,
-    LMSCommandError
-)
 from .cache import CacheManager
-from .research import (
-    ModelResearcher,
-    ResearchResult,
-    apply_research_to_metadata
-)
+from .lms_integration import LMSIntegration
+from .research import ModelResearcher, apply_research_to_metadata
+from .schemas import ModelMetadata, ModelType, ResearchStatus
 
 logger = logging.getLogger(__name__)
 
@@ -362,8 +348,8 @@ class ModelRegistry:
 
         # Track unchanged cached models
         for model_id in cached_ids - removed_ids:
-            if model_id not in [r for r in results["researched"]]:
-                if model_id not in [f for f in results["failed"]]:
+            if model_id not in results["researched"]:
+                if model_id not in results["failed"]:
                     results["cached"].append(model_id)
 
         # Save updated cache

@@ -26,12 +26,12 @@ __all__ = [
     "check_lms_availability",
 ]
 
-import subprocess
 import json
 import logging
+import subprocess
 import threading
 import time
-from typing import Optional, Dict, List, Any
+from typing import Any, Dict, List, Optional
 
 from config.constants import (
     LMS_CLI_CHECK_TIMEOUT,
@@ -45,7 +45,7 @@ from config.constants import (
 )
 from core.exceptions import LLMError
 from utils.retry import run_with_retry
-from utils.validation import validate_model_name, ValidationError
+from utils.validation import ValidationError, validate_model_name
 
 logger = logging.getLogger(__name__)
 
@@ -77,12 +77,12 @@ class LMSRestClient:
         self._download_endpoint = LMS_DOWNLOAD_MODEL_ENDPOINT
         self._load_timeout = LMS_REST_LOAD_TIMEOUT
         self._default_timeout = LMS_REST_DEFAULT_TIMEOUT
-        self._client: "httpx.Client | None" = None
+        self._client = None  # httpx.Client, lazily initialized
         self._cache_lock = threading.Lock()
         self._models_cache: list[dict] | None = None
         self._models_cache_time: float = 0.0
 
-    def _get_client(self) -> "httpx.Client":
+    def _get_client(self):  # -> httpx.Client
         """Get or create the shared httpx.Client for connection pooling."""
         if self._client is None:
             import httpx
@@ -880,7 +880,7 @@ ALTERNATIVE:
                                 logger.info(f"✅ Model '{model_name}' reactivated successfully via API call")
                                 return True
                             else:
-                                logger.warning(f"⚠️  API call succeeded but model still not active")
+                                logger.warning("⚠️  API call succeeded but model still not active")
                                 # Fall through to unload+reload
                         else:
                             logger.warning(f"⚠️  API call failed with status {response.status_code}")
@@ -1132,7 +1132,7 @@ ALTERNATIVE:
         """
         if not cls.is_installed():
             print(f"\n{'='*80}")
-            print(f"⚠️  WARNING: LMS CLI not installed")
+            print("⚠️  WARNING: LMS CLI not installed")
             print(f"{'='*80}")
             print(f"\nContext: {context}")
             print("\nWithout LMS CLI, you may experience:")

@@ -8,7 +8,8 @@ to specialized sub-clients; this class exists only for API compatibility.
 
 import logging
 import time
-from typing import Any, Dict, Generator, List, NoReturn, Optional, Union
+from collections.abc import Generator
+from typing import Any, Dict, List, NoReturn, Optional, Union
 
 import requests
 
@@ -22,13 +23,12 @@ from config.constants import (
 )
 from llm.anthropic_client import AnthropicClient
 from llm.chat_client import ChatClient
-from llm.native_chat_client import NativeChatClient
-from mcp_client.ephemeral import EphemeralIntegration
 from llm.exceptions import LLMResponseError
 from llm.format_adapter import FormatAdapter
 from llm.http_transport import HTTPTransport, handle_request_exception
 from llm.jit_loader import ensure_model_loaded
 from llm.model_info_client import ModelInfoClient
+from llm.native_chat_client import NativeChatClient
 from llm.protocols import (
     AnthropicProvider,
     ChatProvider,
@@ -41,6 +41,7 @@ from llm.protocols import (
 from llm.responses_client import ResponsesClient
 from llm.streaming_client import StreamingClient
 from llm.thinking_client import ThinkingClient
+from mcp_client.ephemeral import EphemeralIntegration
 
 logger = logging.getLogger(__name__)
 
@@ -110,7 +111,7 @@ class LLMClient:
         """Ensure session is closed on garbage collection (safety net)."""
         try:
             self.close()
-        except Exception:
+        except Exception:  # noqa: S110
             pass
 
     def __enter__(self) -> "LLMClient":
@@ -367,7 +368,7 @@ class LLMClient:
         model: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Generate a vision completion from a multimodal LLM."""
-        from utils.image_utils import ImageInput, build_vision_content, process_image_input
+        from utils.image_utils import build_vision_content, process_image_input
 
         if isinstance(images, str):
             images = [images]

@@ -48,10 +48,14 @@ ignore = [
     "E501",   # line too long (handled by formatter)
     "B008",   # do not perform function calls in argument defaults
     "C901",   # too complex
+    "UP006",  # Use `list` instead of `List` — bulk modernization deferred
+    "UP035",  # `typing.List` deprecated — bulk modernization deferred
+    "E402",   # module-level import not at top — by design (sys.path, conditional)
+    "F403",   # wildcard imports — by design in config/constants/__init__.py
 ]
 
 [tool.ruff.lint.isort]
-known-first-party = ["config", "llm", "mcp_client", "tools", "utils", "model_registry"]
+known-first-party = ["config", "core", "llm", "mcp_client", "tools", "utils", "model_registry"]
 
 [tool.mypy]
 python_version = "3.9"

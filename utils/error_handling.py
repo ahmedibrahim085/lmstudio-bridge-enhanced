@@ -9,12 +9,12 @@ asynchronous LLM operations, including:
 These utilities help make the system more resilient to transient failures.
 """
 
-import time
 import asyncio
-import random
-from functools import wraps
-from typing import Callable, Any, Optional, Tuple
 import logging
+import random
+import time
+from functools import wraps
+from typing import Any, Callable, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -52,15 +52,11 @@ def retry_with_backoff(
             # Async version
             @wraps(func)
             async def async_wrapper(*args, **kwargs) -> Any:
-                last_exception = None
-
                 for attempt in range(max_retries):
                     try:
                         return await func(*args, **kwargs)
 
                     except exceptions as e:
-                        last_exception = e
-
                         # If this was the last attempt, raise the exception
                         if attempt == max_retries - 1:
                             logger.error(
@@ -86,15 +82,11 @@ def retry_with_backoff(
             # Sync version
             @wraps(func)
             def sync_wrapper(*args, **kwargs) -> Any:
-                last_exception = None
-
                 for attempt in range(max_retries):
                     try:
                         return func(*args, **kwargs)
 
                     except exceptions as e:
-                        last_exception = e
-
                         # If this was the last attempt, raise the exception
                         if attempt == max_retries - 1:
                             logger.error(

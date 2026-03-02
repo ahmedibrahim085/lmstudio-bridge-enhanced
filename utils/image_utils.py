@@ -255,7 +255,6 @@ def _process_file_path(file_path: str, detail: str) -> ImageInput:
     Returns:
         ImageInput with base64 data URI
     """
-    errors = []
     warnings = []
 
     # Resolve and validate path
@@ -324,7 +323,7 @@ def _process_file_path(file_path: str, detail: str) -> ImageInput:
             warnings=warnings
         )
 
-    except IOError as e:
+    except OSError as e:
         return ImageInput(
             input_type=ImageInputType.FILE_PATH,
             url="",

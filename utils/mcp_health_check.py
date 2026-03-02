@@ -73,7 +73,7 @@ class MCPHealthChecker:
                         try:
                             with open(config_file) as f:
                                 lms_config["mcpServers"][mcp_dir.name] = json.load(f)
-                        except Exception:
+                        except Exception:  # noqa: S110
                             pass
             if lms_config["mcpServers"]:
                 return lms_config
@@ -280,7 +280,7 @@ class MCPHealthChecker:
                 print(f"❌ {mcp_name:20s} - NOT RUNNING")
                 print(f"   Error: {status.error}")
                 if status.log_excerpt:
-                    print(f"   Log excerpt:")
+                    print("   Log excerpt:")
                     for line in status.log_excerpt.split('\n')[:5]:
                         print(f"      {line}")
 

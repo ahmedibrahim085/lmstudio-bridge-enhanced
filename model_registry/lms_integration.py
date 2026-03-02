@@ -8,13 +8,13 @@ querying available and loaded models.
 Requires: LMS CLI installed (npm install -g @lmstudio/lms or brew install lmstudio-ai/lms/lms)
 """
 
-import subprocess
 import json
 import logging
-from typing import List, Dict, Any, Optional, Tuple
+import subprocess
 from dataclasses import dataclass
+from typing import Any, Dict, List, Optional, Tuple
 
-from .schemas import ModelMetadata, ModelType
+from .schemas import ModelMetadata
 
 logger = logging.getLogger(__name__)
 
@@ -175,12 +175,12 @@ class LMSIntegration:
 
             return result.stdout
 
-        except subprocess.TimeoutExpired:
+        except subprocess.TimeoutExpired as exc:
             raise LMSCommandError(
                 command=" ".join(cmd),
                 stderr=f"Command timed out after {timeout}s",
                 returncode=-1
-            )
+            ) from exc
 
     @classmethod
     def get_all_models(cls, include_embeddings: bool = True) -> List[Dict[str, Any]]:
@@ -215,7 +215,7 @@ class LMSIntegration:
                 command="lms ls --json",
                 stderr=f"Invalid JSON output: {e}",
                 returncode=0
-            )
+            ) from e
 
     @classmethod
     def get_loaded_models(cls) -> List[Dict[str, Any]]:
@@ -243,7 +243,7 @@ class LMSIntegration:
                 command="lms ps --json",
                 stderr=f"Invalid JSON output: {e}",
                 returncode=0
-            )
+            ) from e
 
     @classmethod
     def get_all_model_ids(cls, include_embeddings: bool = True) -> List[str]:
@@ -334,6 +334,7 @@ class LMSIntegration:
         Returns None on any error so callers can fall back to the CLI path.
         """
         import httpx
+
         from config.constants import DEFAULT_LMSTUDIO_BASE_URL, NATIVE_MODELS_ENDPOINT
 
         url = (base_url or DEFAULT_LMSTUDIO_BASE_URL).rstrip("/")

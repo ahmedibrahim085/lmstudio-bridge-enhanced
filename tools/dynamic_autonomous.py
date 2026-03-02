@@ -470,7 +470,7 @@ class DynamicAutonomousAgent:
             # Extract root cause from nested exception groups for clearer error messages
             import sys
             root_cause = e
-            if sys.version_info >= (3, 11) and isinstance(e, BaseExceptionGroup):
+            if sys.version_info >= (3, 11) and isinstance(e, BaseExceptionGroup):  # noqa: F821
                 # Unwrap nested ExceptionGroups to find the actual error
                 while hasattr(root_cause, 'exceptions') and root_cause.exceptions:
                     root_cause = root_cause.exceptions[0]
