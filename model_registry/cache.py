@@ -16,7 +16,7 @@ import logging
 import os
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Any
+from typing import Any, Dict, List, Optional
 
 from .schemas import ModelMetadata, RegistryStats, ResearchStatus
 
@@ -103,7 +103,7 @@ class CacheManager:
             return {}
 
         try:
-            with open(self.cache_path, "r") as f:
+            with open(self.cache_path) as f:
                 data = json.load(f)
 
             # Parse metadata objects
@@ -277,7 +277,7 @@ class CacheManager:
         # Get last updated time from cache file
         if self.cache_path.exists():
             try:
-                with open(self.cache_path, "r") as f:
+                with open(self.cache_path) as f:
                     data = json.load(f)
                 if data.get("updated_at"):
                     stats.last_updated = datetime.fromisoformat(data["updated_at"])
@@ -357,7 +357,7 @@ class CacheManager:
         if not self.cache_path.exists():
             return {"version": "1.0", "models": {}}
 
-        with open(self.cache_path, "r") as f:
+        with open(self.cache_path) as f:
             return json.load(f)
 
     def import_from_dict(self, data: Dict[str, Any]) -> int:

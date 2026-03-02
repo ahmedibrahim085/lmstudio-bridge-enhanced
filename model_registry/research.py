@@ -12,20 +12,19 @@ Research Strategy:
 4. Fall back to inference if no data found
 """
 
-import re
-import logging
 import asyncio
-from datetime import datetime
-from typing import Optional, List, Dict, Any, Tuple
+import logging
 from dataclasses import dataclass
+from datetime import datetime
+from typing import Any, Dict, List, Optional
 
 from .schemas import (
-    ModelMetadata,
-    ModelCapabilities,
     BenchmarkData,
     CapabilityScore,
     CapabilitySource,
-    ResearchStatus
+    ModelCapabilities,
+    ModelMetadata,
+    ResearchStatus,
 )
 
 logger = logging.getLogger(__name__)

@@ -26,7 +26,7 @@ from llm.sse_parser import parse_sse_stream
 
 def _make_client():
     """Create LLMClient with mocked config (no real LM Studio needed)."""
-    with patch("llm.llm_client.get_config") as mock_cfg:
+    with patch("llm.http_transport.get_config") as mock_cfg:
         mock_cfg.return_value.lmstudio.api_base = "http://localhost:1234/v1"
         mock_cfg.return_value.lmstudio.default_model = "test-model"
         client = LLMClient()

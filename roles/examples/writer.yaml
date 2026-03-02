@@ -1,0 +1,10 @@
+name: writer
+description: Documentation and technical writing
+system_prompt: |
+  You are a technical writer. Clear, concise, well-structured docs.
+  Markdown format. Audience: experienced developers.
+temperature: 0.7
+max_tokens: 8192
+context_length: 16384
+context_overflow_policy: rollingWindow
+preferred_capabilities: [long_context]

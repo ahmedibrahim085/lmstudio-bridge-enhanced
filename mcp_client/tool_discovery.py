@@ -6,7 +6,8 @@ This module handles discovering tools from MCP servers and converting
 their schemas to OpenAI-compatible format for LLM tool calling.
 """
 
-from typing import List, Dict, Any, Optional
+from typing import Any, Dict, List, Optional
+
 from mcp import ClientSession
 from mcp.types import Tool
 

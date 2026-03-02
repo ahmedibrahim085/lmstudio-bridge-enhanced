@@ -1,15 +1,27 @@
-"""MCP client functionality for connecting to other MCP servers."""
+"""MCP client functionality for connecting to other MCP servers.
+
+Two server configuration modes:
+- **Static** (startup-time): ``MCPDiscovery`` reads ``.mcp.json`` files to
+  discover servers available for the entire session.
+- **Dynamic** (per-request): ``EphemeralIntegration`` attaches MCP servers
+  to individual ``/api/v1/chat`` requests via the ``integrations`` parameter
+  (LM Studio 0.4+).
+"""
 
 from .connection import MCPConnection, MCPConnectionManager
-from .tool_discovery import ToolDiscovery, SchemaConverter, ToolRegistry
-from .executor import ToolExecutor, BatchToolExecutor
-from .roots_manager import RootsManager
+from .ephemeral import EphemeralIntegration, build_integrations_payload, validate_integration
+from .executor import BatchToolExecutor, ToolExecutor
 from .persistent_session import PersistentMCPSession
-from .type_coercion import coerce_tool_arg_types, safe_call_tool, NUMERIC_PARAMS
+from .roots_manager import RootsManager
+from .tool_discovery import SchemaConverter, ToolDiscovery, ToolRegistry
+from .type_coercion import NUMERIC_PARAMS, coerce_tool_arg_types, safe_call_tool
 
 __all__ = [
     "MCPConnection",
     "MCPConnectionManager",
+    "EphemeralIntegration",
+    "build_integrations_payload",
+    "validate_integration",
     "ToolDiscovery",
     "SchemaConverter",
     "ToolRegistry",
@@ -19,5 +31,5 @@ __all__ = [
     "PersistentMCPSession",
     "coerce_tool_arg_types",
     "safe_call_tool",
-    "NUMERIC_PARAMS"
+    "NUMERIC_PARAMS",
 ]

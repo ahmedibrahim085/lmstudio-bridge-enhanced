@@ -6,9 +6,9 @@ Implements the MCP Roots Protocol allowing runtime directory updates
 without reconnecting to the filesystem MCP server.
 """
 
-from typing import List, Optional, Dict, Any, Callable
-from pathlib import Path
 import logging
+from pathlib import Path
+from typing import Any, Callable, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 

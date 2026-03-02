@@ -20,9 +20,9 @@ Configuration:
     This allows adding custom numeric parameters without code changes.
 """
 
-import os
 import logging
-from typing import Dict, Any, Set
+import os
+from typing import Any, Dict, Set
 
 logger = logging.getLogger(__name__)
 

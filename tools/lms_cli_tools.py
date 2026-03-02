@@ -26,7 +26,7 @@ Requirements:
   Installation: brew install lmstudio-ai/lms/lms
 """
 
-from typing import Dict, Any, Optional
+from typing import Any, Dict, Optional
 
 from utils.lms_helper import LMSHelper
 from utils.model_fallback import get_fallback_manager

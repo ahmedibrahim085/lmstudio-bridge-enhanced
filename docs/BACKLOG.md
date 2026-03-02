@@ -1,19 +1,19 @@
 # LM Studio Bridge Enhanced — Execution Backlog
 
-> Updated: 2026-03-01 | Post-code-quality-audit | Baseline: ~1684 tests passing, 91% coverage
+> Updated: 2026-03-02 | Post-v5.0.0 | Baseline: ~1969 tests passing, 91% coverage
 
 ---
 
-## Current State (Verified 2026-02-23)
+## Current State (Verified 2026-03-02)
 
 | Metric | Value |
 |--------|-------|
-| Branch | `feat/round-d-v4` at `3455f69` |
-| Tests | ~1684 passed, 0 failures |
-| Coverage | **91%** |
+| Branch | `feat/arch-2-constants-split` |
+| Tests | ~1969 passed, 0 failures |
+| Coverage | **91%+** |
 | Coverage target | **80% minimum / 89% goal (exceeded)** |
-| VERSION | 4.0.0 (in constants.py) |
-| Completed rounds | Phase 1, Phase 1.5, Round A, Round B, Round C, Polish, Error Audit, Code Quality Audit |
+| VERSION | 5.0.0 (in config/constants/version.py) |
+| Completed rounds | Phase 1, 1.5, Round A-D, Error Audit, Code Quality, v5.0.0 (Pre-flight + Phase A + Phase B + Phase C) |
 
 ---
 
@@ -166,6 +166,24 @@ Round D ────────────────┘ DONE (v4.0.0)
             OPP-26 ═══╣
             OPP-30 ═══╝
   [Gate: coverage ≥ 91% ✅, VERSION → v4.0.0 ✅]
+                        │
+v5.0.0 Phase A ────────┘ DONE (Architecture)
+  ARCH-2 ═══╗
+  ARCH-3 ═══╣ parallel (independent)
+  ARCH-4 ═══╣
+  ARCH-5 ═══╝
+  ARCH-1 ────→ (after ARCH-2..5)
+                        │
+v5.0.0 Phase B ────────┘ DONE (Features)
+  OPP-21 ═══╗
+  OPP-28 ═══╣ parallel (independent)
+  OPP-29 ═══╣
+  OPP-31 ═══╝
+  OPP-27 → OPP-24 (sequential)
+                        │
+v5.0.0 Phase C ────────┘ DONE (Major)
+  OPP-19 → OPP-25 (sequential)
+  [Gate: coverage ≥ 91% ✅, VERSION → v5.0.0 ✅]
 ```
 
 ---
@@ -187,7 +205,7 @@ Low-effort, high-value additive improvements. All backward compatible.
 
 ---
 
-## v5.0.0 — Architecture + Features (PROPOSED)
+## v5.0.0 — Architecture + Features (DONE)
 
 Major version combining architecture refactoring, medium-lift features, and breaking changes.
 All breaking changes bundled into one upgrade — v4.x stays a "safe upgrade" guarantee.
@@ -206,26 +224,23 @@ Addresses top findings from `docs/ARCHITECTURE_REVIEW.md` (score: 62/100).
 
 **Execution**: A-2 through A-5 in parallel (independent). A-1 after (touches many files).
 
-### Phase B: Round E — Medium-Lift Features
+### Phase B: Round E — Medium-Lift Features (DONE)
 
-| Step | OPP | Name | Type | Evolves | Backward Compat | Effort | Depends On |
-|------|-----|------|------|---------|-----------------|--------|------------|
-| B-1 | OPP-21 | Native Reasoning Parameter | EVOLUTION | OPP-14 (Extended Thinking) | No — replaces `thinking_budget` | LOW | OPP-14 ✅ |
-| B-2 | OPP-24 | Model Auto-Download (REST API) | EVOLUTION | OPP-04 (Model Lifecycle) | Yes — additive | MEDIUM | OPP-04 ✅ |
-| B-3 | OPP-27 | Advanced Model Load Params | EVOLUTION | OPP-04 (Model Lifecycle) | Yes — additive | LOW | OPP-04 ✅ |
-| B-4 | OPP-28 | API Authentication | NEW | None | Yes — additive header | LOW | None |
-| B-5 | OPP-29 | Log-Probabilities | NEW | None | Yes — additive | LOW | None |
+| Step | OPP | Name | Type | Status |
+|------|-----|------|------|--------|
+| B-1 | OPP-21 | Native Reasoning Parameter | EVOLUTION | ✅ DONE |
+| B-2 | OPP-24 | Model Auto-Download (REST API) | EVOLUTION | ✅ DONE |
+| B-3 | OPP-27 | Advanced Model Load Params | EVOLUTION | ✅ DONE |
+| B-4 | OPP-28 | API Authentication | NEW | ✅ DONE |
+| B-5 | OPP-29 | Log-Probabilities | NEW | ✅ DONE |
+| B-6 | OPP-31 | Model Profiles | NEW | ✅ DONE |
 
-**Parallelization**: OPP-27 → OPP-24 sequential (share `lms_helper.py`). OPP-21 + OPP-28 + OPP-29 independent.
+### Phase C: Round F — Major Features (DONE)
 
-### Phase C: Round F — Major Features
-
-| Step | OPP | Name | Type | Evolves | Backward Compat | Effort | Depends On |
-|------|-----|------|------|---------|-----------------|--------|------------|
-| C-1 | OPP-19 | Native Chat API (`/api/v1/chat`) | EVOLUTION | OPP-12 (Streaming) + OPP-16 (Native MCP) | No — new streaming parser | HIGH | OPP-12 ✅, OPP-16 ✅ |
-| C-2 | OPP-25 | Ephemeral MCP Servers | EVOLUTION | OPP-16 (Native MCP via API) | No — restructures `mcp_servers` | HIGH | OPP-16 ✅, OPP-19 |
-
-**Execution**: Sequential — OPP-19 must land first (OPP-25 uses native chat API).
+| Step | OPP | Name | Type | Status |
+|------|-----|------|------|--------|
+| C-1 | OPP-19 | Native Chat API (`/api/v1/chat`) | EVOLUTION | ✅ DONE |
+| C-2 | OPP-25 | Ephemeral MCP Servers | EVOLUTION | ✅ DONE |
 
 ### v5.0.0 Execution Order
 
@@ -241,7 +256,8 @@ Phase A: Architecture (unblocks cleaner Phase B/C implementation)
 Phase B: Medium-Lift Features
   OPP-21 ═══╗
   OPP-28 ═══╣ parallel (independent)
-  OPP-29 ═══╝
+  OPP-29 ═══╣
+  OPP-31 ═══╝
   OPP-27 → OPP-24  (sequential, shared files)
               │
               ▼
@@ -251,37 +267,51 @@ Phase C: Major Features
 
 **Gate**: Coverage >= 90%, all tests pass, architecture score >= 75/100, VERSION → v5.0.0
 
+### v5.0.0 Gate ✅
+- [x] All 8 v5 OPPs + 5 ARCH items implemented and tested
+- [x] Coverage >= 91% (maintained)
+- [x] All tests pass (~1969 total)
+- [x] Architect verification passed (APPROVED)
+- [x] VERSION bumped to v5.0.0
+- [x] Ruff + pyright clean on all new files
+
 ---
 
 ## New Dependency Chains (v4.0.0 / v5.0.0)
 
-### Chain E: Streaming Evolution
+### Chain E: Streaming Evolution (ALL DONE)
 ```
-OPP-12 DONE → OPP-23 [v4.0.0] → OPP-19 [v5-C]
-```
-
-### Chain F: Model Lifecycle Evolution
-```
-OPP-04 DONE → OPP-22 [v4.0.0]
-OPP-04 DONE → OPP-27 [v5-B] → OPP-24 [v5-B]
-OPP-04 DONE → OPP-30 [v4.0.0]
+OPP-12 DONE → OPP-23 DONE → OPP-19 DONE
 ```
 
-### Chain G: Reasoning Evolution
+### Chain F: Model Lifecycle Evolution (ALL DONE)
 ```
-OPP-14 DONE → OPP-21 [v5-B]
-```
-
-### Chain H: MCP Evolution
-```
-OPP-16 DONE → OPP-19 [v5-C] → OPP-25 [v5-C]
+OPP-04 DONE → OPP-22 DONE
+OPP-04 DONE → OPP-27 DONE → OPP-24 DONE
+OPP-04 DONE → OPP-30 DONE
 ```
 
-### Independent
+### Chain G: Reasoning Evolution (ALL DONE)
 ```
-OPP-26 (sampling params) [v4.0.0] — no dependencies
-OPP-28 (auth) [v5-B] — no dependencies
-OPP-29 (logprobs) [v5-B] — no dependencies
+OPP-14 DONE → OPP-21 DONE
+```
+
+### Chain H: MCP Evolution (ALL DONE)
+```
+OPP-16 DONE → OPP-19 DONE → OPP-25 DONE
+```
+
+### Chain I: Model Profiles (ALL DONE)
+```
+OPP-04 DONE → OPP-22 DONE → OPP-31 DONE
+OPP-26 DONE ──────────────↗
+```
+
+### Independent (ALL DONE)
+```
+OPP-26 DONE (sampling params)
+OPP-28 DONE (auth)
+OPP-29 DONE (logprobs)
 ```
 
 ---
@@ -293,14 +323,14 @@ OPP-29 (logprobs) [v5-B] — no dependencies
 | Type | Count | OPPs |
 |------|-------|------|
 | EVOLUTION (extends existing) | 8 | OPP-19, 21, 22, 23, 24, 25, 27, 30 |
-| NEW (greenfield) | 3 | OPP-26, 28, 29 |
+| NEW (greenfield) | 4 | OPP-26, 28, 29, 31 |
 | ALREADY EXISTS (removed) | 1 | ~~OPP-20~~ (structured output — already in v3.2.0) |
 
 ### By Backward Compatibility
 
 | Compat | Count | OPPs |
 |--------|-------|------|
-| Yes (additive) | 8 | OPP-22, 23, 24, 26, 27, 28, 29, 30 |
+| Yes (additive) | 9 | OPP-22, 23, 24, 26, 27, 28, 29, 30, 31 |
 | No (breaking) | 3 | OPP-19, 21, 25 |
 
 ---
@@ -379,3 +409,6 @@ These are not individual OPPs — they are **synergy effects** from combining mu
 | 2026-02-24 | Added Architecture Refactoring phase (ARCH-1..5) from ARCHITECTURE_REVIEW.md findings |
 | 2026-03-01 | Code quality audit: 12 findings fixed (threading, error contracts, logging, dedup, imports) |
 | 2026-03-01 | VERSION bumped to 4.0.0, docs updated to reflect current state |
+| 2026-03-01 | OPP-31 (Model Profiles) spec written — 7-stage research, 112 sources, RICE 24.3, added to v5.0.0 Phase B |
+| 2026-03-02 | v5.0.0 complete: 57 commits, Phase A (5 ARCH) + Phase B (6 OPPs) + Phase C (2 OPPs), ~1969 tests, 91% coverage |
+| 2026-03-02 | All v5 sections marked DONE, gate checklist verified, documentation updated |

@@ -1,13 +1,15 @@
 """Configuration package for LM Studio Bridge Enhanced."""
 
 # Import all constants
-from .constants import *
+import os
 
 # Import config_main functionality
 import sys
-import os
+
+from .constants import *
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from config_main import get_config, Config, LMStudioConfig, MCPConfig, reset_config
+from config_main import Config, LMStudioConfig, MCPConfig, get_config, reset_config
 
 # Make everything available from config package
 __all__ = [

@@ -5,11 +5,11 @@ MCP client connection management module.
 This module handles connecting to and managing sessions with MCP servers.
 """
 
-import asyncio
-from typing import Optional, List, Dict, Any
 from contextlib import asynccontextmanager
+from typing import Any, Dict, List, Optional
+
 from mcp import ClientSession
-from mcp.client.stdio import stdio_client, StdioServerParameters
+from mcp.client.stdio import StdioServerParameters, stdio_client
 
 
 class MCPConnection:

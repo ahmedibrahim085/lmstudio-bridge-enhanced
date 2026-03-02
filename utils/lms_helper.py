@@ -26,12 +26,12 @@ __all__ = [
     "check_lms_availability",
 ]
 
-import subprocess
 import json
 import logging
+import subprocess
 import threading
 import time
-from typing import Optional, Dict, List, Any
+from typing import Any, Dict, List, Optional
 
 from config.constants import (
     LMS_CLI_CHECK_TIMEOUT,
@@ -43,9 +43,9 @@ from config.constants import (
     MODEL_LOADING_DELAY,
     MODEL_REACTIVATION_DELAY,
 )
-from llm.exceptions import LLMError
+from core.exceptions import LLMError
 from utils.retry import run_with_retry
-from utils.validation import validate_model_name, ValidationError
+from utils.validation import ValidationError, validate_model_name
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +63,7 @@ class LMSRestClient:
     def __init__(self, base_url=None):
         from config.constants import (  # noqa: PLC0415
             DEFAULT_LMSTUDIO_BASE_URL,
+            LMS_DOWNLOAD_MODEL_ENDPOINT,
             LMS_LOAD_MODEL_ENDPOINT,
             LMS_REST_DEFAULT_TIMEOUT,
             LMS_REST_LOAD_TIMEOUT,
@@ -73,14 +74,15 @@ class LMSRestClient:
         self._models_endpoint = NATIVE_MODELS_ENDPOINT
         self._load_endpoint = LMS_LOAD_MODEL_ENDPOINT
         self._unload_endpoint = LMS_UNLOAD_MODEL_ENDPOINT
+        self._download_endpoint = LMS_DOWNLOAD_MODEL_ENDPOINT
         self._load_timeout = LMS_REST_LOAD_TIMEOUT
         self._default_timeout = LMS_REST_DEFAULT_TIMEOUT
-        self._client: "httpx.Client | None" = None
+        self._client = None  # httpx.Client, lazily initialized
         self._cache_lock = threading.Lock()
         self._models_cache: list[dict] | None = None
         self._models_cache_time: float = 0.0
 
-    def _get_client(self) -> "httpx.Client":
+    def _get_client(self):  # -> httpx.Client
         """Get or create the shared httpx.Client for connection pooling."""
         if self._client is None:
             import httpx
@@ -172,7 +174,16 @@ class LMSRestClient:
             logger.warning("LM Studio server availability check failed", exc_info=True)
             return False
 
-    def load_model(self, model_key: str, context_length=None, flash_attention=None):
+    def load_model(
+        self,
+        model_key: str,
+        context_length=None,
+        flash_attention=None,
+        gpu_layers=None,
+        max_concurrent_predictions=None,
+        ttl=None,
+        draft_model=None,
+    ):
         """
         Load model via REST. Check-before-load to prevent duplicates.
 
@@ -190,12 +201,28 @@ class LMSRestClient:
                 "config": self._fetch_model_config(model_key),
             }
 
+        # Validate new load parameters
+        if gpu_layers is not None and gpu_layers < -1:
+            raise ValueError(f"gpu_layers must be >= -1, got {gpu_layers}")
+        if max_concurrent_predictions is not None and max_concurrent_predictions < 1:
+            raise ValueError(
+                f"max_concurrent_predictions must be >= 1, got {max_concurrent_predictions}"
+            )
+
         try:
             body = {"model": model_key}
             if context_length is not None:
                 body["context_length"] = context_length
             if flash_attention is not None:
                 body["flash_attention"] = flash_attention
+            if gpu_layers is not None:
+                body["gpu_layers"] = gpu_layers
+            if max_concurrent_predictions is not None:
+                body["max_concurrent_predictions"] = max_concurrent_predictions
+            if ttl is not None:
+                body["ttl"] = ttl
+            if draft_model is not None:
+                body["draft_model"] = draft_model
 
             response = self._get_client().post(
                 f"{self.base_url}{self._load_endpoint}",
@@ -246,6 +273,86 @@ class LMSRestClient:
         except Exception as e:
             logger.error(f"Failed to unload model: {e}")
             return False
+
+    def download_model(self, model_key: str) -> dict:
+        """Download a model via REST API.
+
+        POST to the download endpoint. Returns structured dict.
+        """
+        if not model_key or not model_key.strip():
+            raise ValueError("model_key cannot be empty")
+
+        try:
+            response = self._get_client().post(
+                f"{self.base_url}{self._download_endpoint}",
+                json={"model": model_key},
+                timeout=self._default_timeout,
+            )
+
+            if response.status_code == 200:
+                data = response.json()
+                result = {
+                    "success": True,
+                    "model": model_key,
+                    "message": f"Download started for '{model_key}'",
+                }
+                if data.get("already_exists"):
+                    result["already_exists"] = True
+                    result["message"] = f"Model '{model_key}' already downloaded"
+                return result
+            elif response.status_code == 409:
+                return {
+                    "success": False,
+                    "model": model_key,
+                    "message": response.text or "Download conflict",
+                    "conflict": True,
+                }
+            else:
+                return {
+                    "success": False,
+                    "model": model_key,
+                    "message": response.text or f"HTTP {response.status_code}",
+                }
+        except Exception as e:
+            return {
+                "success": False,
+                "model": model_key,
+                "message": str(e),
+            }
+
+    def get_download_status(self, model_key: str) -> dict:
+        """Get download progress via REST API.
+
+        GET to the download status endpoint. Returns structured dict.
+        """
+        try:
+            response = self._get_client().get(
+                f"{self.base_url}{self._download_endpoint}/status",
+                params={"model": model_key},
+                timeout=self._default_timeout,
+            )
+
+            if response.status_code == 200:
+                data = response.json()
+                return {
+                    "success": True,
+                    "model": model_key,
+                    "progress": data.get("progress"),
+                    "status": data.get("status"),
+                    "message": f"Download status for '{model_key}'",
+                }
+            else:
+                return {
+                    "success": False,
+                    "model": model_key,
+                    "message": response.text or f"HTTP {response.status_code}",
+                }
+        except Exception as e:
+            return {
+                "success": False,
+                "model": model_key,
+                "message": str(e),
+            }
 
 
 class LMSHelper:
@@ -453,7 +560,7 @@ ALTERNATIVE:
         if rest_client is not None:
             rest_result = rest_client.load_model(model_name)
             if rest_result["memory_error"]:
-                from llm.exceptions import ModelMemoryError
+                from core.exceptions import ModelMemoryError
                 raise ModelMemoryError(model_name)
             if rest_result["success"]:
                 logger.info(f"Model '{model_name}' loaded via REST API")
@@ -492,7 +599,7 @@ ALTERNATIVE:
                 import re
                 memory_match = re.search(r'requires approximately ([\d.]+\s*GB)', error_msg, re.IGNORECASE)
                 if memory_match or 'memory' in error_msg.lower() or 'insufficient' in error_msg.lower():
-                    from llm.exceptions import ModelMemoryError
+                    from core.exceptions import ModelMemoryError
                     required_memory = memory_match.group(1) if memory_match else None
                     raise ModelMemoryError(model_name, required_memory)
 
@@ -500,7 +607,7 @@ ALTERNATIVE:
 
         except Exception as e:
             # Re-raise ModelMemoryError to allow proper handling upstream
-            from llm.exceptions import ModelMemoryError
+            from core.exceptions import ModelMemoryError
             if isinstance(e, ModelMemoryError):
                 raise
             logger.error(f"Error loading model with LMS: {e}")
@@ -773,7 +880,7 @@ ALTERNATIVE:
                                 logger.info(f"✅ Model '{model_name}' reactivated successfully via API call")
                                 return True
                             else:
-                                logger.warning(f"⚠️  API call succeeded but model still not active")
+                                logger.warning("⚠️  API call succeeded but model still not active")
                                 # Fall through to unload+reload
                         else:
                             logger.warning(f"⚠️  API call failed with status {response.status_code}")
@@ -1025,7 +1132,7 @@ ALTERNATIVE:
         """
         if not cls.is_installed():
             print(f"\n{'='*80}")
-            print(f"⚠️  WARNING: LMS CLI not installed")
+            print("⚠️  WARNING: LMS CLI not installed")
             print(f"{'='*80}")
             print(f"\nContext: {context}")
             print("\nWithout LMS CLI, you may experience:")

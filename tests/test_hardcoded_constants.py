@@ -108,9 +108,9 @@ class TestConstantsUsedInCode:
         assert "timeout=30" not in source
 
     def test_llm_client_uses_pool_constants(self):
-        """llm_client.py must use LLM_POOL_* and HTTP_RETRY_* constants."""
+        """http_transport.py must use LLM_POOL_* and HTTP_RETRY_* constants."""
         import inspect
-        import llm.llm_client as mod
+        import llm.http_transport as mod
         source = inspect.getsource(mod)
         assert "LLM_POOL_CONNECTIONS" in source
         assert "LLM_POOL_MAXSIZE" in source

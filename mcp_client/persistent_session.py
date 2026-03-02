@@ -6,15 +6,16 @@ Allows long-lived sessions where directories can be updated dynamically
 at runtime without reconnecting.
 """
 
-from typing import List, Optional, Dict, Any
+import logging
+from contextlib import AsyncExitStack
+from typing import Any, Dict, List, Optional
+
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
-from contextlib import AsyncExitStack
-from .tool_discovery import ToolDiscovery, SchemaConverter
+
 from .executor import ToolExecutor
 from .roots_manager import RootsManager
-import logging
-import asyncio
+from .tool_discovery import ToolDiscovery
 
 logger = logging.getLogger(__name__)
 

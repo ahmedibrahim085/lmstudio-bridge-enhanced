@@ -19,7 +19,7 @@ from config.constants import (
 @pytest.fixture
 def client():
     """Create an LLMClient with mocked config."""
-    with patch("llm.llm_client.get_config") as mock_config:
+    with patch("llm.http_transport.get_config") as mock_config:
         mock_config.return_value.lmstudio.api_base = "http://localhost:1234"
         mock_config.return_value.lmstudio.default_model = "test-model"
         c = LLMClient()
@@ -190,16 +190,16 @@ class TestAnthropicMessagesJIT:
     """JIT model loading tests."""
 
     def test_anthropic_messages_jit_loading(self, client, mock_session):
-        """_ensure_model_loaded() called with JIT_TTL_DEFAULT."""
+        """_ensure_model_loaded() called with JIT_TTL_DEFAULT via AnthropicClient."""
         mock_session.post.return_value = _make_anthropic_response()
 
-        with patch.object(client, "_ensure_model_loaded") as mock_jit:
+        with patch("llm.anthropic_client.ensure_model_loaded") as mock_jit:
             client.anthropic_messages(
                 messages=[{"role": "user", "content": "Hello"}]
             )
             mock_jit.assert_called_once()
             call_args = mock_jit.call_args
-            assert call_args[1]["ttl"] is not None or len(call_args[0]) >= 2
+            assert call_args[1].get("ttl") is not None or len(call_args[0]) >= 2
 
 
 class TestAnthropicMessagesErrors:

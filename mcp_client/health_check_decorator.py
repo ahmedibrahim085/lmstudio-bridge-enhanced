@@ -9,9 +9,9 @@ Per user's insight: Handle MCP availability in BOTH code and tests.
 """
 
 import asyncio
-from functools import wraps
-from typing import Optional, Callable, Any
 import logging
+from functools import wraps
+from typing import Any, Callable, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -173,7 +173,7 @@ def require_any_mcp(mcp_names: list[str], return_error_message: bool = True):
                     f"Error: None of the required MCPs are available.\n\n"
                     f"Required (any one of): {', '.join(mcp_names)}\n\n"
                     f"Status:\n" + "\n".join(f"  - {err}" for err in all_errors) + "\n\n"
-                    f"Please check MCP configuration and logs."
+                    "Please check MCP configuration and logs."
                 )
 
                 if return_error_message:

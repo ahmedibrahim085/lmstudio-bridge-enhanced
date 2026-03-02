@@ -12,11 +12,10 @@ Tools:
 """
 
 import logging
-from typing import Dict, List, Optional, Any
+from typing import Any, Dict, List, Optional
 
-from .registry import get_registry, ModelRegistry
-from .lms_integration import LMSNotInstalledError, LMSCommandError
-from .schemas import ResearchStatus
+from .lms_integration import LMSCommandError, LMSNotInstalledError
+from .registry import get_registry
 
 logger = logging.getLogger(__name__)
 

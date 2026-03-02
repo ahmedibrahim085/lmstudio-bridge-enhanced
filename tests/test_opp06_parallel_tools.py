@@ -20,7 +20,6 @@ import sys
 import os
 import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
-import pytest
 
 # ---------------------------------------------------------------------------
 # Path setup
@@ -37,16 +36,6 @@ from tools.dynamic_autonomous import DynamicAutonomousAgent, _SingleSessionDispa
 def _make_function_call(name, args=None):
     """Build function_call item as returned by LLM output."""
     return {"type": "function_call", "name": name, "arguments": args or {}}
-
-
-def _make_response(output_items, response_id="resp-001"):
-    """Build mock create_response return value."""
-    return {"id": response_id, "output": output_items}
-
-
-def _make_text_output(text):
-    """Build text message output item."""
-    return {"type": "message", "content": [{"type": "output_text", "text": text}]}
 
 
 def _make_function_call_response(tool_name="read_file", arguments=None, response_id="resp_1"):
@@ -208,7 +197,7 @@ class TestExecuteToolsSequential(unittest.TestCase):
         agent = _make_agent()
         fc_list = [_make_function_call("bad_tool", {})]
 
-        async def failing_dispatch(fc_name, tool_args):
+        async def failing_dispatch(_, __):
             raise RuntimeError("tool exploded")
 
         dispatcher = MagicMock()
@@ -223,7 +212,7 @@ class TestExecuteToolsSequential(unittest.TestCase):
 
         # At least one result tuple; error reflected in result text or counter
         self.assertEqual(len(results), 1)
-        fc_name, result_text = results[0]
+        _, result_text = results[0]
         self.assertIn("error", result_text.lower())
 
 
@@ -246,12 +235,6 @@ class TestExecuteToolsParallel(unittest.TestCase):
     # Test 4 (xfail): 3 sequential failures in one round → count hits 3
     # ------------------------------------------------------------------
 
-    @pytest.mark.xfail(
-        reason=(
-            "Sequential path increments per-tool, parallel caps at +1. "
-            "Known inconsistency -- deferred."
-        )
-    )
     def test_sequential_three_failures_same_round(self):
         """
         When three tools all fail in one sequential round the counter reaches 3,
@@ -260,14 +243,14 @@ class TestExecuteToolsParallel(unittest.TestCase):
         NOTE: This diverges from parallel semantics (which caps at +1 per batch).
         Marked xfail to document the known inconsistency; will be resolved later.
         """
-        def always_fc(**kwargs):
+        def always_fc(**_kwargs):
             return _make_multi_fc_response(["t1", "t2", "t3"], response_id="rX")
 
         agent = _make_agent(MagicMock(side_effect=always_fc))
         session = MagicMock()
         session.call_tool = AsyncMock()
 
-        async def always_fail_dispatch(fc_name, tool_args):
+        async def always_fail_dispatch(_, __):
             raise RuntimeError("tool failure")
 
         dispatcher = MagicMock()
@@ -306,7 +289,7 @@ class TestExecuteToolsParallel(unittest.TestCase):
         )
 
         self.assertEqual(len(results), 1)
-        name, result = results[0]
+        name, _result = results[0]
         self.assertEqual(name, "read_file")
 
     # ------------------------------------------------------------------
@@ -355,7 +338,7 @@ class TestExecuteToolsParallel(unittest.TestCase):
             _make_function_call("second_tool", {}),
         ]
 
-        async def ordered_dispatch(fc_name, tool_args):
+        async def ordered_dispatch(fc_name, _tool_args):
             # second_tool "arrives" faster conceptually, but order must be preserved
             if fc_name == "second_tool":
                 await asyncio.sleep(0)
@@ -387,7 +370,7 @@ class TestExecuteToolsParallel(unittest.TestCase):
             _make_function_call("good_2", {}),
         ]
 
-        async def partial_dispatch(fc_name, tool_args):
+        async def partial_dispatch(fc_name, _tool_args):
             if fc_name == "bad_tool":
                 raise RuntimeError("bad_tool exploded")
             return fc_name, f"ok_{fc_name}"
@@ -421,7 +404,7 @@ class TestExecuteToolsParallel(unittest.TestCase):
             _make_function_call("t3", {}),
         ]
 
-        async def always_fail(fc_name, tool_args):
+        async def always_fail(fc_name, _tool_args):
             raise RuntimeError(f"{fc_name} failed")
 
         dispatcher = MagicMock()
@@ -452,7 +435,7 @@ class TestExecuteToolsParallel(unittest.TestCase):
             _make_function_call("t2", {}),
         ]
 
-        async def always_succeed(fc_name, tool_args):
+        async def always_succeed(fc_name, _tool_args):
             return fc_name, f"result_{fc_name}"
 
         dispatcher = MagicMock()
@@ -499,7 +482,7 @@ class TestParallelLoopIntegration(unittest.TestCase):
             _make_message_response("done", response_id="r2"),
         ])
 
-        def create_response_side_effect(**kwargs):
+        def create_response_side_effect(**_kwargs):
             return next(responses)
 
         agent = _make_agent(MagicMock(side_effect=create_response_side_effect))
@@ -507,7 +490,7 @@ class TestParallelLoopIntegration(unittest.TestCase):
 
         parallel_called = {"called": False}
 
-        async def spy_parallel(dispatcher, fc_list):
+        async def spy_parallel(dispatcher, fc_list):  # noqa: ARG001
             parallel_called["called"] = True
             return [(fc["name"], "ok") for fc in fc_list]
 
@@ -543,7 +526,7 @@ class TestParallelLoopIntegration(unittest.TestCase):
             _make_message_response("done", response_id="r2"),
         ])
 
-        def create_response_side_effect(**kwargs):
+        def create_response_side_effect(**_kwargs):
             return next(responses)
 
         agent = _make_agent(MagicMock(side_effect=create_response_side_effect))
@@ -551,7 +534,7 @@ class TestParallelLoopIntegration(unittest.TestCase):
 
         sequential_called = {"called": False}
 
-        async def spy_sequential(dispatcher, fc_list):
+        async def spy_sequential(dispatcher, fc_list):  # noqa: ARG001
             sequential_called["called"] = True
             return [(fc["name"], "ok") for fc in fc_list]
 
@@ -598,7 +581,7 @@ class TestParallelLoopIntegration(unittest.TestCase):
             _make_message_response("recovered", response_id="r2"),
         ])
 
-        def create_response_side_effect(**kwargs):
+        def create_response_side_effect(**_kwargs):
             return next(responses)
 
         agent = _make_agent(MagicMock(side_effect=create_response_side_effect))
@@ -633,12 +616,12 @@ class TestParallelLoopIntegration(unittest.TestCase):
             _make_message_response("done", response_id="r2"),
         ])
 
-        def create_response_side_effect(**kwargs):
+        def create_response_side_effect(**_kwargs):
             return next(responses)
 
         agent = _make_agent(MagicMock(side_effect=create_response_side_effect))
 
-        async def raising_dispatch(fc_name, tool_args):
+        async def raising_dispatch(fc_name, _tool_args):
             raise KeyError(f"Unknown tool {fc_name}")
 
         dispatcher = MagicMock()
@@ -676,7 +659,7 @@ class TestParallelLoopIntegration(unittest.TestCase):
 
         call_log = []
 
-        async def mixed_dispatch(fc_name, tool_args):
+        async def mixed_dispatch(fc_name, _tool_args):
             call_log.append(fc_name)
             if fc_name == "slow_tool":
                 raise asyncio.TimeoutError("slow_tool timed out")
@@ -736,7 +719,7 @@ class TestParallelErrorCounting(unittest.TestCase):
             _make_function_call("t3", {}),
         ]
 
-        async def always_fail(fc_name, tool_args):
+        async def always_fail(fc_name, _tool_args):
             raise RuntimeError(f"{fc_name} failed")
 
         dispatcher = MagicMock()
@@ -767,12 +750,12 @@ class TestParallelErrorCounting(unittest.TestCase):
             _make_message_response("completed", response_id="r2"),
         ])
 
-        def create_response_side_effect(**kwargs):
+        def create_response_side_effect(**_kwargs):
             return next(responses)
 
         agent = _make_agent(MagicMock(side_effect=create_response_side_effect))
 
-        async def partial_dispatch(fc_name, tool_args):
+        async def partial_dispatch(fc_name, _tool_args):
             if fc_name == "bad_tool":
                 raise RuntimeError("bad_tool exploded")
             return fc_name, f"ok_{fc_name}"
@@ -811,7 +794,7 @@ class TestParallelErrorCounting(unittest.TestCase):
             _make_function_call("good_2", {}),
         ]
 
-        async def partial_dispatch(fc_name, tool_args):
+        async def partial_dispatch(fc_name, _tool_args):
             if fc_name == "bad_tool":
                 raise RuntimeError("bad_tool exploded")
             return fc_name, f"ok_{fc_name}"
@@ -856,7 +839,7 @@ class TestParallelErrorCounting(unittest.TestCase):
 
         dispatched_to = {}
 
-        async def fake_safe_call_tool(session, name, args):
+        async def fake_safe_call_tool(session, name, _args):
             from mcp.types import CallToolResult, TextContent
             if session is session_a:
                 dispatched_to[name] = "session_a"
@@ -871,7 +854,7 @@ class TestParallelErrorCounting(unittest.TestCase):
             _make_message_response("routed correctly", response_id="r2"),
         ])
 
-        def create_response_side_effect(**kwargs):
+        def create_response_side_effect(**_kwargs):
             return next(responses)
 
         agent = _make_agent(MagicMock(side_effect=create_response_side_effect))

@@ -1,6 +1,6 @@
 # Planning & Execution Guidelines v2.0
 
-> *Updated: 2026-02-23 | Based on: Original guidelines + evidence from Round A execution + coverage data*
+> *Updated: 2026-03-02 | Based on: Original guidelines + evidence from Round A-D execution + v5.0.0 architecture refactoring*
 
 ---
 
@@ -99,9 +99,9 @@ Every change covers:
 ### 09 — No Hardcoding
 
 - **NO hardcoded strings, variables, queries, URLs, timeouts, or magic numbers**
-- All values go in `config/constants.py` with descriptive names and usage comments
+- All values go in `config/constants/` (domain-split package) with descriptive names and usage comments
 - Use parameters for maximum reusability and flexibility
-- Known violations to fix: `chat_completion()` hardcodes `"chat/completions"` instead of `CHAT_COMPLETIONS_ENDPOINT`; `DEFAULT_MAX_RETRIES` collision between `llm_client.py` (=2) and `constants.py` (=3)
+- Known violations: RESOLVED — `DEFAULT_MAX_RETRIES` collision fixed (H-05), `chat_completion()` hardcoding fixed
 
 ### 10 — Test Coverage Requirements
 
@@ -112,7 +112,7 @@ Every change covers:
 | **Critical path coverage** | **95%** | **100%** |
 
 - Measure with: `pytest --cov=llm --cov=tools --cov=config --cov=model_registry --cov=mcp_client --cov=utils --cov-report=term-missing`
-- **Current baseline**: 91% overall, 1684 tests (verified 2026-03-01, v4.0.0)
+- **Current baseline**: 91% overall, ~1969 tests (verified 2026-03-02, v5.0.0)
 - Coverage debt largely resolved through test infrastructure overhaul + error audit + code quality audit
 - Remaining low-coverage modules tracked in per-module coverage reports
 
@@ -165,7 +165,7 @@ Every atomic commit MUST:
 | New API surface added | Minor bump |
 | Breaking change to existing tool signatures | Major bump |
 | Bug fix or minor improvement | Patch bump |
-| Update `config/constants.py:VERSION` | In the same commit as the feature |
+| Update `config/constants/version.py:VERSION` | In the same commit as the feature |
 
 ---
 
@@ -196,7 +196,7 @@ Every atomic commit MUST:
 
 - [ ] All tests still pass
 - [ ] No dead code introduced
-- [ ] Constants extracted to `config/constants.py`
+- [ ] Constants extracted to `config/constants/` package
 - [ ] Commit messages follow format
 
 ### 4.5 Before PR/Merge
@@ -252,3 +252,4 @@ def test_<feature>_integration():
 |---------|------|---------|
 | v1.0 | Pre-2026-02-23 | Original guidelines |
 | v2.0 | 2026-02-23 | Fixed TDD terminology (RED/BLUE/GREEN → RED/GREEN/REFACTOR); Removed dashboard point (no dashboard in project); Added test coverage requirements (80% min / 89% target); Updated external review to GLM-5 via nano-agent; Added integration test requirements (MANDATORY); Added rollback strategy; Added review gates; Added version bump strategy; Added documentation update requirements; Added coverage debt table with baselines; Added commit ordering rule; Added boundary cases to testing requirements |
+| v2.1 | 2026-03-02 | Updated `config/constants.py` references to `config/constants/` package (ARCH-2 split); Updated test baseline to ~1969 tests, v5.0.0; Marked known violations as RESOLVED |

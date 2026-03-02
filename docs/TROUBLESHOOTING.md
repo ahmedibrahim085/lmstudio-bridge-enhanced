@@ -606,13 +606,13 @@ Available models: mistralai/magistral-small-2509, deepseek/deepseek-coder-33b
 **Symptoms**: Task uses default model instead of specified model
 
 **Causes**:
-1. Using old version of lmstudio-bridge-enhanced (< v2.0.0)
+1. Using old version of lmstudio-bridge-enhanced (< v5.0.0)
 2. Model parameter not specified correctly
 3. Positional argument instead of named parameter
 
 **Solutions**:
 
-1. **Update to v2.0.0+**:
+1. **Update to v5.0.0+**:
    ```bash
    cd lmstudio-bridge-enhanced
    git pull
@@ -1052,6 +1052,73 @@ python3 tests/standalone/test_autonomous_tools.py
 # Performance benchmark
 python3 scripts/benchmark_hot_reload.py
 ```
+
+---
+
+## v5.0.0 Feature Issues
+
+### Issue: "Agent profile not found"
+
+**Symptoms**:
+```
+Error: Agent 'coder' not found. Use list_agents() to see configured agents.
+```
+
+**Causes**:
+1. Agent not created yet
+2. Agent name typo
+
+**Solutions**:
+
+1. **Create the agent first**:
+   ```python
+   create_agent(name="coder", model="qwen/qwen3-coder-30b", role="coding")
+   ```
+
+2. **List existing agents**:
+   ```python
+   list_agents()
+   # Shows all configured agent profiles
+   ```
+
+---
+
+### Issue: "Native chat endpoint not available"
+
+**Symptoms**:
+```
+Error: /api/v1/chat endpoint returned 404
+```
+
+**Cause**: LM Studio version doesn't support native chat API
+
+**Solutions**:
+1. Update LM Studio to latest version (native `/api/v1/chat` requires recent builds)
+2. Fall back to OpenAI-compatible `/v1/chat/completions` endpoint
+
+---
+
+### Issue: "Constants import error after v5 upgrade"
+
+**Symptoms**:
+```
+ImportError: cannot import name 'X' from 'config.constants'
+```
+
+**Cause**: v5.0.0 split `config/constants.py` into a package (`config/constants/`). Stale `.pyc` cache files may cause issues.
+
+**Solutions**:
+1. **Clear Python cache**:
+   ```bash
+   find . -type d -name __pycache__ -exec rm -rf {} +
+   ```
+
+2. **Verify import still works** (backward-compatible):
+   ```python
+   # Both work in v5.0.0:
+   from config.constants import VERSION           # package re-export
+   from config.constants.version import VERSION    # direct domain import
+   ```
 
 ---
 

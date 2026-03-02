@@ -6,7 +6,7 @@ Input validation utilities for autonomous execution tools.
 import os
 import re
 from pathlib import Path
-from typing import Optional, Union, List
+from typing import List, Optional, Union
 
 
 class ValidationError(Exception):
@@ -110,7 +110,7 @@ def _validate_single_directory(directory: str, allow_root: bool = False) -> str:
     try:
         path = Path(directory).expanduser().resolve(strict=False)
     except (RuntimeError, OSError) as e:
-        raise ValidationError(f"Invalid directory path: {e}")
+        raise ValidationError(f"Invalid directory path: {e}") from e
 
     # Security: Keep both the normalized (non-resolved) and resolved paths
     # This prevents symlink bypass attacks (e.g., /etc -> /private/etc on macOS)

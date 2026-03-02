@@ -40,51 +40,38 @@ Requirements:
 """
 
 # Core schemas
-from .schemas import (
-    ModelMetadata,
-    ModelCapabilities,
-    CapabilityScore,
-    BenchmarkData,
-    RegistryStats,
-    ModelType,
-    CapabilitySource,
-    ResearchStatus
-)
-
-# LMS Integration
-from .lms_integration import (
-    LMSIntegration,
-    LMSNotInstalledError,
-    LMSCommandError
-)
-
 # Cache management
 from .cache import CacheManager
 
-# Research engine
-from .research import (
-    ModelResearcher,
-    ResearchResult,
-    apply_research_to_metadata
-)
+# LMS Integration
+from .lms_integration import LMSCommandError, LMSIntegration, LMSNotInstalledError
 
 # Main registry
-from .registry import (
-    ModelRegistry,
-    get_registry,
-    reset_registry
+from .registry import ModelRegistry, get_registry, reset_registry
+
+# Research engine
+from .research import ModelResearcher, ResearchResult, apply_research_to_metadata
+from .schemas import (
+    BenchmarkData,
+    CapabilityScore,
+    CapabilitySource,
+    ModelCapabilities,
+    ModelMetadata,
+    ModelType,
+    RegistryStats,
+    ResearchStatus,
 )
 
 # MCP Tools (main API)
 from .tools import (
-    list_available_models,
-    get_model_capabilities,
-    refresh_model_registry,
-    get_best_tool_calling_model,
-    get_best_coding_model,
-    get_best_vision_model,
     TOOL_SCHEMAS,
-    get_tool_handlers
+    get_best_coding_model,
+    get_best_tool_calling_model,
+    get_best_vision_model,
+    get_model_capabilities,
+    get_tool_handlers,
+    list_available_models,
+    refresh_model_registry,
 )
 
 __all__ = [

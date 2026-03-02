@@ -134,7 +134,6 @@ class TestCreateResponsePayload(unittest.TestCase):
     def _make_client(self):
         """Create LLMClient with mocked session."""
         from llm.llm_client import LLMClient
-        client = LLMClient.__new__(LLMClient)
         mock_session = MagicMock()
         mock_response = MagicMock()
         mock_response.json.return_value = {
@@ -149,9 +148,10 @@ class TestCreateResponsePayload(unittest.TestCase):
         mock_response.status_code = 200
         mock_response.raise_for_status = MagicMock()
         mock_session.post.return_value = mock_response
-        client.session = mock_session
-        client.model = "test-model"
-        client.api_base = "http://localhost:1234/v1"
+        with patch("llm.http_transport.get_config") as mock_config:
+            mock_config.return_value.lmstudio.api_base = "http://localhost:1234/v1"
+            mock_config.return_value.lmstudio.default_model = "test-model"
+            client = LLMClient(session=mock_session)
         return client, mock_session
 
     def test_create_response_includes_temperature_in_payload(self):

@@ -5,9 +5,8 @@ Logging utilities for lmstudio-bridge-enhanced.
 Provides structured logging with proper context and levels.
 """
 
-import sys
 import logging
-
+import sys
 
 # Logging levels
 DEBUG = logging.DEBUG

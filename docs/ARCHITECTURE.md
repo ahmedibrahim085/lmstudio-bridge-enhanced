@@ -10,12 +10,14 @@ Deep dive into how LM Studio Bridge Enhanced enables TRUE dynamic MCP support wi
 
 **LM Studio only exposes HTTP APIs** - it does NOT natively support the MCP protocol!
 
-**LM Studio's HTTP APIs** (OpenAI-compatible v1 endpoints):
-1. `GET /v1/models` - List available models
-2. `POST /v1/chat/completions` - Chat completions
-3. `POST /v1/completions` - Text completions
-4. `POST /v1/embeddings` - Generate embeddings
+**LM Studio's HTTP APIs** (4 API surfaces):
+1. `GET /v1/models` - List available models (OpenAI-compatible)
+2. `POST /v1/chat/completions` - Chat completions (OpenAI-compatible)
+3. `POST /v1/completions` - Text completions (OpenAI-compatible)
+4. `POST /v1/embeddings` - Generate embeddings (OpenAI-compatible)
 5. `POST /v1/responses` - Stateful conversations (LM Studio-specific)
+6. `POST /v1/messages` - Anthropic-compatible messages
+7. `POST /api/v1/chat` - Native LM Studio chat with 19 event types (v5.0.0)
 
 **What's Missing**:
 - ❌ No MCP protocol support
@@ -97,7 +99,7 @@ autonomous_with_mcp(
 ### The Three Roles of This Bridge
 
 1. **MCP Server** (to Claude Code)
-   - Exposes 16 tools that Claude can use
+   - Exposes 37 tools that Claude can use
    - Appears as a standard MCP server
    - Integrates seamlessly with Claude Code
 
@@ -149,9 +151,11 @@ autonomous_with_mcp(
 │ lmstudio-bridge-enhanced (MCP Server + Orchestrator)     │
 │  ┌────────────────────────────────────────────────────┐  │
 │  │ FastMCP Server                                     │  │
-│  │  - Exposes 11 tools to Claude Code               │  │
-│  │  - 7 core LM Studio tools                         │  │
-│  │  - 4 dynamic autonomous tools                     │  │
+│  │  - Exposes 37 tools to Claude Code               │  │
+│  │  - 11 core (completions, health, embeddings)      │  │
+│  │  - 6 vision tools + 5 autonomous MCP tools        │  │
+│  │  - 5 agent profile + 1 smart selection            │  │
+│  │  - 9 LMS CLI tools (optional)                     │  │
 │  └────────────────────────────────────────────────────┘  │
 │                                                           │
 │  ┌────────────────────────────────────────────────────┐  │
@@ -672,11 +676,15 @@ def is_model_loaded(model_name: str) -> Optional[bool]:
 
 **MCP Tools** (in tools/lms_cli_tools.py):
 
-Exposes 5 LMS CLI functions as MCP tools:
+Exposes 9 LMS CLI functions as MCP tools:
 - `lms_list_loaded_models`
+- `lms_list_downloaded_models`
 - `lms_load_model`
 - `lms_unload_model`
 - `lms_ensure_model_loaded` ⭐
+- `lms_search_models`
+- `lms_download_model`
+- `lms_resolve_model`
 - `lms_server_status`
 
 See [API Reference](API_REFERENCE.md#lms-cli-tools-optional) for details.
@@ -980,6 +988,95 @@ def get_connection_params(self, mcp_name: str):
 
 ---
 
+## v5.0.0 Architecture Changes
+
+### Facade Pattern (ARCH-1)
+
+The monolithic `LLMClient` (1503 lines, 30+ methods) was split into a **Facade + 7 Protocol-based sub-clients**:
+
+```
+┌──────────────────────────────────────────────────┐
+│                  LLMClient (Facade)               │
+│  Delegates to specialized sub-clients             │
+│  Backward-compatible: all existing methods work   │
+├──────────────────────────────────────────────────┤
+│  ChatClient          │ /v1/chat/completions       │
+│  AnthropicClient     │ /v1/messages               │
+│  ResponsesClient     │ /v1/responses              │
+│  StreamingClient     │ SSE streaming              │
+│  ThinkingClient      │ Reasoning/extended thinking│
+│  ModelInfoClient     │ Model discovery & info     │
+│  NativeChatClient    │ /api/v1/chat (19 events)   │
+└──────────────────────────────────────────────────┘
+```
+
+**Files**: `llm/chat_client.py`, `llm/anthropic_client.py`, `llm/responses_client.py`, `llm/streaming_client.py`, `llm/thinking_client.py`, `llm/model_info_client.py`, `llm/native_chat_client.py`
+
+**Protocol contracts**: `llm/protocols.py` defines `runtime_checkable` Protocol classes.
+
+### Domain-Split Constants (ARCH-2)
+
+`config/constants.py` (854 lines, 205 constants) was converted to a **package with 15 domain files**:
+
+```
+config/constants/
+├── __init__.py      # Re-exports everything (backward-compatible)
+├── version.py       # VERSION, MIN_PYTHON_VERSION
+├── server.py        # Host, port, logging, env vars
+├── api.py           # Endpoints, HTTP status codes, format constants
+├── timeouts.py      # All timeout/retry/TTL constants
+├── models.py        # Default model names, role keywords
+├── errors.py        # Error message strings
+├── limits.py        # Min/max validation bounds
+├── sampling.py      # Default sampling parameters
+├── streaming.py     # SSE parsing constants
+├── thinking.py      # Thinking/reasoning constants
+├── security.py      # SSRF protection, blocked IPs
+├── images.py        # Vision/image constants
+├── mcp.py           # MCP paths and packages
+├── selection.py     # Smart model selection weights
+└── testing.py       # Test timeouts and markers
+```
+
+**Backward-compatible**: `from config.constants import X` still works via `__init__.py` re-exports.
+
+### Native Chat Client (OPP-19)
+
+New sub-client for LM Studio's native `/api/v1/chat` endpoint with **19 SSE event types**:
+
+```
+chat.start → model_load.{start,progress,end} → prompt_processing.{start,progress,end}
+→ reasoning.{start,delta,end} → tool_call.{start,arguments,success,failure}
+→ message.{start,delta,end} → error → chat.end
+```
+
+**Parser**: `llm/native_sse_parser.py` — yields `NativeSSEEvent(event_type, data)` frozen dataclasses.
+
+### Agent Profiles (OPP-31)
+
+User-defined agent slots with auto-resolved model configuration:
+
+- **Agent Slot** = user-defined role + assigned model + auto-tuned parameters
+- **6-family knowledge base**: Qwen, DeepSeek, Llama, Mistral, Gemma, Phi — vendor-researched overlays
+- **Config layering**: critical constraints > user overrides > family overlay > role template > defaults
+- **MCP tools**: `create_agent`, `list_agents`, `remove_agent`, `list_roles`, `create_role`
+
+**Files**: `tools/profiles.py`, `model_registry/profiles.py`, `model_registry/knowledge_base.py`
+
+### Additional v5.0.0 Features
+
+| Feature | OPP | Description |
+|---------|-----|-------------|
+| Reasoning Effort | OPP-21 | `reasoning_effort` parameter (low/medium/high) |
+| Model Auto-Download | OPP-24 | `lms_download_model` tool via REST API |
+| Advanced Load Params | OPP-27 | GPU offload, context length, keep-alive config |
+| API Authentication | OPP-28 | `api_key` parameter on all completions |
+| Log-Probabilities | OPP-29 | `logprobs` and `top_logprobs` parameters |
+| Ephemeral MCP | OPP-25 | Spawn temporary MCP servers per-session |
+| Smart Selection | OPP-08 | `select_best_model` tool with capability matching |
+
+---
+
 ## Conclusion
 
 The architecture enables:
@@ -989,6 +1086,9 @@ The architecture enables:
 ✅ **Generic tool discovery** - No hardcoded assumptions
 ✅ **Autonomous execution** - Local LLM uses tools independently
 ✅ **Multi-MCP sessions** - Use tools from multiple MCPs simultaneously
+✅ **Facade + sub-clients** - Clean separation of concerns (v5.0.0)
+✅ **Agent profiles** - Role-based model routing with auto-tuned params (v5.0.0)
+✅ **4 API surfaces** - OpenAI, Anthropic, Responses, Native Chat (v5.0.0)
 ✅ **Future-proof** - Works with MCPs that don't exist yet!
 
 **The result**: A truly dynamic, scalable, and maintainable MCP bridge!

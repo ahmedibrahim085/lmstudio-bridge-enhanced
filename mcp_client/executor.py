@@ -6,9 +6,10 @@ This module handles executing tools on MCP servers and managing
 tool call results.
 """
 
-from typing import Dict, Any, Optional, List
+from typing import Any, Dict, List
+
 from mcp import ClientSession
-from mcp.types import CallToolResult, TextContent, ImageContent, EmbeddedResource
+from mcp.types import CallToolResult, EmbeddedResource, ImageContent, TextContent
 
 from .type_coercion import safe_call_tool
 
@@ -66,7 +67,7 @@ class ToolExecutor:
             elif isinstance(content_item, EmbeddedResource):
                 text_parts.append(f"[Resource: {content_item.resource}]")
             else:
-                text_parts.append(f"[Unknown content type]")
+                text_parts.append("[Unknown content type]")
 
         return "\n".join(text_parts)
 

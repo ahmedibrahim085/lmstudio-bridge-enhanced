@@ -1,13 +1,13 @@
-# LM Studio Bridge Enhanced v4.0.0
+# LM Studio Bridge Enhanced v5.0.0
 
-An autonomous middleware agent that lets any MCP client delegate tasks to local LLMs, which can then use any MCP tool — translating between all 3 API formats in real-time.
+An autonomous middleware agent that lets any MCP client delegate tasks to local LLMs, which can then use any MCP tool — translating between all 4 API formats in real-time.
 
 **Based on**: [LMStudio-MCP](https://github.com/infinitimeless/LMStudio-MCP) by infinitimeless
 
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![LM Studio](https://img.shields.io/badge/LM%20Studio-0.4.4+-green.svg)](https://lmstudio.ai/)
-[![Tests](https://img.shields.io/badge/tests-1684%20passing-brightgreen.svg)](#testing)
+[![Tests](https://img.shields.io/badge/tests-1969%20passing-brightgreen.svg)](#testing)
 [![Coverage](https://img.shields.io/badge/coverage-91%25-brightgreen.svg)](#testing)
 
 ---
@@ -24,7 +24,7 @@ This project is not just a bridge — it's a **3-way autonomous middleware agent
           v                                   |
     +---------------------------------------------+
     |          PILLAR 1: MCP SERVER                |
-    |          (FastMCP, 30+ tools)                |
+    |          (FastMCP, 37 tools)                 |
     |                                              |
     |    +--------------------------------------+  |
     |    |   PILLAR 4: AUTONOMOUS AGENT         |  |
@@ -35,9 +35,9 @@ This project is not just a bridge — it's a **3-way autonomous middleware agent
     |    +--------v------+  +------v-----------+   |
     |    | PILLAR 2:     |  | PILLAR 3:        |   |
     |    | LLM CLIENT    |  | MCP CLIENT       |   |
-    |    | (14 endpoints |  | (dynamic         |   |
-    |    |  3 API        |  |  discovery,      |   |
-    |    |  surfaces)    |  |  hot reload)     |   |
+    |    | (Facade +     |  | (dynamic         |   |
+    |    |  7 sub-clients|  |  discovery,      |   |
+    |    |  4 API surfs) |  |  hot reload)     |   |
     |    +--------+------+  +------+-----------+   |
     |             |                 |               |
     |    +--------v-----------------v-----------+   |
@@ -55,8 +55,8 @@ This project is not just a bridge — it's a **3-way autonomous middleware agent
 
 | Pillar | Role | What Sees It As |
 |--------|------|-----------------|
-| **1. MCP Server** | Serves 30+ tools via FastMCP | Claude Code sees an MCP with tools |
-| **2. LLM Client** | Calls LM Studio across 14 endpoints, 3 API surfaces | LM Studio sees an HTTP client |
+| **1. MCP Server** | Serves 37 tools via FastMCP | Claude Code sees an MCP with tools |
+| **2. LLM Client** | Facade + 7 sub-clients across 4 API surfaces | LM Studio sees an HTTP client |
 | **3. MCP Client** | Connects to other MCPs dynamically from `.mcp.json` | Other MCPs see an MCP client |
 | **4. Autonomous Agent** | Runs LLM-tool loops independently — multi-round, self-correcting, parallel | The orchestrator that ties everything together |
 | **5. Format Translator** | Bidirectional 3-way translation: OpenAI, Anthropic, Responses | The universal glue between competing standards |
@@ -67,7 +67,7 @@ This project is not just a bridge — it's a **3-way autonomous middleware agent
 |---|----------------|-------------|
 | **D-1** | 3-way MCP topology | Acts as MCP Server AND MCP Client AND LLM Client simultaneously — a 3-way node in the MCP graph |
 | **D-2** | Autonomous agent loops | Claude delegates a task, the bridge runs a full LLM-tool loop and returns only the result |
-| **D-3** | Universal format translation | OpenAI, Anthropic, Responses — all 3 formats, bidirectional, for tools + messages + streaming |
+| **D-3** | Universal format translation | OpenAI, Anthropic, Responses, Native — all 4 formats, bidirectional, for tools + messages + streaming |
 | **D-4** | Dynamic MCP discovery | Hot-reload from `.mcp.json` — add a new MCP, it's instantly available. Zero code changes |
 | **D-5** | Smart model routing | Scores all loaded models by capability and picks the best one for each task |
 | **D-6** | JIT model lifecycle | Model not loaded? Bridge loads it. Wrong model? Bridge swaps it. All transparent |
@@ -178,6 +178,61 @@ Use the autonomous_with_mcp tool with the filesystem MCP to list all Python file
 ---
 
 ## Key Features
+
+### Agent Profiles & Model Slots (v5.0.0)
+
+Define task-specific agent roles and assign models dynamically:
+
+```python
+# Create a role template
+create_role(
+    name="coder",
+    description="Code generation and refactoring",
+    config={"temperature": 0.2, "max_tokens": 4096}
+)
+
+# Create an agent with a model assigned to a role
+create_agent(
+    name="my-coder",
+    role="coder",
+    model="qwen/qwen3-coder-30b"
+)
+
+# List active agents
+list_agents()
+
+# Remove when done
+remove_agent(name="my-coder")
+```
+
+**Features**:
+- User-defined roles via YAML templates — create, modify, delete
+- Any model can play any role with auto-resolved configuration
+- Multiple agent slots run concurrently (coder + tester + reviewer)
+- 6-param config: temperature, top_p, top_k, max_tokens, system_prompt, context_length
+- Model family knowledge base: 6 families x 6 task types with vendor-researched overlays
+- Critical constraints auto-enforced per model family
+
+### Native Chat API (v5.0.0)
+
+Direct access to LM Studio's native `/api/v1/chat` endpoint with 19-event SSE streaming:
+
+**19 Event Types**: `chat.start`, `model_load.start/progress/end`, `prompt_processing.start/progress/end`, `reasoning.start/delta/end`, `tool_call.start/arguments/success/failure`, `message.start/delta/end`, `error`, `chat.end`
+
+**Features**:
+- Rich streaming with model loading progress, reasoning tokens, tool execution status
+- Native reasoning parameter (`reasoning_effort`: low/medium/high) replacing `thinking_budget`
+- Log-probabilities support for confidence scoring
+- Ephemeral MCP servers via `integrations` parameter
+- API authentication via `Authorization` header
+
+### Model Auto-Download (v5.0.0)
+
+Download models directly via REST API without manual LM Studio interaction:
+
+```python
+lms_download_model(model_key="qwen/qwen3-coder-30b")
+```
 
 ### Multi-Model Support (v3.1.0)
 
@@ -366,37 +421,57 @@ autonomous_discover_and_execute("Complete this task")
 
 ---
 
-## Available Tools
+## Available Tools (37 total)
 
-### Core LM Studio (8 tools)
-1. `health_check` - Check LM Studio connection
-2. `list_models` - List available models
-3. `get_current_model` - Get loaded model info
-4. `chat_completion` - Chat completions (with optional `response_format` for structured output)
-5. `text_completion` - Text/code completion
-6. `generate_embeddings` - Vector embeddings
-7. `create_response` - Stateful conversations
-8. `validate_json_schema` - Validate JSON schema before use with structured output
+### Core Completions (5 tools)
+1. `chat_completion` - Chat completions (with reasoning_effort, logprobs, response_format)
+2. `text_completion` - Text/code completion
+3. `create_response` - Stateful conversations
+4. `generate_embeddings` - Vector embeddings
+5. `validate_json_schema` - Validate JSON schema before use with structured output
+
+### Health & Discovery (5 tools)
+6. `health_check` - Check LM Studio connection
+7. `check_server_health` - Detailed server health with diagnostics
+8. `check_server_type` - Detect GUI vs headless (llmster)
+9. `get_current_model` - Get loaded model info
+10. `list_models` - List available models
 
 ### Vision Tools (6 tools)
-9. `analyze_image` - Comprehensive image analysis
-10. `describe_image` - Generate descriptions (detailed/brief/creative/technical)
-11. `compare_images` - Compare multiple images
-12. `extract_text_from_image` - OCR-like text extraction
-13. `identify_objects` - Identify objects with locations
-14. `answer_about_image` - Answer specific questions about images
+11. `analyze_image` - Comprehensive image analysis
+12. `describe_image` - Generate descriptions (detailed/brief/creative/technical)
+13. `compare_images` - Compare multiple images
+14. `extract_text_from_image` - OCR-like text extraction
+15. `identify_objects` - Identify objects with locations
+16. `answer_about_image` - Answer specific questions about images
 
-### Model Registry Tools (4 tools)
-15. `lms_list_downloaded_models` - List all downloaded models with metadata
-16. `lms_download_model` - Download models from Hugging Face
-17. `lms_resolve_model` - Intelligent model resolution with fallback
-18. `get_model_capabilities` - Get capabilities with BFCL benchmark scores
+### Autonomous MCP (5 tools)
+17. `autonomous_with_mcp` - Use any MCP by name
+18. `autonomous_with_multiple_mcps` - Use multiple MCPs
+19. `autonomous_discover_and_execute` - Auto-discover all MCPs
+20. `autonomous_with_images` - Autonomous with vision input
+21. `list_available_mcps` - List discovered MCPs
 
-### Autonomous MCP (4 tools)
-19. `autonomous_with_mcp` - Use any MCP by name
-20. `autonomous_with_multiple_mcps` - Use multiple MCPs
-21. `autonomous_discover_and_execute` - Auto-discover all MCPs
-22. `list_available_mcps` - List discovered MCPs
+### Agent Profiles (5 tools) — NEW in v5.0.0
+22. `create_agent` - Create an agent slot with model + role
+23. `list_agents` - List active agent slots
+24. `remove_agent` - Remove an agent slot
+25. `create_role` - Create a role template
+26. `list_roles` - List available role templates
+
+### Smart Model Selection (1 tool)
+27. `select_best_model` - Capability-scored model routing
+
+### LMS CLI Tools (9 tools, optional)
+28. `lms_list_loaded_models` - List loaded models with details
+29. `lms_list_downloaded_models` - List all downloaded models with metadata
+30. `lms_load_model` - Load a specific model
+31. `lms_unload_model` - Unload a model to free memory
+32. `lms_ensure_model_loaded` - Idempotent model preloading (recommended)
+33. `lms_search_models` - Search model catalog
+34. `lms_download_model` - Download models from Hugging Face
+35. `lms_resolve_model` - Intelligent model resolution with fallback
+36. `lms_server_status` - Server health and diagnostics
 
 ---
 
@@ -413,10 +488,11 @@ Claude Code ──MCP──> [MCP Server] ──> [Autonomous Agent] ──> [LL
                                     OpenAI <-> Anthropic <-> Responses
 ```
 
-**API Surfaces** (3 simultaneous):
+**API Surfaces** (4 simultaneous):
 - OpenAI-compatible: `/v1/chat/completions`, `/v1/completions`, `/v1/models`, `/v1/embeddings`, `/v1/responses`
 - Anthropic-compatible: `/v1/messages`
-- Native LM Studio: `/api/v1/models`, `/api/v1/models/load`, `/api/v1/models/unload`, `/api/v1/diagnostics`
+- Native LM Studio REST: `/api/v1/models`, `/api/v1/models/load`, `/api/v1/models/unload`, `/api/v1/diagnostics`
+- Native LM Studio Chat: `/api/v1/chat` — 19-event SSE streaming with reasoning, tool calls, model loading progress
 
 ---
 
@@ -501,19 +577,22 @@ cd lmstudio-bridge-enhanced
 python3 -m pytest tests/ -v
 ```
 
-**Test Results**: ~1684 tests passing, 91% coverage
+**Test Results**: ~1969 tests passing, 91% coverage
 
 Test coverage includes:
 - Format adapter 3-way translation (200+ tests)
 - Autonomous agent loops — OpenAI and Anthropic formats (100+ tests)
-- Streaming — SSE parser, thinking parser (80+ tests)
+- Streaming — SSE parser, native SSE parser, thinking parser (100+ tests)
 - Structured output and JSON schema (51 tests)
 - Vision/multimodal (50+ tests)
 - Model registry, selection, discovery (150+ tests)
-- Model lifecycle — load, unload, JIT, validation (100+ tests)
+- Model lifecycle — load, unload, JIT, download, validation (120+ tests)
+- Agent profiles — slots, roles, resolver, knowledge base (200+ tests)
+- Native chat client — 19 event types, ephemeral MCP (80+ tests)
+- Reasoning, logprobs, authentication (80+ tests)
 - Conversation branching (50+ tests)
 - Thread safety, resource cleanup, error handling (80+ tests)
-- Architecture guards, version consistency (20+ tests)
+- Architecture guards, constants split, version consistency (30+ tests)
 
 ---
 
@@ -555,7 +634,35 @@ See [Troubleshooting Guide](docs/TROUBLESHOOTING.md) for more.
 
 ## Version History
 
-### v4.0.0 (March 2026) - Current
+### v5.0.0 (March 2026) - Current
+
+**Architecture Refactoring (Phase A)**:
+- **ARCH-1**: LLMClient Facade pattern — split 1500-line god class into 7 Protocol-based sub-clients (chat, responses, anthropic, streaming, thinking, model_info, native_chat)
+- **ARCH-2**: Constants package — split 854-line flat file into 15 domain modules with backward-compatible re-exports
+- **ARCH-3**: Metrics helper extraction — deduplicated 4x copy-pasted 15-line blocks
+- **ARCH-4**: Exception hierarchy — `core/exceptions.py` with proper upward dependency fix
+- **ARCH-5**: Platform-abstract npx spawning — removed 85 lines of macOS-only Homebrew paths
+
+**New Features (Phase B)**:
+- **OPP-21**: Native reasoning parameter (`reasoning_effort`: low/medium/high) — replaces `thinking_budget`
+- **OPP-28**: API authentication — `Authorization` header support for secured LM Studio instances
+- **OPP-29**: Log-probabilities — per-token confidence scoring
+- **OPP-31**: Agent profiles & model slots — user-defined roles, any model to any role, concurrent agents, 6-family knowledge base
+- **OPP-27**: Advanced model load params — GPU offloading, context length, flash attention
+- **OPP-24**: Model auto-download via REST API
+
+**Major Features (Phase C)**:
+- **OPP-19**: Native chat API (`/api/v1/chat`) — 19-event SSE parser with model loading, reasoning, tool calls
+- **OPP-25**: Ephemeral MCP servers — `integrations` parameter for per-request MCP configuration
+
+**Stats**: 1969 tests, 91% coverage, 57 commits, +9541/-2560 lines
+
+### v4.1.0 (March 2026)
+- **DeprecationWarning for thinking_budget** — migration bridge to v5.0.0 reasoning API
+- **CI enforcement** — coverage gate (89%), ruff lint, architecture guard
+- **Python 3.12 in CI matrix** — matches pyproject.toml classifiers
+
+### v4.0.0 (March 2026)
 - **Code quality audit** — 12-agent, 3-wave deep review with TDD fixes
 - **Hardcoded value extraction** — all magic numbers moved to config/constants.py
 - **Silent error catch elimination** — logging added to all 16 catch blocks
