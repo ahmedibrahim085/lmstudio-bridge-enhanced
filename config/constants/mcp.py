@@ -11,6 +11,9 @@ __all__ = [
     "MCP_PACKAGES",
     "MCP_CONFIG_SEARCH_PATHS",
     "MCP_PACKAGE_PATTERNS",
+    "INTEGRATION_TYPE_MCP",
+    "SUPPORTED_INTEGRATION_TYPES",
+    "MAX_INTEGRATIONS_PER_REQUEST",
 ]
 
 # Default root directory for filesystem MCP operations
@@ -49,3 +52,8 @@ MCP_PACKAGE_PATTERNS = [
     "@modelcontextprotocol",   # Official MCP packages
     "mcp-server"               # Community MCP packages
 ]
+
+# OPP-25: Ephemeral MCP Server Integrations
+INTEGRATION_TYPE_MCP = "mcp"
+SUPPORTED_INTEGRATION_TYPES = (INTEGRATION_TYPE_MCP,)
+MAX_INTEGRATIONS_PER_REQUEST = 20
