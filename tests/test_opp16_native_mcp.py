@@ -29,7 +29,6 @@ def mock_session(client):
 class TestSupportsNativeMCP:
     """Tests for supports_native_mcp() feature detection."""
 
-    @pytest.mark.xfail(reason="API contract provisional — verify against LM Studio 0.4.3+")
     def test_supports_native_mcp_true(self, client, mock_session):
         """Server returns mcp capability -> True."""
         resp = MagicMock()
@@ -40,7 +39,6 @@ class TestSupportsNativeMCP:
 
         assert client.supports_native_mcp() is True
 
-    @pytest.mark.xfail(reason="API contract provisional — verify against LM Studio 0.4.3+")
     def test_supports_native_mcp_false(self, client, mock_session):
         """Server lacks mcp capability -> False."""
         resp = MagicMock()
