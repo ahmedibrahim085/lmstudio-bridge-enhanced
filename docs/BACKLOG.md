@@ -1,6 +1,6 @@
 # LM Studio Bridge Enhanced — Execution Backlog
 
-> Updated: 2026-03-02 | Post-v5.0.0 + Log Analysis (3 rounds) | Baseline: ~1969 tests passing, 91% coverage
+> Updated: 2026-03-02 | Post-v5.0.0 + Log Analysis (4 rounds) | Baseline: ~1969 tests passing, 91% coverage
 
 ---
 
@@ -13,8 +13,8 @@
 | Coverage | **91%+** |
 | Coverage target | **80% minimum / 89% goal (exceeded)** |
 | VERSION | 5.0.0 (in config/constants/version.py) |
-| Completed rounds | Phase 1, 1.5, Round A-D, Error Audit, Code Quality, v5.0.0 (Pre-flight + Phase A + Phase B + Phase C), Log Analysis |
-| Next | Round G Batch 1: OPP-38 (fix "default"), OPP-32 (schema coercion), OPP-39 (context guard), OPP-43 (poll limiter) |
+| Completed rounds | Phase 1, 1.5, Round A-D, Error Audit, Code Quality, v5.0.0 (Pre-flight + Phase A + Phase B + Phase C), Log Analysis (4 rounds) |
+| Next | Round G Phase 2: OPP-32 (schema coercion), OPP-39 (context guard), OPP-43 (poll limiter) |
 
 ---
 
@@ -186,27 +186,20 @@ v5.0.0 Phase C ────────┘ DONE (Major)
   OPP-19 → OPP-25 (sequential)
   [Gate: coverage ≥ 91% ✅, VERSION → v5.0.0 ✅]
                         │
-Log Analysis ──────────┘ DONE (3-round deep analysis)
+Log Analysis ──────────┘ DONE (4-round deep analysis)
   Source: 188K-line LM Studio server log
-  28 issues → 16 OPPs proposed
+  31 issues → 19 OPPs proposed (OPP-32 to OPP-50)
                         │
-Round G ───────────────┘ PROPOSED (Log Analysis OPPs)
-  Batch 1: OPP-38 ═══╗ P0 parallel
+Round G ───────────────┘ PROPOSED (10 active OPPs after root cause analysis)
+  Phase 1: OPP-38 ────→ kill "default" cascade (highest ROI)
+  Phase 2: OPP-39 ═══╗ foundations (parallel)
            OPP-32 ═══╣
-           OPP-39 ═══╣
            OPP-43 ═══╝
-  Batch 2: OPP-33 ═══╗ P1 parallel
-           OPP-37 ═══╣
-           OPP-40 ═══╝
-  Batch 3: OPP-44 ═══╗ P1 parallel
-           OPP-46 ═══╝
-  Batch 4: OPP-34 ═══╗ P1/P2 parallel
-           OPP-35 ═══╣
-           OPP-36 ═══╣
-           OPP-45 ═══╝
-  Batch 5: OPP-41 ═══╗ P2 parallel
-           OPP-42 ═══╣
-           OPP-47 ═══╝
+  Phase 3: OPP-33+44 ═╗ build ToolCallContext
+           OPP-37+40 ═╝
+  Phase 4: OPP-45 ────→ model intelligence
+  Phase 5: OPP-46 ────→ adaptive timeout (streaming refactor)
+  Phase 6: OPP-50 ────→ schema dedup experiment
   [Gate: coverage ≥ 91%, VERSION → v5.1.0]
 ```
 
@@ -415,15 +408,19 @@ These are not individual OPPs — they are **synergy effects** from combining mu
 
 ## Round G — Log Analysis OPPs (PROPOSED)
 
-> Source: `docs/LOG_ANALYSIS_2026-03-02.md` — 3-round deep analysis of 188K-line LM Studio server log
-> 28 issues found (7 CRITICAL, 10 HIGH, 8 MEDIUM, 3 LOW), yielding 16 proposed OPPs
+> Source: `docs/LOG_ANALYSIS_2026-03-02.md` — 4-round deep analysis of 188K-line LM Studio server log
+> 31 issues found (8 CRITICAL, 12 HIGH, 8 MEDIUM, 3 LOW) → 19 raw OPPs → **10 actionable** after root cause analysis
+>
+> **Root Cause Analysis (2026-03-02)**: 4 parallel architect agents traced every OPP through the codebase.
+> Found 2 root causes (missing model lifecycle state machine + `dynamic_autonomous.py` god module),
+> leading to 4 mergers, 3 removals, 1 deferral, 1 redefinition. See changelog for details.
 
 ### Priority 0 (Critical — Data Loss / Silent Failures)
 
 | Step | OPP | Name | Type | Fixes | Effort | Files |
 |------|-----|------|------|-------|--------|-------|
 | G-1 | OPP-32 | Schema-Aware Type Coercion | EVOLUTION | 11/13 WARNs, 15 orphans | MEDIUM | `mcp_client/type_coercion.py` |
-| G-2 | OPP-38 | Fix "model: default" Fallback | BUGFIX | 167 ERRORs, 135 rejected requests | LOW | `config_main.py`, `config/constants/testing.py` |
+| G-2 | OPP-38 | Fix "model: default" Fallback | BUGFIX | 167 ERRORs, 135 rejected requests | LOW | ✅ **DONE** — 6 commits, 22 tests |
 | G-3 | OPP-39 | Context Window Guard | NEW | 282K wasted tokens (3 × 94K overflow) | MEDIUM | `tools/dynamic_autonomous.py` |
 | G-4 | OPP-43 | Poll Rate Limiter (backoff + idle suspension) | NEW | 11,613 polls (85% of events), 789/min peak | MEDIUM | `utils/lms_helper.py`, `llm/llm_client.py` |
 
@@ -432,80 +429,96 @@ These are not individual OPPs — they are **synergy effects** from combining mu
 | Step | OPP | Name | Type | Fixes | Effort | Files |
 |------|-----|------|------|-------|--------|-------|
 | G-5 | OPP-33 | Pre-Dispatch Tool Argument Validation | NEW | 2 WARNs (missing required params), reduces orphans | LOW | `tools/dynamic_autonomous.py` |
-| G-6 | OPP-34 | Model Tool-Calling Error Budget | NEW | glm-4.6v-flash 31% failure rate undetected | MEDIUM | `tools/dynamic_autonomous.py` |
+| ~~G-6~~ | ~~OPP-34~~ | ~~Model Tool-Calling Error Budget~~ | ~~NEW~~ | **MERGED → OPP-45** (tracking without action is subset of auto-demotion) | — | — |
 | G-7 | OPP-37 | Orphan Detection with Fast-Fail | EVOLUTION | 23 orphaned tool calls (24% rate) | MEDIUM | `tools/dynamic_autonomous.py` |
-| G-8 | OPP-40 | Tool Result Caching | NEW | 42% duplicate tool calls (~30 redundant) | MEDIUM | `tools/dynamic_autonomous.py` |
-| G-9 | OPP-44 | Tool Call Circuit Breaker | NEW | 7 consecutive failures before self-correct, no max retries | MEDIUM | `tools/dynamic_autonomous.py` |
-| G-10 | OPP-45 | Per-Model Error Budget with Auto-Demotion | NEW | glm 80% of events + 100% of errors, no demotion | MEDIUM | `tools/dynamic_autonomous.py`, `llm/llm_client.py` |
-| G-11 | OPP-46 | Adaptive Timeout (Prompt Processing Progress) | NEW | 3 × wasted prompt processing (94K tokens → 0 output) | MEDIUM | `llm/llm_client.py`, `tools/dynamic_autonomous.py` |
+| G-8 | OPP-40 | Tool Result Caching | NEW | 42% duplicate tool calls (~30 redundant). **+OPP-47 merged**: cache key normalization handles namespace differences | MEDIUM | `tools/dynamic_autonomous.py` |
+| G-9 | OPP-44 | Tool Call Circuit Breaker | NEW | 7 consecutive failures before self-correct, no max retries. **+OPP-48 merged**: 10 truncated JSON parse failures count as breaker errors | MEDIUM | `tools/dynamic_autonomous.py` |
+| G-10 | OPP-45 | Per-Model Error Budget with Auto-Demotion | NEW | glm 80% of events + 100% of errors, no demotion. **+OPP-34 merged**: error tracking + action in one OPP. Integrates `ModelFallbackManager` | MEDIUM | `tools/dynamic_autonomous.py`, `llm/llm_client.py`, `utils/model_fallback.py` |
+| G-11 | OPP-46 | Adaptive Timeout (Both Inference Phases) | NEW | 3 × wasted prompt processing (94K tokens → 0 output), 9 disconnects during generation, 126 prompt re-starts (91% re-processing). **+OPP-49 merged**: unified timeout for prompt processing AND generation phases | MEDIUM→HIGH | `llm/llm_client.py`, `llm/responses_client.py`, `tools/dynamic_autonomous.py` |
+
+### Round 4 Additions (Post Root Cause Analysis)
+
+| Step | OPP | Name | Type | Fixes | Effort | Files |
+|------|-----|------|------|-------|--------|-------|
+| ~~G-17~~ | ~~OPP-48~~ | ~~Truncated Tool Call Recovery~~ | ~~NEW~~ | **MERGED → OPP-44** (parse failures count as circuit breaker errors) | — | — |
+| ~~G-18~~ | ~~OPP-49~~ | ~~Generation-Aware Timeout~~ | ~~NEW~~ | **MERGED → OPP-46** (unified adaptive timeout for both inference phases) | — | — |
+| G-19 | OPP-50 | Tool Schema Dedup Experiment | EXPERIMENT | Test: omit `tools` from payload after round 0 when `previous_response_id` is set. If LM Studio accepts, saves ~3,810 repeated definitions/session | LOW | `llm/responses_client.py` |
 
 ### Priority 2 (Medium — Observability / Optimization)
 
 | Step | OPP | Name | Type | Fixes | Effort | Files |
 |------|-----|------|------|-------|--------|-------|
-| G-12 | OPP-35 | LMSAuthenticator getModelInfo Caching | EVOLUTION | 6,273 uncached API calls, 789/min peak | LOW | `utils/lms_helper.py` |
-| G-13 | OPP-36 | Logprobs Response Bloat Suppression | EVOLUTION | 18,211 log lines (9.7%) of empty arrays | LOW | LM Studio server-side + bridge logging |
-| G-14 | OPP-41 | Conversation Chain Health Monitoring | NEW | Avg 2.4 chain length, 42% restart rate | LOW | `tools/dynamic_autonomous.py` |
-| G-15 | OPP-42 | Token Budget Monitoring & Alerting | NEW | 27:1 input/output ratio invisible | LOW | `tools/dynamic_autonomous.py` |
-| G-16 | OPP-47 | Tool Name Normalization Layer | NEW | qwen uses `list_directory`, glm uses `filesystem__list_directory` | LOW | `mcp_client/type_coercion.py`, `tools/dynamic_autonomous.py` |
+| ~~G-12~~ | ~~OPP-35~~ | ~~LMSAuthenticator getModelInfo Caching~~ | ~~EVOLUTION~~ | **REMOVED**: 6,273 calls are LM Studio INTERNAL (`lms-cli`), not our bridge. Our `list_all_models()` already cached at 30s TTL (`lms_helper.py:92-97`) | — | — |
+| ~~G-13~~ | ~~OPP-36~~ | ~~Logprobs Response Bloat Suppression~~ | ~~EVOLUTION~~ | **REMOVED**: Bridge never requests logprobs (default=False). LM Studio sends empty `top_logprobs: []` server-side. Not a bridge code issue | — | — |
+| ~~G-14~~ | ~~OPP-41~~ | ~~Conversation Chain Health Monitoring~~ | ~~NEW~~ | **REMOVED**: Short chains (avg 2.4) = efficient task completion, NOT a bug. Already partially captured in `LoopMetrics.total_rounds` | — | — |
+| G-15 | OPP-42 | Token Budget Monitoring & Alerting | NEW | **DEFERRED**: Re-measure after OPP-39 bounds context. 27:1 ratio dominated by 3×94K overflow outliers. Also blocked by LM Studio `/v1/responses` not returning token counts | LOW | `tools/dynamic_autonomous.py` |
+| ~~G-16~~ | ~~OPP-47~~ | ~~Tool Name Normalization Layer~~ | ~~NEW~~ | **MERGED → OPP-40** (cache key normalization is 5-line implementation detail, not standalone OPP) | — | — |
 
-### Dependency Chains
+### Dependency Chains (Post Root Cause Analysis)
 
 ```
-Chain J: Type Safety
-  OPP-32 (schema coercion) → OPP-33 (pre-dispatch validation) → OPP-34 (error budget)
+Root Cause 1: Missing Model Lifecycle State Machine
+  OPP-38 (fix "default") → OPP-43 (poll limiter)
+  (fixing "default" eliminates error-amplified polling)
 
-Chain K: Context Efficiency
-  OPP-39 (context guard) → OPP-40 (tool cache) → OPP-42 (token monitoring)
+Root Cause 2: dynamic_autonomous.py God Module — Missing ToolCallContext
+  OPP-32 (schema coercion) ─┐
+  OPP-33 (pre-dispatch)     ├─→ ToolCallContext foundation
+  OPP-44 (circuit breaker)  ─┘        │
+                                       ├→ OPP-37 (orphan detection) + OPP-40 (result cache)
+                                       └→ OPP-45 (per-model error budget + auto-demotion)
 
-Chain L: Resilience (R3)
-  OPP-44 (circuit breaker) → OPP-45 (error budget + auto-demotion)
+Context Efficiency:
+  OPP-39 (context guard) → OPP-42 (token monitoring, DEFERRED)
 
-Chain M: Polling (R3)
-  OPP-43 (poll rate limiter) → OPP-35 (getModelInfo cache)
+Timeout Intelligence:
+  OPP-46 (adaptive timeout, both phases — absorbs OPP-49)
 
 Independent:
-  OPP-38 (fix "default") — trivial 1-line fix, no dependencies
-  OPP-37 (orphan detection) — independent
-  OPP-36 (logprobs suppression) — independent
-  OPP-41 (chain monitoring) — independent
-  OPP-46 (adaptive timeout) — independent (uses prompt_processing progress events)
-  OPP-47 (tool name normalization) — independent
+  OPP-50 (tool schema dedup experiment)
 ```
 
-### Execution Order (Proposed)
+### Execution Order (Revised — Root Cause Driven)
 
 ```
-Batch 1 (P0, parallel):
-  OPP-38 ═══╗ trivial fix
-  OPP-32 ═══╣ schema coercion
-  OPP-39 ═══╣ context guard
-  OPP-43 ═══╝ poll rate limiter (R3)
+Phase 1: Kill the Cascade ✅ DONE
+  OPP-38 ✅ ──→ fix "default" sentinel escape (6 commits, 22 tests, 1991 pass)
 
-Batch 2 (P1, parallel):
-  OPP-33 ═══╗ pre-dispatch validation (after OPP-32)
-  OPP-37 ═══╣ orphan detection
-  OPP-40 ═══╝ tool result caching
+Phase 2: Foundations (parallel)
+  OPP-39 ═══╗ context window guard
+  OPP-32 ═══╣ schema-aware type coercion
+  OPP-43 ═══╝ poll rate limiter (after OPP-38 removes error amplification)
 
-Batch 3 (P1, parallel):
-  OPP-44 ═══╗ circuit breaker (R3)
-  OPP-46 ═══╝ adaptive timeout (R3)
+Phase 3: Build ToolCallContext (sequential pair, then parallel)
+  OPP-33 + OPP-44 ═══╗ pre-dispatch validation + circuit breaker (shared foundation)
+  OPP-37 + OPP-40   ═╝ orphan detection + result cache (extend context)
 
-Batch 4 (P1/P2, parallel):
-  OPP-34 ═══╗ error budget (after OPP-33)
-  OPP-35 ═══╣ getModelInfo cache (after OPP-43)
-  OPP-36 ═══╣ logprobs suppression
-  OPP-45 ═══╝ per-model error budget + auto-demotion (after OPP-44, R3)
+Phase 4: Model Intelligence
+  OPP-45 ────→ per-model error budget + auto-demotion (integrates ModelFallbackManager)
 
-Batch 5 (P2, parallel):
-  OPP-41 ═══╗ chain monitoring
-  OPP-42 ═══╣ token monitoring
-  OPP-47 ═══╝ tool name normalization (R3)
+Phase 5: Streaming Refactor (most invasive, do last)
+  OPP-46 ────→ adaptive timeout for both inference phases (requires non-streaming → streaming)
+
+Phase 6: Quick Experiment
+  OPP-50 ────→ test omitting tools after round 0 with previous_response_id
 ```
+
+### Consolidated OPP Summary
+
+| Status | Count | OPPs |
+|--------|-------|------|
+| **Active** | 9 | OPP-32, 33, 37, 39, 40, 43, 44, 45, 46 |
+| **Done (Round G)** | 1 | OPP-38 |
+| **Experiment** | 1 | OPP-50 |
+| **Deferred** | 1 | OPP-42 (re-measure after OPP-39) |
+| **Merged** | 4 | OPP-34→45, OPP-47→40, OPP-48→44, OPP-49→46 |
+| **Removed** | 3 | OPP-35, 36, 41 |
+| **Total original** | 19 | OPP-32 through OPP-50 |
 
 ### Gate
 
 - [ ] All P0 OPPs (32, 38, 39, 43) implemented and tested
+- [ ] ToolCallContext pattern implemented (enables OPP-33, 37, 40, 44)
 - [ ] Coverage >= 91% maintained
 - [ ] All existing tests pass
 - [ ] Re-run log analysis scenario to confirm fix
@@ -540,3 +553,7 @@ Batch 5 (P2, parallel):
 | 2026-03-02 | Added Round G (Log Analysis OPPs) with 4 batches, 3 dependency chains, gate criteria |
 | 2026-03-02 | Round 3 log analysis: 11 additional findings → 5 new OPPs (OPP-43 to OPP-47), total 28 issues, 16 OPPs |
 | 2026-03-02 | Round G updated: 16 OPPs across 5 batches, 5 dependency chains (J-M + independent), gate updated |
+| 2026-03-02 | Round 4 log analysis: 3 additional findings → 3 new OPPs (OPP-48 to OPP-50), total 31 issues, 19 OPPs |
+| 2026-03-02 | Round G updated: 19 OPPs across 6 batches, 7 dependency chains (J-O + independent), evidence updated for OPP-43/45/46 |
+| 2026-03-02 | Root cause analysis: 4 parallel architect agents traced every OPP through codebase. Found 2 root causes (missing model lifecycle state machine + `dynamic_autonomous.py` god module). Consolidated 19 raw OPPs → 10 active + 1 experiment + 1 deferred + 4 merged (34→45, 47→40, 48→44, 49→46) + 3 removed (35, 36, 41). Replaced batch execution with 6-phase root-cause-driven plan |
+| 2026-03-02 | OPP-38 DONE: 6 atomic TDD commits on `feat/opp-38-default-sentinel-fix`. Added `is_model_sentinel()` helper, fixed 4 vulnerable clients (V1-V4), refactored 8 files to use centralized helper. 22 new tests, 1991 total pass, 0 fail |
