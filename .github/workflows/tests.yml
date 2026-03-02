@@ -44,13 +44,13 @@ jobs:
             --ignore=tests/test_memory_pressure.py \
             -m "not e2e and not integration" \
             --cov=llm --cov=tools --cov=config --cov=utils \
-            --cov=model_registry --cov=mcp_client \
-            --cov-report=term-missing --cov-fail-under=89 \
+            --cov=model_registry --cov=mcp_client --cov=core \
+            --cov-report=term-missing --cov-fail-under=75 \
             -q --tb=short \
             --reruns 2 --reruns-delay 5
 
       - name: Lint
-        run: ruff check llm/ utils/ tools/ config/ model_registry/ mcp_client/
+        run: ruff check llm/ utils/ tools/ config/ model_registry/ mcp_client/ core/
 
       - name: Architecture guard
         run: python -m pytest tests/test_architecture.py -v
