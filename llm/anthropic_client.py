@@ -14,6 +14,7 @@ from config.constants import (
 )
 from llm.exceptions import LLMResponseError, LLMTimeoutError
 from llm.http_transport import HTTPTransport, handle_request_exception
+from llm.jit_loader import ensure_model_loaded
 from utils.error_handling import retry_with_backoff
 
 logger = logging.getLogger(__name__)
@@ -46,9 +47,7 @@ class AnthropicClient:
         """Send a request to LM Studio's Anthropic-compatible Anthropic messages endpoint."""
         target_model = model if model is not None else self._transport.model
 
-        from llm.chat_client import ChatClient
-
-        ChatClient(self._transport)._ensure_model_loaded(target_model, ttl=JIT_TTL_DEFAULT)
+        ensure_model_loaded(target_model, ttl=JIT_TTL_DEFAULT)
 
         filtered_messages = [m for m in messages if m.get("role") != "system"]
 

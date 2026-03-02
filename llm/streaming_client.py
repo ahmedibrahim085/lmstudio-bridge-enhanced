@@ -13,6 +13,7 @@ from config.constants import (
 )
 from llm.format_adapter import FormatAdapter
 from llm.http_transport import HTTPTransport, handle_request_exception
+from llm.jit_loader import ensure_model_loaded
 from llm.sse_parser import parse_sse_stream
 
 logger = logging.getLogger(__name__)
@@ -24,10 +25,9 @@ class StreamingClient:
     def __init__(self, transport: HTTPTransport) -> None:
         self._transport = transport
 
-    def _ensure_model_loaded(self, target_model: Optional[str], ttl: int) -> None:
-        from llm.chat_client import ChatClient
-
-        ChatClient(self._transport)._ensure_model_loaded(target_model, ttl=ttl)
+    @staticmethod
+    def _ensure_model_loaded(target_model: Optional[str], ttl: int) -> None:
+        ensure_model_loaded(target_model, ttl=ttl)
 
     def stream_chat_completion(
         self,

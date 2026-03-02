@@ -78,13 +78,13 @@ class TestPhase2Invariants:
         )
 
     def test_single_ensure_model_loaded_call_site(self):
-        """ensure_model_loaded_with_verification must appear exactly once in ChatClient (inside _ensure_model_loaded)."""
-        with open("llm/chat_client.py", "r") as f:
+        """ensure_model_loaded_with_verification must appear exactly once in jit_loader (the canonical location)."""
+        with open("llm/jit_loader.py", "r") as f:
             content = f.read()
         count = content.count("ensure_model_loaded_with_verification")
         assert count == 1, (
             f"ensure_model_loaded_with_verification appears {count} times, expected 1 "
-            f"(should only be inside _ensure_model_loaded, OPP-09)"
+            f"(should only be inside jit_loader.ensure_model_loaded, OPP-09)"
         )
 
     def test_retry_logic_is_shim(self):

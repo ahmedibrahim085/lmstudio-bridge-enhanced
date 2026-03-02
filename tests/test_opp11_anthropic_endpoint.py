@@ -193,7 +193,7 @@ class TestAnthropicMessagesJIT:
         """_ensure_model_loaded() called with JIT_TTL_DEFAULT via AnthropicClient."""
         mock_session.post.return_value = _make_anthropic_response()
 
-        with patch("llm.chat_client.ChatClient._ensure_model_loaded") as mock_jit:
+        with patch("llm.anthropic_client.ensure_model_loaded") as mock_jit:
             client.anthropic_messages(
                 messages=[{"role": "user", "content": "Hello"}]
             )

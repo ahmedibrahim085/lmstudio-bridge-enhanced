@@ -12,6 +12,7 @@ from config.constants import (
 from llm.exceptions import LLMResponseError, LLMTimeoutError
 from llm.format_adapter import FormatAdapter
 from llm.http_transport import HTTPTransport, handle_request_exception
+from llm.jit_loader import ensure_model_loaded
 from utils.error_handling import retry_with_backoff
 
 logger = logging.getLogger(__name__)
@@ -52,11 +53,7 @@ class ResponsesClient:
         )
         resolved_ttl = ttl if ttl is not None else JIT_TTL_DEFAULT
 
-        # JIT load via ChatClient's helper (reuse pattern)
-        from llm.chat_client import ChatClient
-
-        chat = ChatClient(self._transport)
-        chat._ensure_model_loaded(model_to_use, ttl=resolved_ttl)
+        ensure_model_loaded(model_to_use, ttl=resolved_ttl)
 
         payload: Dict[str, Any] = {
             "input": input_text,

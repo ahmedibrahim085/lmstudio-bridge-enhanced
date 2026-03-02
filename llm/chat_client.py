@@ -12,8 +12,8 @@ from config.constants import (
 )
 from llm.exceptions import LLMResponseError, LLMTimeoutError
 from llm.http_transport import HTTPTransport, handle_request_exception
+from llm.jit_loader import ensure_model_loaded
 from utils.error_handling import retry_with_backoff
-from utils.lms_helper import LMSHelper
 
 logger = logging.getLogger(__name__)
 
@@ -24,35 +24,14 @@ class ChatClient:
     def __init__(self, transport: HTTPTransport) -> None:
         self._transport = transport
 
+    @staticmethod
     def _ensure_model_loaded(
-        self,
         target_model: Optional[str],
         ttl: int,
         label: str = "Model",
     ) -> None:
-        """JIT model loading guard."""
-        from llm.exceptions import LLMConnectionError
-
-        if not target_model or target_model == "default" or not LMSHelper.is_installed():
-            return
-        try:
-            is_loaded = LMSHelper.is_model_loaded(target_model)
-            if is_loaded is False:
-                logger.warning(f"{label} '{target_model}' not loaded, attempting to load...")
-                load_success = LMSHelper.ensure_model_loaded_with_verification(
-                    target_model, ttl=ttl, skip_initial_check=True,
-                )
-                if not load_success:
-                    raise LLMConnectionError(
-                        f"{label} '{target_model}' is not loaded and failed to load automatically."
-                    )
-                logger.info(f"{label} '{target_model}' loaded successfully")
-            elif is_loaded is True:
-                logger.debug(f"{label} '{target_model}' already loaded")
-        except LLMConnectionError:
-            raise
-        except Exception as e:
-            logger.warning(f"Could not verify {label.lower()} load state: {e}. Proceeding anyway...")
+        """JIT model loading guard — delegates to llm.jit_loader."""
+        ensure_model_loaded(target_model, ttl=ttl, label=label)
 
     @retry_with_backoff(
         max_retries=DEFAULT_MAX_RETRIES,

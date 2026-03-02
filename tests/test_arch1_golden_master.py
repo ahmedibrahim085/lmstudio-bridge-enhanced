@@ -27,10 +27,10 @@ from llm.llm_client import LLMClient, _handle_request_exception
 def _skip_jit_loading():
     """Prevent JIT model loading in all sub-clients.
 
-    All sub-clients delegate to ChatClient._ensure_model_loaded which calls
+    All sub-clients call jit_loader.ensure_model_loaded() which calls
     LMSHelper.is_installed(). Mocking it False makes all JIT checks no-op.
     """
-    with patch("llm.chat_client.LMSHelper.is_installed", return_value=False):
+    with patch("llm.jit_loader.LMSHelper.is_installed", return_value=False):
         yield
 
 

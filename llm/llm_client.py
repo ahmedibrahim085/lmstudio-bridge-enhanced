@@ -25,7 +25,16 @@ from llm.chat_client import ChatClient
 from llm.exceptions import LLMResponseError
 from llm.format_adapter import FormatAdapter
 from llm.http_transport import HTTPTransport, handle_request_exception
+from llm.jit_loader import ensure_model_loaded
 from llm.model_info_client import ModelInfoClient
+from llm.protocols import (
+    AnthropicProvider,
+    ChatProvider,
+    ModelInfoProvider,
+    ResponseProvider,
+    StreamProvider,
+    ThinkingProvider,
+)
 from llm.responses_client import ResponsesClient
 from llm.streaming_client import StreamingClient
 from llm.thinking_client import ThinkingClient
@@ -72,13 +81,13 @@ class LLMClient:
         self.session = self._transport.session
         self._owns_session = self._transport._owns_session
 
-        # Sub-clients
-        self._chat = ChatClient(self._transport)
-        self._responses = ResponsesClient(self._transport)
-        self._anthropic = AnthropicClient(self._transport)
-        self._streaming = StreamingClient(self._transport)
-        self._thinking = ThinkingClient(self._transport)
-        self._model_info = ModelInfoClient(self._transport)
+        # Sub-clients (typed via protocols for structural verification)
+        self._chat: ChatProvider = ChatClient(self._transport)
+        self._responses: ResponseProvider = ResponsesClient(self._transport)
+        self._anthropic: AnthropicProvider = AnthropicClient(self._transport)
+        self._streaming: StreamProvider = StreamingClient(self._transport)
+        self._thinking: ThinkingProvider = ThinkingClient(self._transport)
+        self._model_info: ModelInfoProvider = ModelInfoClient(self._transport)
 
         # Native MCP support cache (OPP-16)
         self._native_mcp_supported: Optional[bool] = None
@@ -173,7 +182,7 @@ class LLMClient:
         label: str = "Model",
     ) -> None:
         """JIT model loading guard."""
-        self._chat._ensure_model_loaded(target_model, ttl=ttl, label=label)
+        ensure_model_loaded(target_model, ttl=ttl, label=label)
 
     # ------------------------------------------------------------------
     # Chat / Text completions

@@ -329,7 +329,7 @@ def _make_mock_response(content: str) -> dict[str, Any]:
 class TestThinkingCompletion:
     """Tests for LLMClient.thinking_completion()."""
 
-    @patch("llm.chat_client.ChatClient._ensure_model_loaded")
+    @patch("llm.thinking_client.ensure_model_loaded")
     @patch("llm.llm_client.LLMClient.chat_completion")
     def test_happy_path_enriches_response(
         self, mock_chat: MagicMock, mock_load: MagicMock
@@ -351,7 +351,7 @@ class TestThinkingCompletion:
         assert result["thinking_blocks"][0]["content"] == "I need to reason here."
         assert "Final answer." in result["content_without_thinking"]
 
-    @patch("llm.chat_client.ChatClient._ensure_model_loaded")
+    @patch("llm.thinking_client.ensure_model_loaded")
     @patch("llm.llm_client.LLMClient.chat_completion")
     def test_budget_below_min_raises_value_error(
         self, mock_chat: MagicMock, mock_load: MagicMock
@@ -364,7 +364,7 @@ class TestThinkingCompletion:
                 thinking_budget=MIN_THINKING_BUDGET_TOKENS - 1,
             )
 
-    @patch("llm.chat_client.ChatClient._ensure_model_loaded")
+    @patch("llm.thinking_client.ensure_model_loaded")
     @patch("llm.llm_client.LLMClient.chat_completion")
     def test_budget_above_max_raises_value_error(
         self, mock_chat: MagicMock, mock_load: MagicMock
@@ -377,7 +377,7 @@ class TestThinkingCompletion:
                 thinking_budget=MAX_THINKING_BUDGET_TOKENS + 1,
             )
 
-    @patch("llm.chat_client.ChatClient._ensure_model_loaded")
+    @patch("llm.thinking_client.ensure_model_loaded")
     @patch("llm.llm_client.LLMClient.chat_completion")
     def test_none_budget_uses_default(
         self, mock_chat: MagicMock, mock_load: MagicMock
@@ -401,7 +401,7 @@ class TestThinkingCompletion:
         assert passed_max_tokens is not None
         assert passed_max_tokens >= DEFAULT_THINKING_BUDGET_TOKENS
 
-    @patch("llm.chat_client.ChatClient._ensure_model_loaded")
+    @patch("llm.thinking_client.ensure_model_loaded")
     @patch("llm.llm_client.LLMClient.chat_completion")
     def test_response_without_thinking_blocks_still_enriched(
         self, mock_chat: MagicMock, mock_load: MagicMock
@@ -418,7 +418,7 @@ class TestThinkingCompletion:
         assert result["thinking_tokens_estimated"] == 0
         assert "Just a plain answer." in result["content_without_thinking"]
 
-    @patch("llm.chat_client.ChatClient._ensure_model_loaded")
+    @patch("llm.thinking_client.ensure_model_loaded")
     @patch("llm.llm_client.LLMClient.chat_completion")
     def test_ensure_model_loaded_called(
         self, mock_chat: MagicMock, mock_load: MagicMock
@@ -434,7 +434,7 @@ class TestThinkingCompletion:
 
         mock_load.assert_called_once()
 
-    @patch("llm.chat_client.ChatClient._ensure_model_loaded")
+    @patch("llm.thinking_client.ensure_model_loaded")
     @patch("llm.llm_client.LLMClient.chat_completion")
     def test_thinking_tokens_estimated_positive_when_thinking_present(
         self, mock_chat: MagicMock, mock_load: MagicMock
@@ -451,7 +451,7 @@ class TestThinkingCompletion:
 
         assert result["thinking_tokens_estimated"] > 0
 
-    @patch("llm.chat_client.ChatClient._ensure_model_loaded")
+    @patch("llm.thinking_client.ensure_model_loaded")
     @patch("llm.llm_client.LLMClient.chat_completion")
     def test_thinking_blocks_are_dicts_with_content_key(
         self, mock_chat: MagicMock, mock_load: MagicMock
@@ -479,7 +479,7 @@ class TestThinkingCompletion:
 class TestStreamThinkingCompletion:
     """Tests for LLMClient.stream_thinking_completion()."""
 
-    @patch("llm.chat_client.ChatClient._ensure_model_loaded")
+    @patch("llm.thinking_client.ensure_model_loaded")
     @patch("llm.llm_client.LLMClient.stream_chat_completion")
     def test_happy_path_yields_chunks(
         self, mock_stream: MagicMock, mock_load: MagicMock
@@ -502,7 +502,7 @@ class TestStreamThinkingCompletion:
         assert results[0] == chunks[0]
         assert results[1] == chunks[1]
 
-    @patch("llm.chat_client.ChatClient._ensure_model_loaded")
+    @patch("llm.thinking_client.ensure_model_loaded")
     @patch("llm.llm_client.LLMClient.stream_chat_completion")
     def test_budget_below_min_raises_value_error(
         self, mock_stream: MagicMock, mock_load: MagicMock
@@ -517,7 +517,7 @@ class TestStreamThinkingCompletion:
                 )
             )
 
-    @patch("llm.chat_client.ChatClient._ensure_model_loaded")
+    @patch("llm.thinking_client.ensure_model_loaded")
     @patch("llm.llm_client.LLMClient.stream_chat_completion")
     def test_budget_above_max_raises_value_error(
         self, mock_stream: MagicMock, mock_load: MagicMock
@@ -532,7 +532,7 @@ class TestStreamThinkingCompletion:
                 )
             )
 
-    @patch("llm.chat_client.ChatClient._ensure_model_loaded")
+    @patch("llm.thinking_client.ensure_model_loaded")
     @patch("llm.llm_client.LLMClient.stream_chat_completion")
     def test_stream_chat_completion_called_with_stream_true(
         self, mock_stream: MagicMock, mock_load: MagicMock
@@ -549,7 +549,7 @@ class TestStreamThinkingCompletion:
 
         mock_stream.assert_called_once()
 
-    @patch("llm.chat_client.ChatClient._ensure_model_loaded")
+    @patch("llm.thinking_client.ensure_model_loaded")
     @patch("llm.llm_client.LLMClient.stream_chat_completion")
     def test_none_budget_uses_default_no_error(
         self, mock_stream: MagicMock, mock_load: MagicMock
@@ -615,7 +615,7 @@ class TestIsThinkingCapable:
 class TestNonStreamingRegression:
     """Verify existing chat_completion still works without thinking params."""
 
-    @patch("llm.chat_client.ChatClient._ensure_model_loaded")
+    @patch("llm.thinking_client.ensure_model_loaded")
     @patch.object(
         LLMClient,
         "chat_completion",

@@ -13,6 +13,7 @@ from config.constants import (
     STREAM_READ_TIMEOUT,
 )
 from llm.http_transport import HTTPTransport
+from llm.jit_loader import ensure_model_loaded
 from llm.thinking_parser import (
     estimate_thinking_tokens,
     parse_thinking_blocks,
@@ -56,15 +57,13 @@ class ThinkingClient:
         effective_max_tokens = budget + max_tokens
 
         target_model = model if model is not None else self._transport.model
-        from llm.chat_client import ChatClient
-
-        ChatClient(self._transport)._ensure_model_loaded(target_model, ttl=JIT_TTL_DEFAULT)
+        ensure_model_loaded(target_model, ttl=JIT_TTL_DEFAULT)
 
         # Use injected chat function or create a ChatClient
         if _chat_fn is None:
-            from llm.chat_client import ChatClient as CC
+            from llm.chat_client import ChatClient
 
-            _chat_fn = CC(self._transport).chat_completion
+            _chat_fn = ChatClient(self._transport).chat_completion
 
         response = _chat_fn(
             messages=messages,

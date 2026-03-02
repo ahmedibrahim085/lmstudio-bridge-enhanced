@@ -4,9 +4,10 @@ Each protocol defines the public interface for one responsibility domain.
 Sub-clients implement these protocols; the Facade delegates to them.
 """
 
-from typing import Any, Dict, Generator, List, Optional, Protocol, Union
+from typing import Any, Dict, Generator, List, Optional, Protocol, Union, runtime_checkable
 
 
+@runtime_checkable
 class ChatProvider(Protocol):
     """Contract for chat and text completion methods."""
 
@@ -37,6 +38,7 @@ class ChatProvider(Protocol):
     ) -> Dict[str, Any]: ...
 
 
+@runtime_checkable
 class ResponseProvider(Protocol):
     """Contract for stateful /v1/responses API."""
 
@@ -58,6 +60,7 @@ class ResponseProvider(Protocol):
     ) -> Dict[str, Any]: ...
 
 
+@runtime_checkable
 class AnthropicProvider(Protocol):
     """Contract for Anthropic-compatible messages API."""
 
@@ -76,6 +79,7 @@ class AnthropicProvider(Protocol):
     ) -> Dict[str, Any]: ...
 
 
+@runtime_checkable
 class StreamProvider(Protocol):
     """Contract for all streaming methods."""
 
@@ -124,6 +128,7 @@ class StreamProvider(Protocol):
     ) -> Generator[Dict[str, Any], None, None]: ...
 
 
+@runtime_checkable
 class ModelInfoProvider(Protocol):
     """Contract for model listing and info methods."""
 
@@ -132,6 +137,7 @@ class ModelInfoProvider(Protocol):
     def get_model_info(self, model_id: Optional[str] = None) -> Dict[str, Any]: ...
 
 
+@runtime_checkable
 class ThinkingProvider(Protocol):
     """Contract for thinking/reasoning methods."""
 
