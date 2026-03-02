@@ -1,9 +1,15 @@
 #!/usr/bin/env python3
-"""
-Dynamic MCP discovery - reads .mcp.json to discover available MCPs.
+"""Static MCP discovery — reads .mcp.json to discover available MCPs at startup.
 
-This module enables TRULY dynamic MCP support where the local LLM can use
-ANY MCP that's configured in either:
+This module provides **static** (session-scoped) MCP server discovery by
+reading ``.mcp.json`` configuration files. Servers discovered here are
+available for the entire session.
+
+For **dynamic** (per-request) MCP server attachment, see
+``mcp_client.ephemeral`` which uses the ``integrations`` parameter of
+LM Studio's ``/api/v1/chat`` endpoint (LM Studio 0.4+).
+
+Configuration sources:
 - Claude Code's .mcp.json (project configuration)
 - Any other .mcp.json file specified by path
 """
