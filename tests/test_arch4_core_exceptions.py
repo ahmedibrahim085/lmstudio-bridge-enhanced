@@ -24,6 +24,7 @@ EXPECTED_ALL = [
     "LLMTimeoutError",
     "LLMRateLimitError",
     "LLMValidationError",
+    "LLMAuthenticationError",
     "LLMConnectionError",
     "LLMResponseError",
     "ModelNotFoundError",

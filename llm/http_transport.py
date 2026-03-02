@@ -6,6 +6,7 @@ instance — they never create their own sessions.
 """
 
 import logging
+import os
 from typing import NoReturn, Optional
 
 import requests
@@ -14,6 +15,8 @@ from urllib3.util.retry import Retry
 
 from config import get_config
 from config.constants import (
+    AUTH_HEADER_PREFIX,
+    ENV_LMS_API_KEY,
     HEALTH_CHECK_TIMEOUT,
     HTTP_RETRY_BACKOFF_FACTOR,
     HTTP_RETRY_TOTAL,
@@ -22,6 +25,7 @@ from config.constants import (
     MODEL_LIST_TIMEOUT,
 )
 from llm.exceptions import (
+    LLMAuthenticationError,
     LLMConnectionError,
     LLMError,
     LLMRateLimitError,
@@ -62,7 +66,13 @@ def handle_request_exception(e: Exception, operation: str = "LLM request") -> No
     elif isinstance(e, requests.exceptions.HTTPError):
         status_code = e.response.status_code if e.response is not None else None
 
-        if status_code == 429:
+        if status_code == 401:
+            raise LLMAuthenticationError(
+                f"{operation} failed: Authentication failed (HTTP 401). "
+                f"Check your API key.",
+                original_exception=e,
+            )
+        elif status_code == 429:
             raise LLMRateLimitError(
                 f"{operation} failed: Rate limit exceeded. Please try again later.",
                 original_exception=e,
@@ -112,6 +122,7 @@ class HTTPTransport:
         api_base: Optional[str] = None,
         model: Optional[str] = None,
         session: Optional["requests.Session"] = None,
+        api_key: Optional[str] = None,
     ):
         config = get_config()
         self.api_base = api_base or config.lmstudio.api_base
@@ -133,6 +144,20 @@ class HTTPTransport:
             )
             self.session.mount("http://", adapter)
             self.session.mount("https://", adapter)
+
+        # Resolve API key: constructor > env var > None
+        resolved_key = api_key if api_key is not None else os.environ.get(ENV_LMS_API_KEY)
+        if resolved_key is not None:
+            resolved_key = resolved_key.strip()
+        if resolved_key:
+            self.session.headers["Authorization"] = f"{AUTH_HEADER_PREFIX} {resolved_key}"
+            self._has_api_key = True
+        else:
+            self._has_api_key = False
+
+    def __repr__(self) -> str:
+        auth = "key=***" if self._has_api_key else "no-auth"
+        return f"HTTPTransport(api_base={self.api_base!r}, model={self.model!r}, {auth})"
 
     def close(self) -> None:
         """Close the HTTP session if owned."""

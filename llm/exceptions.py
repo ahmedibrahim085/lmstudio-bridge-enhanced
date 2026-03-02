@@ -5,6 +5,7 @@ This file exists so existing ``from llm.exceptions import …`` still works.
 """
 
 from core.exceptions import (  # noqa: F401
+    LLMAuthenticationError,
     LLMConnectionError,
     LLMError,
     LLMRateLimitError,
@@ -21,6 +22,7 @@ __all__ = [
     "LLMTimeoutError",
     "LLMRateLimitError",
     "LLMValidationError",
+    "LLMAuthenticationError",
     "LLMConnectionError",
     "LLMResponseError",
     "ModelNotFoundError",

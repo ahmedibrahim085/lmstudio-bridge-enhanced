@@ -83,6 +83,11 @@ class LLMConnectionError(LLMError):
     pass
 
 
+class LLMAuthenticationError(LLMError):
+    """Raised when API authentication fails (HTTP 401)."""
+    pass
+
+
 class LLMResponseError(LLMError):
     """Raised when LLM response format is invalid.
 
@@ -173,6 +178,7 @@ class ModelNotFoundError(LLMValidationError):
 #   ├── LLMRateLimitError (too many requests)
 #   ├── LLMValidationError (validation failed)
 #   │   └── ModelNotFoundError (specific model not available)
+#   ├── LLMAuthenticationError (HTTP 401)
 #   ├── LLMConnectionError (cannot connect to API)
 #   ├── LLMResponseError (invalid response format)
 #   └── ModelMemoryError (model too large for available memory)
@@ -205,6 +211,7 @@ __all__ = [
     "LLMTimeoutError",
     "LLMRateLimitError",
     "LLMValidationError",
+    "LLMAuthenticationError",
     "LLMConnectionError",
     "LLMResponseError",
     "ModelNotFoundError",

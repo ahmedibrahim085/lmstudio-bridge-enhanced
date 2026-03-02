@@ -215,7 +215,7 @@ class TestHTTPError404Branch:
 class TestHTTPErrorOtherBranch:
     """requests.exceptions.HTTPError with non-special status -> LLMResponseError"""
 
-    @pytest.mark.parametrize("status_code", [400, 401, 403, 503])
+    @pytest.mark.parametrize("status_code", [400, 403, 503])
     def test_raises_llm_response_error(self, status_code: int):
         original = _make_http_error(status_code)
         with pytest.raises(LLMResponseError):
