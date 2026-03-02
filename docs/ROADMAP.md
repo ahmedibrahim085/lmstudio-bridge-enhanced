@@ -20,6 +20,8 @@
 | v5.0.0 Phase A (Architecture) | ARCH-1..5 | **DONE** | v5.0.0 | ~30 |
 | v5.0.0 Phase B (Features) | OPP-21, 24, 27, 28, 29, 31 | **DONE** | v5.0.0 | ~100 |
 | v5.0.0 Phase C (Major) | OPP-19, 25 | **DONE** | v5.0.0 | ~60 |
+| Log Analysis | 28 issues, 16 OPPs proposed | **ANALYSIS DONE** | — | — |
+| Round G (Log Analysis OPPs) | OPP-32—47 | **PROPOSED** | v5.1.0 | ~TBD |
 
 ---
 
@@ -309,3 +311,61 @@ v5.0.0 Phase C ────┐
 | **GRAND TOTAL** | **30 OPPs + 5 ARCH + 22 fixes** | **976.1** | **~780** |
 
 Final completed state: ~1969 tests, 91% coverage, VERSION 5.0.0.
+
+---
+
+## Round G — Log Analysis OPPs (PROPOSED)
+
+> Source: 3-round deep analysis of 188K-line LM Studio server log (`docs/LOG_ANALYSIS_2026-03-02.md`)
+> 28 issues found → 16 new OPPs proposed (OPP-32 through OPP-47)
+
+| Rank | OPP | Name | R | I | C | E | RICE | Priority | Status |
+|------|-----|------|---|---|---|---|------|----------|--------|
+| 1 | OPP-38 | Fix "model: default" Fallback | 10 | 10 | 1.0 | 0.5 | **200** | P0 | PROPOSED |
+| 2 | OPP-32 | Schema-Aware Type Coercion | 8 | 9 | 0.9 | 2 | **32.4** | P0 | PROPOSED |
+| 3 | OPP-39 | Context Window Guard | 7 | 9 | 0.8 | 2 | **25.2** | P0 | PROPOSED |
+| 4 | OPP-40 | Tool Result Caching | 7 | 8 | 0.9 | 2 | **25.2** | P1 | PROPOSED |
+| 5 | OPP-37 | Orphan Detection with Fast-Fail | 6 | 8 | 0.8 | 2 | **19.2** | P1 | PROPOSED |
+| 6 | OPP-33 | Pre-Dispatch Tool Argument Validation | 6 | 7 | 0.9 | 1 | **37.8** | P1 | PROPOSED |
+| 7 | OPP-34 | Model Tool-Calling Error Budget | 5 | 7 | 0.8 | 2 | **14** | P1 | PROPOSED |
+| 8 | OPP-35 | LMSAuthenticator getModelInfo Caching | 4 | 5 | 1.0 | 1 | **20** | P2 | PROPOSED |
+| 9 | OPP-36 | Logprobs Response Bloat Suppression | 3 | 4 | 0.7 | 1 | **8.4** | P2 | PROPOSED |
+| 10 | OPP-41 | Conversation Chain Health Monitoring | 4 | 5 | 0.8 | 1 | **16** | P2 | PROPOSED |
+| 11 | OPP-42 | Token Budget Monitoring & Alerting | 4 | 5 | 0.8 | 1 | **16** | P2 | PROPOSED |
+| 12 | OPP-43 | Poll Rate Limiter (backoff + idle) | 9 | 9 | 0.9 | 2 | **36.5** | P0 | PROPOSED |
+| 13 | OPP-44 | Tool Call Circuit Breaker | 7 | 8 | 0.8 | 2 | **22.4** | P1 | PROPOSED |
+| 14 | OPP-45 | Per-Model Error Budget + Auto-Demotion | 7 | 8 | 0.8 | 2 | **22.4** | P1 | PROPOSED |
+| 15 | OPP-46 | Adaptive Timeout (Prompt Progress) | 6 | 7 | 0.8 | 2 | **16.8** | P1 | PROPOSED |
+| 16 | OPP-47 | Tool Name Normalization Layer | 4 | 5 | 0.9 | 1 | **18** | P2 | PROPOSED |
+
+### Key Findings Driving These OPPs
+
+| Finding | Severity | Evidence | OPP |
+|---------|----------|----------|-----|
+| "model: default" sent to LM Studio | CRITICAL | 167 ERRORs, 135 rejected | OPP-38 |
+| Array type coercion gap | CRITICAL | 11/13 WARNs | OPP-32 |
+| 94K token context overflow | CRITICAL | 3 × 94K input → 0 output | OPP-39 |
+| 24% orphaned tool calls | CRITICAL | 23/95 started never finished | OPP-37 |
+| 89% prompt cache miss | HIGH | 113/127 cached_tokens=0 | OPP-40 |
+| 42% duplicate tool calls | HIGH | list_directory llm/ ×15 | OPP-40 |
+| Conversation fragmentation | HIGH | 2.4 avg chain length | OPP-41 |
+| 6,273 uncached getModelInfo | HIGH | 789 calls/min peak | OPP-35 |
+| 18,211 logprobs lines | HIGH | 9.7% log bloat | OPP-36 |
+| 27:1 input/output ratio | MEDIUM | 96.5% tokens are overhead | OPP-42 |
+| 11,613 lms-cli polls (85% of events) | CRITICAL | 789/min peak, getModelInfo uncached | OPP-43 |
+| 10 silently dropped tool calls | CRITICAL | Truncated JSON generation, no circuit breaker | OPP-44 |
+| glm 80% events + 100% errors | HIGH | Error density accelerates 1.75→5.33/min | OPP-45 |
+| 3× wasted prompt processing | HIGH | 94K tokens processed then 0 output | OPP-46 |
+| Tool name inconsistency across models | MEDIUM | qwen: `list_directory`, glm: `filesystem__list_directory` | OPP-47 |
+
+### Execution Batches
+
+```
+Batch 1 (P0, parallel):  OPP-38 + OPP-32 + OPP-39 + OPP-43
+Batch 2 (P1, parallel):  OPP-33 + OPP-37 + OPP-40
+Batch 3 (P1, parallel):  OPP-44 + OPP-46
+Batch 4 (P1/P2):         OPP-34 + OPP-35 + OPP-36 + OPP-45
+Batch 5 (P2):            OPP-41 + OPP-42 + OPP-47
+```
+
+Target version: **v5.1.0** (all backward compatible, no breaking changes)

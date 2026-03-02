@@ -1,6 +1,6 @@
 # LM Studio Bridge Enhanced — Execution Backlog
 
-> Updated: 2026-03-02 | Post-v5.0.0 | Baseline: ~1969 tests passing, 91% coverage
+> Updated: 2026-03-02 | Post-v5.0.0 + Log Analysis (3 rounds) | Baseline: ~1969 tests passing, 91% coverage
 
 ---
 
@@ -13,7 +13,8 @@
 | Coverage | **91%+** |
 | Coverage target | **80% minimum / 89% goal (exceeded)** |
 | VERSION | 5.0.0 (in config/constants/version.py) |
-| Completed rounds | Phase 1, 1.5, Round A-D, Error Audit, Code Quality, v5.0.0 (Pre-flight + Phase A + Phase B + Phase C) |
+| Completed rounds | Phase 1, 1.5, Round A-D, Error Audit, Code Quality, v5.0.0 (Pre-flight + Phase A + Phase B + Phase C), Log Analysis |
+| Next | Round G Batch 1: OPP-38 (fix "default"), OPP-32 (schema coercion), OPP-39 (context guard), OPP-43 (poll limiter) |
 
 ---
 
@@ -184,6 +185,29 @@ v5.0.0 Phase B ────────┘ DONE (Features)
 v5.0.0 Phase C ────────┘ DONE (Major)
   OPP-19 → OPP-25 (sequential)
   [Gate: coverage ≥ 91% ✅, VERSION → v5.0.0 ✅]
+                        │
+Log Analysis ──────────┘ DONE (3-round deep analysis)
+  Source: 188K-line LM Studio server log
+  28 issues → 16 OPPs proposed
+                        │
+Round G ───────────────┘ PROPOSED (Log Analysis OPPs)
+  Batch 1: OPP-38 ═══╗ P0 parallel
+           OPP-32 ═══╣
+           OPP-39 ═══╣
+           OPP-43 ═══╝
+  Batch 2: OPP-33 ═══╗ P1 parallel
+           OPP-37 ═══╣
+           OPP-40 ═══╝
+  Batch 3: OPP-44 ═══╗ P1 parallel
+           OPP-46 ═══╝
+  Batch 4: OPP-34 ═══╗ P1/P2 parallel
+           OPP-35 ═══╣
+           OPP-36 ═══╣
+           OPP-45 ═══╝
+  Batch 5: OPP-41 ═══╗ P2 parallel
+           OPP-42 ═══╣
+           OPP-47 ═══╝
+  [Gate: coverage ≥ 91%, VERSION → v5.1.0]
 ```
 
 ---
@@ -389,6 +413,106 @@ These are not individual OPPs — they are **synergy effects** from combining mu
 
 ---
 
+## Round G — Log Analysis OPPs (PROPOSED)
+
+> Source: `docs/LOG_ANALYSIS_2026-03-02.md` — 3-round deep analysis of 188K-line LM Studio server log
+> 28 issues found (7 CRITICAL, 10 HIGH, 8 MEDIUM, 3 LOW), yielding 16 proposed OPPs
+
+### Priority 0 (Critical — Data Loss / Silent Failures)
+
+| Step | OPP | Name | Type | Fixes | Effort | Files |
+|------|-----|------|------|-------|--------|-------|
+| G-1 | OPP-32 | Schema-Aware Type Coercion | EVOLUTION | 11/13 WARNs, 15 orphans | MEDIUM | `mcp_client/type_coercion.py` |
+| G-2 | OPP-38 | Fix "model: default" Fallback | BUGFIX | 167 ERRORs, 135 rejected requests | LOW | `config_main.py`, `config/constants/testing.py` |
+| G-3 | OPP-39 | Context Window Guard | NEW | 282K wasted tokens (3 × 94K overflow) | MEDIUM | `tools/dynamic_autonomous.py` |
+| G-4 | OPP-43 | Poll Rate Limiter (backoff + idle suspension) | NEW | 11,613 polls (85% of events), 789/min peak | MEDIUM | `utils/lms_helper.py`, `llm/llm_client.py` |
+
+### Priority 1 (High — Reliability / Efficiency)
+
+| Step | OPP | Name | Type | Fixes | Effort | Files |
+|------|-----|------|------|-------|--------|-------|
+| G-5 | OPP-33 | Pre-Dispatch Tool Argument Validation | NEW | 2 WARNs (missing required params), reduces orphans | LOW | `tools/dynamic_autonomous.py` |
+| G-6 | OPP-34 | Model Tool-Calling Error Budget | NEW | glm-4.6v-flash 31% failure rate undetected | MEDIUM | `tools/dynamic_autonomous.py` |
+| G-7 | OPP-37 | Orphan Detection with Fast-Fail | EVOLUTION | 23 orphaned tool calls (24% rate) | MEDIUM | `tools/dynamic_autonomous.py` |
+| G-8 | OPP-40 | Tool Result Caching | NEW | 42% duplicate tool calls (~30 redundant) | MEDIUM | `tools/dynamic_autonomous.py` |
+| G-9 | OPP-44 | Tool Call Circuit Breaker | NEW | 7 consecutive failures before self-correct, no max retries | MEDIUM | `tools/dynamic_autonomous.py` |
+| G-10 | OPP-45 | Per-Model Error Budget with Auto-Demotion | NEW | glm 80% of events + 100% of errors, no demotion | MEDIUM | `tools/dynamic_autonomous.py`, `llm/llm_client.py` |
+| G-11 | OPP-46 | Adaptive Timeout (Prompt Processing Progress) | NEW | 3 × wasted prompt processing (94K tokens → 0 output) | MEDIUM | `llm/llm_client.py`, `tools/dynamic_autonomous.py` |
+
+### Priority 2 (Medium — Observability / Optimization)
+
+| Step | OPP | Name | Type | Fixes | Effort | Files |
+|------|-----|------|------|-------|--------|-------|
+| G-12 | OPP-35 | LMSAuthenticator getModelInfo Caching | EVOLUTION | 6,273 uncached API calls, 789/min peak | LOW | `utils/lms_helper.py` |
+| G-13 | OPP-36 | Logprobs Response Bloat Suppression | EVOLUTION | 18,211 log lines (9.7%) of empty arrays | LOW | LM Studio server-side + bridge logging |
+| G-14 | OPP-41 | Conversation Chain Health Monitoring | NEW | Avg 2.4 chain length, 42% restart rate | LOW | `tools/dynamic_autonomous.py` |
+| G-15 | OPP-42 | Token Budget Monitoring & Alerting | NEW | 27:1 input/output ratio invisible | LOW | `tools/dynamic_autonomous.py` |
+| G-16 | OPP-47 | Tool Name Normalization Layer | NEW | qwen uses `list_directory`, glm uses `filesystem__list_directory` | LOW | `mcp_client/type_coercion.py`, `tools/dynamic_autonomous.py` |
+
+### Dependency Chains
+
+```
+Chain J: Type Safety
+  OPP-32 (schema coercion) → OPP-33 (pre-dispatch validation) → OPP-34 (error budget)
+
+Chain K: Context Efficiency
+  OPP-39 (context guard) → OPP-40 (tool cache) → OPP-42 (token monitoring)
+
+Chain L: Resilience (R3)
+  OPP-44 (circuit breaker) → OPP-45 (error budget + auto-demotion)
+
+Chain M: Polling (R3)
+  OPP-43 (poll rate limiter) → OPP-35 (getModelInfo cache)
+
+Independent:
+  OPP-38 (fix "default") — trivial 1-line fix, no dependencies
+  OPP-37 (orphan detection) — independent
+  OPP-36 (logprobs suppression) — independent
+  OPP-41 (chain monitoring) — independent
+  OPP-46 (adaptive timeout) — independent (uses prompt_processing progress events)
+  OPP-47 (tool name normalization) — independent
+```
+
+### Execution Order (Proposed)
+
+```
+Batch 1 (P0, parallel):
+  OPP-38 ═══╗ trivial fix
+  OPP-32 ═══╣ schema coercion
+  OPP-39 ═══╣ context guard
+  OPP-43 ═══╝ poll rate limiter (R3)
+
+Batch 2 (P1, parallel):
+  OPP-33 ═══╗ pre-dispatch validation (after OPP-32)
+  OPP-37 ═══╣ orphan detection
+  OPP-40 ═══╝ tool result caching
+
+Batch 3 (P1, parallel):
+  OPP-44 ═══╗ circuit breaker (R3)
+  OPP-46 ═══╝ adaptive timeout (R3)
+
+Batch 4 (P1/P2, parallel):
+  OPP-34 ═══╗ error budget (after OPP-33)
+  OPP-35 ═══╣ getModelInfo cache (after OPP-43)
+  OPP-36 ═══╣ logprobs suppression
+  OPP-45 ═══╝ per-model error budget + auto-demotion (after OPP-44, R3)
+
+Batch 5 (P2, parallel):
+  OPP-41 ═══╗ chain monitoring
+  OPP-42 ═══╣ token monitoring
+  OPP-47 ═══╝ tool name normalization (R3)
+```
+
+### Gate
+
+- [ ] All P0 OPPs (32, 38, 39, 43) implemented and tested
+- [ ] Coverage >= 91% maintained
+- [ ] All existing tests pass
+- [ ] Re-run log analysis scenario to confirm fix
+- [ ] VERSION → v5.1.0 (or v6.0.0 if breaking)
+
+---
+
 ## Changelog
 
 | Date | Change |
@@ -412,3 +536,7 @@ These are not individual OPPs — they are **synergy effects** from combining mu
 | 2026-03-01 | OPP-31 (Model Profiles) spec written — 7-stage research, 112 sources, RICE 24.3, added to v5.0.0 Phase B |
 | 2026-03-02 | v5.0.0 complete: 57 commits, Phase A (5 ARCH) + Phase B (6 OPPs) + Phase C (2 OPPs), ~1969 tests, 91% coverage |
 | 2026-03-02 | All v5 sections marked DONE, gate checklist verified, documentation updated |
+| 2026-03-02 | Log analysis: 2-round deep analysis of 188K-line server log → 17 issues, 11 new OPPs (OPP-32 to OPP-42) |
+| 2026-03-02 | Added Round G (Log Analysis OPPs) with 4 batches, 3 dependency chains, gate criteria |
+| 2026-03-02 | Round 3 log analysis: 11 additional findings → 5 new OPPs (OPP-43 to OPP-47), total 28 issues, 16 OPPs |
+| 2026-03-02 | Round G updated: 16 OPPs across 5 batches, 5 dependency chains (J-M + independent), gate updated |
