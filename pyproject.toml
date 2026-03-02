@@ -1,6 +1,6 @@
 [project]
 name = "lmstudio-bridge-enhanced"
-version = "4.1.0"
+version = "5.0.0"
 description = "Enhanced MCP bridge for LM Studio with local LLM orchestration"
 readme = "README.md"
 requires-python = ">=3.9"

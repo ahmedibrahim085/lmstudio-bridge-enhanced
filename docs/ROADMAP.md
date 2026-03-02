@@ -16,9 +16,10 @@
 | Error Audit | 10 bug fixes | **DONE** | v3.5.1-error-audit | ~50 |
 | Code Quality Audit | 12 findings fixed | **DONE** | v4.0.0 | ~75 |
 | Round D (Quick Wins) | OPP-22, 23, 26, 30 | **DONE** | v4.0.0 | ~90 |
-| v5.0.0 Phase A (Architecture) | ARCH-1..5 | **PROPOSED** | v5.0.0 | — |
-| v5.0.0 Phase B (Features) | OPP-21, 24, 27, 28, 29 | **PROPOSED** | v5.0.0 | — |
-| v5.0.0 Phase C (Major) | OPP-19, 25 | **PROPOSED** | v5.0.0 | — |
+| v5.0.0 Pre-flight | v4.1.0 bridge, CI enforcement | **DONE** | v4.1.0 | ~10 |
+| v5.0.0 Phase A (Architecture) | ARCH-1..5 | **DONE** | v5.0.0 | ~30 |
+| v5.0.0 Phase B (Features) | OPP-21, 24, 27, 28, 29, 31 | **DONE** | v5.0.0 | ~100 |
+| v5.0.0 Phase C (Major) | OPP-19, 25 | **DONE** | v5.0.0 | ~60 |
 
 ---
 
@@ -116,6 +117,7 @@ Changes from original:
 | 9 | OPP-28 | API Authentication | 4 | 6 | 0.8 | 1 | **19.2** | v5-B | PROPOSED |
 | 10 | OPP-24 | Model Auto-Download (REST) | 6 | 7 | 0.8 | 2 | **16.8** | v5-B | PROPOSED |
 | 11 | OPP-25 | Ephemeral MCP Servers | 5 | 9 | 0.7 | 4 | **7.9** | v5-C | PROPOSED |
+| 5 | OPP-31 | Model Profiles | 9 | 9 | 0.9 | 3 | **24.3** | v5-B | PROPOSED |
 
 **Completed round totals**:
 - Round A (Phases 2+3 parallel): **309.6** — 6 OPPs — **DONE**
@@ -126,7 +128,7 @@ Changes from original:
 **Proposed round totals**:
 - Round D (v4.0.0 — Quick Wins): **138.1** — 4 OPPs — OPP-22, 23, 26, 30
 - v5.0.0 Phase A (Architecture): 5 refactoring items (ARCH-1..5) — no RICE score
-- v5.0.0 Phase B (Features): **151.8** — 5 OPPs — OPP-21, 24, 27, 28, 29
+- v5.0.0 Phase B (Features): **176.1** — 6 OPPs — OPP-21, 24, 27, 28, 29, 31
 - v5.0.0 Phase C (Major): **23.9** — 2 OPPs — OPP-19, 25
 
 **Note**: ~~OPP-20~~ (Structured Output / JSON Schema) removed — already implemented in v3.2.0.
@@ -238,8 +240,9 @@ Round C — Phase 5 — DONE:
 | OPP-28 | API Authentication | NEW | None | Yes — additive header |
 | OPP-29 | Log-Probabilities | NEW | None | Yes — additive parameter |
 | OPP-30 | Echo Load Config | EVOLUTION | OPP-04 | Yes — additive response field |
+| OPP-31 | Model Profiles | NEW | None | Yes — additive module + MCP tools |
 
-**Summary**: 8 evolutions, 3 new features, 1 removed (OPP-20 already exists). 8 backward compatible, 3 breaking.
+**Summary**: 8 evolutions, 4 new features, 1 removed (OPP-20 already exists). 9 backward compatible, 3 breaking.
 
 ---
 

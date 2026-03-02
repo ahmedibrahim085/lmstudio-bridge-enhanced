@@ -4,16 +4,16 @@
 
 ---
 
-## Current State (Verified 2026-02-23)
+## Current State (Verified 2026-03-02)
 
 | Metric | Value |
 |--------|-------|
-| Branch | `feat/round-d-v4` at `3455f69` |
-| Tests | ~1684 passed, 0 failures |
-| Coverage | **91%** |
+| Branch | `feat/arch-2-constants-split` |
+| Tests | ~1950+ passed, 0 failures |
+| Coverage | **91%+** |
 | Coverage target | **80% minimum / 89% goal (exceeded)** |
-| VERSION | 4.0.0 (in constants.py) |
-| Completed rounds | Phase 1, Phase 1.5, Round A, Round B, Round C, Polish, Error Audit, Code Quality Audit |
+| VERSION | 5.0.0 (in config/constants/version.py) |
+| Completed rounds | Phase 1, 1.5, Round A-D, Error Audit, Code Quality, v5.0.0 (Pre-flight + Phase A + Phase B + Phase C) |
 
 ---
 
@@ -215,8 +215,9 @@ Addresses top findings from `docs/ARCHITECTURE_REVIEW.md` (score: 62/100).
 | B-3 | OPP-27 | Advanced Model Load Params | EVOLUTION | OPP-04 (Model Lifecycle) | Yes — additive | LOW | OPP-04 ✅ |
 | B-4 | OPP-28 | API Authentication | NEW | None | Yes — additive header | LOW | None |
 | B-5 | OPP-29 | Log-Probabilities | NEW | None | Yes — additive | LOW | None |
+| B-6 | OPP-31 | Model Profiles | NEW | None | Yes — additive | MEDIUM | OPP-04 ✅, OPP-22 ✅, OPP-26 ✅ |
 
-**Parallelization**: OPP-27 → OPP-24 sequential (share `lms_helper.py`). OPP-21 + OPP-28 + OPP-29 independent.
+**Parallelization**: OPP-27 → OPP-24 sequential (share `lms_helper.py`). OPP-21 + OPP-28 + OPP-29 + OPP-31 independent. OPP-31 has no file overlap with other Phase B items.
 
 ### Phase C: Round F — Major Features
 
@@ -241,7 +242,8 @@ Phase A: Architecture (unblocks cleaner Phase B/C implementation)
 Phase B: Medium-Lift Features
   OPP-21 ═══╗
   OPP-28 ═══╣ parallel (independent)
-  OPP-29 ═══╝
+  OPP-29 ═══╣
+  OPP-31 ═══╝
   OPP-27 → OPP-24  (sequential, shared files)
               │
               ▼
@@ -277,6 +279,12 @@ OPP-14 DONE → OPP-21 [v5-B]
 OPP-16 DONE → OPP-19 [v5-C] → OPP-25 [v5-C]
 ```
 
+### Chain I: Model Profiles
+```
+OPP-04 DONE → OPP-22 DONE → OPP-31 [v5-B]
+OPP-26 DONE ──────────────↗
+```
+
 ### Independent
 ```
 OPP-26 (sampling params) [v4.0.0] — no dependencies
@@ -293,14 +301,14 @@ OPP-29 (logprobs) [v5-B] — no dependencies
 | Type | Count | OPPs |
 |------|-------|------|
 | EVOLUTION (extends existing) | 8 | OPP-19, 21, 22, 23, 24, 25, 27, 30 |
-| NEW (greenfield) | 3 | OPP-26, 28, 29 |
+| NEW (greenfield) | 4 | OPP-26, 28, 29, 31 |
 | ALREADY EXISTS (removed) | 1 | ~~OPP-20~~ (structured output — already in v3.2.0) |
 
 ### By Backward Compatibility
 
 | Compat | Count | OPPs |
 |--------|-------|------|
-| Yes (additive) | 8 | OPP-22, 23, 24, 26, 27, 28, 29, 30 |
+| Yes (additive) | 9 | OPP-22, 23, 24, 26, 27, 28, 29, 30, 31 |
 | No (breaking) | 3 | OPP-19, 21, 25 |
 
 ---
@@ -379,3 +387,4 @@ These are not individual OPPs — they are **synergy effects** from combining mu
 | 2026-02-24 | Added Architecture Refactoring phase (ARCH-1..5) from ARCHITECTURE_REVIEW.md findings |
 | 2026-03-01 | Code quality audit: 12 findings fixed (threading, error contracts, logging, dedup, imports) |
 | 2026-03-01 | VERSION bumped to 4.0.0, docs updated to reflect current state |
+| 2026-03-01 | OPP-31 (Model Profiles) spec written — 7-stage research, 112 sources, RICE 24.3, added to v5.0.0 Phase B |
