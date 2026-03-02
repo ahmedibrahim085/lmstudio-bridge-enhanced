@@ -44,6 +44,8 @@ class ResponsesClient:
         draft_model: Optional[str] = None,
         min_p: Optional[float] = None,
         top_k: Optional[int] = None,
+        logprobs: bool = False,
+        top_logprobs: Optional[int] = None,
     ) -> Dict[str, Any]:
         """Create a stateful response with optional function calling."""
         model_to_use = (
@@ -78,6 +80,10 @@ class ResponsesClient:
             payload["min_p"] = min_p
         if top_k is not None:
             payload["top_k"] = top_k
+        if logprobs:
+            payload["logprobs"] = True
+            if top_logprobs is not None:
+                payload["top_logprobs"] = top_logprobs
 
         try:
             response = self._transport.session.post(

@@ -8,7 +8,10 @@ from config.constants import (
     DEFAULT_MAX_RETRIES,
     DEFAULT_MAX_TOKENS,
     DEFAULT_RETRY_BASE_DELAY,
+    DEFAULT_TOP_LOGPROBS,
     JIT_TTL_DEFAULT,
+    MAX_TOP_LOGPROBS,
+    MIN_TOP_LOGPROBS,
 )
 from llm.exceptions import LLMResponseError, LLMTimeoutError
 from llm.http_transport import HTTPTransport, handle_request_exception
@@ -50,10 +53,20 @@ class ChatClient:
         model: Optional[str] = None,
         min_p: Optional[float] = None,
         top_k: Optional[int] = None,
+        logprobs: bool = False,
+        top_logprobs: Optional[int] = None,
     ) -> Dict[str, Any]:
         """Generate a chat completion from the local LLM."""
         target_model = model if model is not None else self._transport.model
         self._ensure_model_loaded(target_model, ttl=JIT_TTL_DEFAULT)
+
+        if logprobs:
+            resolved_top = top_logprobs if top_logprobs is not None else DEFAULT_TOP_LOGPROBS
+            if resolved_top < MIN_TOP_LOGPROBS or resolved_top > MAX_TOP_LOGPROBS:
+                raise ValueError(
+                    f"top_logprobs must be between {MIN_TOP_LOGPROBS} and "
+                    f"{MAX_TOP_LOGPROBS}, got {resolved_top}"
+                )
 
         payload: Dict[str, Any] = {
             "messages": messages,
@@ -71,6 +84,9 @@ class ChatClient:
             payload["min_p"] = min_p
         if top_k is not None:
             payload["top_k"] = top_k
+        if logprobs:
+            payload["logprobs"] = True
+            payload["top_logprobs"] = resolved_top
 
         try:
             response = self._transport.session.post(

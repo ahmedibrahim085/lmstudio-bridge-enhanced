@@ -41,7 +41,7 @@ DOMAIN_MODULES = [
     "testing",
 ]
 
-EXPECTED_COUNT = 213
+EXPECTED_COUNT = 216
 
 
 def _get_domain_all(module_name: str) -> list[str]:

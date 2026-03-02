@@ -200,6 +200,8 @@ class LLMClient:
         model: Optional[str] = None,
         min_p: Optional[float] = None,
         top_k: Optional[int] = None,
+        logprobs: bool = False,
+        top_logprobs: Optional[int] = None,
     ) -> Dict[str, Any]:
         """Generate a chat completion from the local LLM."""
         return self._chat.chat_completion(
@@ -213,6 +215,8 @@ class LLMClient:
             model=model,
             min_p=min_p,
             top_k=top_k,
+            logprobs=logprobs,
+            top_logprobs=top_logprobs,
         )
 
     def text_completion(
@@ -320,6 +324,8 @@ class LLMClient:
         draft_model: Optional[str] = None,
         min_p: Optional[float] = None,
         top_k: Optional[int] = None,
+        logprobs: bool = False,
+        top_logprobs: Optional[int] = None,
     ) -> Dict[str, Any]:
         """Create a stateful response with optional function calling."""
         return self._responses.create_response(
@@ -336,6 +342,8 @@ class LLMClient:
             draft_model=draft_model,
             min_p=min_p,
             top_k=top_k,
+            logprobs=logprobs,
+            top_logprobs=top_logprobs,
         )
 
     # ------------------------------------------------------------------
