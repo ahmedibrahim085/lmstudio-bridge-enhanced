@@ -12,6 +12,7 @@ from config.constants import (
     JIT_TTL_DEFAULT,
     MAX_TOP_LOGPROBS,
     MIN_TOP_LOGPROBS,
+    is_model_sentinel,
 )
 from llm.exceptions import LLMResponseError, LLMTimeoutError
 from llm.http_transport import HTTPTransport, handle_request_exception
@@ -73,7 +74,7 @@ class ChatClient:
             "temperature": temperature,
             "max_tokens": max_tokens,
         }
-        if target_model and target_model != "default":
+        if not is_model_sentinel(target_model):
             payload["model"] = target_model
         if tools:
             payload["tools"] = tools
@@ -116,15 +117,16 @@ class ChatClient:
         top_k: Optional[int] = None,
     ) -> Dict[str, Any]:
         """Generate a raw text completion from the local LLM."""
-        target_model = model or self._transport.model
+        target_model = model if model is not None else self._transport.model
         self._ensure_model_loaded(target_model, ttl=JIT_TTL_DEFAULT)
 
         payload: Dict[str, Any] = {
             "prompt": prompt,
             "temperature": temperature,
             "max_tokens": max_tokens,
-            "model": target_model,
         }
+        if not is_model_sentinel(target_model):
+            payload["model"] = target_model
         if stop_sequences:
             payload["stop"] = stop_sequences
         if min_p is not None:

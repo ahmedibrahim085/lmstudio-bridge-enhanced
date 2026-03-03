@@ -1,6 +1,6 @@
 # LM Studio Bridge Enhanced — OPP Roadmap
 
-> Updated: 2026-03-02 | LM Studio target: 0.4.4+ | Baseline: ~1969 tests passing, 91% coverage
+> Updated: 2026-03-02 | LM Studio target: 0.4.4+ | Baseline: ~1969 tests passing, 91% coverage | Log Analysis: 4 rounds
 
 ---
 
@@ -20,6 +20,8 @@
 | v5.0.0 Phase A (Architecture) | ARCH-1..5 | **DONE** | v5.0.0 | ~30 |
 | v5.0.0 Phase B (Features) | OPP-21, 24, 27, 28, 29, 31 | **DONE** | v5.0.0 | ~100 |
 | v5.0.0 Phase C (Major) | OPP-19, 25 | **DONE** | v5.0.0 | ~60 |
+| Log Analysis | 31 issues (4 rounds), 19 raw → 10 active OPPs | **ANALYSIS DONE** | — | — |
+| Round G (Log Analysis OPPs) | 10 active + 1 experiment + 1 deferred | **PROPOSED** | v5.1.0 | ~TBD |
 
 ---
 
@@ -309,3 +311,99 @@ v5.0.0 Phase C ────┐
 | **GRAND TOTAL** | **30 OPPs + 5 ARCH + 22 fixes** | **976.1** | **~780** |
 
 Final completed state: ~1969 tests, 91% coverage, VERSION 5.0.0.
+
+---
+
+## Round G — Log Analysis OPPs (PROPOSED)
+
+> Source: 4-round deep analysis of 188K-line LM Studio server log (`docs/LOG_ANALYSIS_2026-03-02.md`)
+> 31 issues found → 19 raw OPPs → **10 active** after root cause analysis (4 merged, 3 removed, 1 deferred, 1 experiment)
+>
+> **Root causes**: (1) Missing model lifecycle state machine — `"default"` sentinel escapes config→API boundary.
+> (2) `dynamic_autonomous.py` god module (1,168 lines, 16 methods, 8+ responsibilities) — missing `ToolCallContext` pattern.
+
+| Rank | OPP | Name | R | I | C | E | RICE | Priority | Status |
+|------|-----|------|---|---|---|---|------|----------|--------|
+| 1 | OPP-38 | Fix "model: default" Fallback | 10 | 10 | 1.0 | 0.5 | **200** | P0 | **DONE** |
+| 2 | OPP-32 | Schema-Aware Type Coercion | 8 | 9 | 0.9 | 2 | **32.4** | P0 | PROPOSED |
+| 3 | OPP-39 | Context Window Guard | 7 | 9 | 0.8 | 2 | **25.2** | P0 | PROPOSED |
+| 4 | OPP-40 | Tool Result Caching (+OPP-47) | 7 | 8 | 0.9 | 2 | **25.2** | P1 | PROPOSED |
+| 5 | OPP-37 | Orphan Detection with Fast-Fail | 6 | 8 | 0.8 | 2 | **19.2** | P1 | PROPOSED |
+| 6 | OPP-33 | Pre-Dispatch Tool Argument Validation | 6 | 7 | 0.9 | 1 | **37.8** | P1 | PROPOSED |
+| ~~7~~ | ~~OPP-34~~ | ~~Model Tool-Calling Error Budget~~ | — | — | — | — | — | — | **MERGED → OPP-45** |
+| ~~8~~ | ~~OPP-35~~ | ~~LMSAuthenticator getModelInfo Caching~~ | — | — | — | — | — | — | **REMOVED** (LM Studio internal, our cache already works) |
+| ~~9~~ | ~~OPP-36~~ | ~~Logprobs Response Bloat Suppression~~ | — | — | — | — | — | — | **REMOVED** (server-side issue, bridge never requests logprobs) |
+| ~~10~~ | ~~OPP-41~~ | ~~Conversation Chain Health Monitoring~~ | — | — | — | — | — | — | **REMOVED** (short chains = efficient, not a bug) |
+| 11 | OPP-42 | Token Budget Monitoring & Alerting | 4 | 5 | 0.8 | 1 | **16** | P2 | **DEFERRED** (re-measure after OPP-39) |
+| 12 | OPP-43 | Poll Rate Limiter (backoff + idle) | 9 | 9 | 0.9 | 2 | **36.5** | P0 | PROPOSED |
+| 13 | OPP-44 | Tool Call Circuit Breaker (+OPP-48) | 7 | 8 | 0.8 | 2 | **22.4** | P1 | PROPOSED |
+| 14 | OPP-45 | Per-Model Error Budget + Auto-Demotion (+OPP-34) | 7 | 8 | 0.8 | 2 | **22.4** | P1 | PROPOSED |
+| 15 | OPP-46 | Adaptive Timeout — Both Phases (+OPP-49) | 6 | 7 | 0.8 | 2 | **16.8** | P1 | PROPOSED |
+| ~~16~~ | ~~OPP-47~~ | ~~Tool Name Normalization Layer~~ | — | — | — | — | — | — | **MERGED → OPP-40** |
+| ~~17~~ | ~~OPP-48~~ | ~~Truncated Tool Call Recovery~~ | — | — | — | — | — | — | **MERGED → OPP-44** |
+| ~~18~~ | ~~OPP-49~~ | ~~Generation-Aware Timeout~~ | — | — | — | — | — | — | **MERGED → OPP-46** |
+| 19 | OPP-50 | Tool Schema Dedup Experiment | 8 | 5 | 0.9 | 2 | **18** | P1 | EXPERIMENT |
+
+### Key Findings Driving These OPPs
+
+| Finding | Severity | Evidence | OPP |
+|---------|----------|----------|-----|
+| "model: default" sent to LM Studio | CRITICAL | 167 ERRORs, 135 rejected | OPP-38 ✅ |
+| Array type coercion gap | CRITICAL | 11/13 WARNs | OPP-32 |
+| 94K token context overflow | CRITICAL | 3 × 94K input → 0 output | OPP-39 |
+| 24% orphaned tool calls | CRITICAL | 23/95 started never finished | OPP-37 |
+| 89% prompt cache miss | HIGH | 113/127 cached_tokens=0 | OPP-40 |
+| 42% duplicate tool calls | HIGH | list_directory llm/ ×15 | OPP-40 |
+| ~~Conversation fragmentation~~ | ~~HIGH~~ | ~~2.4 avg chain length~~ | ~~OPP-41~~ **REMOVED** (efficient, not a bug) |
+| ~~6,273 uncached getModelInfo~~ | ~~HIGH~~ | ~~789 calls/min peak~~ | ~~OPP-35~~ **REMOVED** (LM Studio internal) |
+| ~~18,211 logprobs lines~~ | ~~HIGH~~ | ~~9.7% log bloat~~ | ~~OPP-36~~ **REMOVED** (server-side) |
+| 27:1 input/output ratio | MEDIUM | 96.5% tokens are overhead | OPP-42 |
+| 11,613 lms-cli polls (85% of events) | CRITICAL | 789/min peak, getModelInfo uncached | OPP-43 |
+| 10 silently dropped tool calls | CRITICAL | Truncated JSON generation, no circuit breaker | OPP-44 |
+| glm 80% events + 100% errors | HIGH | Error density accelerates 1.75→5.33/min | OPP-45 |
+| 3× wasted prompt processing | HIGH | 94K tokens processed then 0 output | OPP-46 |
+| ~~Tool name inconsistency across models~~ | ~~MEDIUM~~ | ~~qwen: `list_directory`, glm: `filesystem__list_directory`~~ | ~~OPP-47~~ **MERGED → OPP-40** |
+| 10 truncated tool call parse failures | HIGH | ALL `read_text_file`, ALL glm-4.6v-flash | OPP-44 (absorbed OPP-48) |
+| 9 client disconnects post-100% prompt | HIGH | 37s gap between prompt processing complete and timeout | OPP-46 (absorbed OPP-49) |
+| 3,909 repeated tool schema definitions | HIGH | 127 tool arrays × ~30 tools/array, ~50% of log volume | OPP-50 (EXPERIMENT) |
+| getModelInfo is 54% of internal calls | CRITICAL (R4 update) | LMSAuthenticator: 6,273 getModelInfo, cache strategy per endpoint | OPP-43 |
+| glm 31.1% tool call failure rate | HIGH (R4 update) | 23/74 orphaned vs 0% for qwen/magistral | OPP-45 |
+| 126 prompt re-starts (91% re-processing) | HIGH (R4 update) | 9 disconnects during generation phase | OPP-46 |
+
+### Execution Order (Root Cause Driven)
+
+```
+Phase 1: Kill the Cascade ✅ DONE
+  OPP-38 ✅ ──→ fix "default" sentinel escape (6 commits, 22 tests)
+
+Phase 2: Foundations (parallel)
+  OPP-39 ═══╗ context window guard
+  OPP-32 ═══╣ schema-aware type coercion
+  OPP-43 ═══╝ poll rate limiter (after OPP-38 removes error amplification)
+
+Phase 3: Build ToolCallContext (sequential pair, then parallel)
+  OPP-33 + OPP-44 ═══╗ pre-dispatch validation + circuit breaker
+  OPP-37 + OPP-40   ═╝ orphan detection + result cache
+
+Phase 4: Model Intelligence
+  OPP-45 ────→ per-model error budget + auto-demotion
+
+Phase 5: Streaming Refactor (most invasive, do last)
+  OPP-46 ────→ adaptive timeout for both inference phases
+
+Phase 6: Quick Experiment
+  OPP-50 ────→ test omitting tools after round 0 with previous_response_id
+```
+
+### Consolidated Summary
+
+| Status | Count | OPPs |
+|--------|-------|------|
+| **Active** | 9 | OPP-32, 33, 37, 39, 40, 43, 44, 45, 46 |
+| **Done (Round G)** | 1 | OPP-38 |
+| **Experiment** | 1 | OPP-50 |
+| **Deferred** | 1 | OPP-42 (re-measure after OPP-39) |
+| **Merged** | 4 | OPP-34→45, OPP-47→40, OPP-48→44, OPP-49→46 |
+| **Removed** | 3 | OPP-35, 36, 41 |
+
+Target version: **v5.1.0** (all backward compatible, no breaking changes)

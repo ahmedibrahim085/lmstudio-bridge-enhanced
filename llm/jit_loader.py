@@ -7,6 +7,7 @@ sub-clients can call it without constructing throwaway ChatClient instances.
 import logging
 from typing import Optional
 
+from config.constants import DEFAULT_MODEL_KEYWORD
 from utils.lms_helper import LMSHelper
 
 logger = logging.getLogger(__name__)
@@ -26,7 +27,7 @@ def ensure_model_loaded(
     """
     from llm.exceptions import LLMConnectionError
 
-    if not target_model or target_model == "default" or not LMSHelper.is_installed():
+    if not target_model or target_model == DEFAULT_MODEL_KEYWORD or not LMSHelper.is_installed():
         return
     try:
         is_loaded = LMSHelper.is_model_loaded(target_model)

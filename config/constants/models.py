@@ -11,6 +11,7 @@ __all__ = [
     "REVIEW_MODELS",
     "DEFAULT_MODEL_KEYWORD",
     "MODEL_ROLE_KEYWORDS",
+    "is_model_sentinel",
 ]
 
 # Default fallback model when no model is specified in API calls
@@ -43,6 +44,15 @@ REVIEW_MODELS = [
 
 # Special keyword meaning "use currently loaded model in LM Studio"
 DEFAULT_MODEL_KEYWORD = "default"
+
+def is_model_sentinel(model: str | None) -> bool:
+    """Return True if model is the sentinel keyword, None, or empty.
+
+    Use this to guard HTTP payloads — never send sentinel values to LM Studio.
+    When True, omit the "model" key from payload so LM Studio uses its loaded model.
+    """
+    return not model or model == DEFAULT_MODEL_KEYWORD
+
 
 # Keywords for classifying models into roles during test discovery
 MODEL_ROLE_KEYWORDS: dict[str, list[str]] = {
