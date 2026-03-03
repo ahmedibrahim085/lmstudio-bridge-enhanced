@@ -13,8 +13,11 @@ import os
 # Add parent directory to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
+from unittest.mock import AsyncMock, patch
+
 from mcp_client.type_coercion import (
     coerce_tool_arg_types,
+    safe_call_tool,
     NUMERIC_PARAMS,
     _load_numeric_params,
     _DEFAULT_NUMERIC_PARAMS
@@ -174,6 +177,204 @@ class TestNumericParamsConfig:
         """Test that loaded NUMERIC_PARAMS includes all defaults."""
         for default_param in _DEFAULT_NUMERIC_PARAMS:
             assert default_param in NUMERIC_PARAMS
+
+
+class TestSchemaAwareCoercion:
+    """Tests for schema-aware array coercion (OPP-32).
+
+    When a tool schema declares a parameter as type:"array", the coercion
+    function should wrap single dicts in a list and parse JSON strings.
+    """
+
+    ARRAY_SCHEMA = {
+        "type": "object",
+        "properties": {
+            "entities": {"type": "array"},
+            "name": {"type": "string"},
+        },
+    }
+
+    # --- Array: dict → [dict] wrapping ---
+
+    def test_dict_wrapped_in_list(self):
+        """Single dict where array expected → wrapped in list."""
+        args = {"entities": {"name": "foo"}}
+        result = coerce_tool_arg_types(args, schema=self.ARRAY_SCHEMA)
+        assert result["entities"] == [{"name": "foo"}]
+
+    def test_nested_dict_wrapped_in_list(self):
+        """Nested dict where array expected → wrapped in list."""
+        args = {"entities": {"name": "foo", "tags": [1, 2]}}
+        result = coerce_tool_arg_types(args, schema=self.ARRAY_SCHEMA)
+        assert result["entities"] == [{"name": "foo", "tags": [1, 2]}]
+
+    # --- Array: JSON string parse ---
+
+    def test_json_string_dict_wrapped(self):
+        """JSON string of dict where array expected → parse then wrap."""
+        args = {"entities": '{"name": "foo"}'}
+        result = coerce_tool_arg_types(args, schema=self.ARRAY_SCHEMA)
+        assert result["entities"] == [{"name": "foo"}]
+
+    def test_json_string_array_parsed(self):
+        """JSON string of array where array expected → parse to list."""
+        args = {"entities": '[{"name": "foo"}]'}
+        result = coerce_tool_arg_types(args, schema=self.ARRAY_SCHEMA)
+        assert result["entities"] == [{"name": "foo"}]
+
+    def test_invalid_json_unchanged(self):
+        """Invalid JSON string where array expected → left as-is."""
+        args = {"entities": "not json at all"}
+        result = coerce_tool_arg_types(args, schema=self.ARRAY_SCHEMA)
+        assert result["entities"] == "not json at all"
+
+    def test_scalar_json_string_left_as_is(self):
+        """Scalar JSON string (e.g. '42') where array expected → left as-is (F-5)."""
+        args = {"entities": "42"}
+        result = coerce_tool_arg_types(args, schema=self.ARRAY_SCHEMA)
+        # Scalar int parsed from JSON should NOT be wrapped — let MCP validate
+        assert result["entities"] == "42"
+
+    def test_scalar_json_bool_string_left_as_is(self):
+        """JSON bool string '"hello"' where array expected → left as-is (F-5)."""
+        args = {"entities": '"hello"'}
+        result = coerce_tool_arg_types(args, schema=self.ARRAY_SCHEMA)
+        # Parsed to string scalar — NOT wrapped
+        assert result["entities"] == '"hello"'
+
+    # --- Array: already a list ---
+
+    def test_already_list_unchanged(self):
+        """List value where array expected → unchanged."""
+        args = {"entities": [{"name": "foo"}]}
+        result = coerce_tool_arg_types(args, schema=self.ARRAY_SCHEMA)
+        assert result["entities"] == [{"name": "foo"}]
+
+    # --- Array: non-wrappable types ---
+
+    def test_int_where_array_expected_unchanged(self):
+        """Integer where array expected → left as-is."""
+        args = {"entities": 42}
+        result = coerce_tool_arg_types(args, schema=self.ARRAY_SCHEMA)
+        assert result["entities"] == 42
+
+    def test_none_where_array_expected_unchanged(self):
+        """None where array expected → left as-is."""
+        args = {"entities": None}
+        result = coerce_tool_arg_types(args, schema=self.ARRAY_SCHEMA)
+        assert result["entities"] is None
+
+    # --- Array: empty string ---
+
+    def test_empty_string_where_array_expected_unchanged(self):
+        """Empty string where array expected → left as-is (F-7)."""
+        args = {"entities": ""}
+        result = coerce_tool_arg_types(args, schema=self.ARRAY_SCHEMA)
+        assert result["entities"] == ""
+
+    # --- No schema: backward compatibility ---
+
+    def test_without_schema_unchanged(self):
+        """Without schema param → existing behavior (dict not wrapped)."""
+        args = {"entities": {"name": "foo"}}
+        result = coerce_tool_arg_types(args)
+        assert result["entities"] == {"name": "foo"}
+
+    def test_schema_none_unchanged(self):
+        """schema=None → existing behavior (dict not wrapped)."""
+        args = {"entities": {"name": "foo"}}
+        result = coerce_tool_arg_types(args, schema=None)
+        assert result["entities"] == {"name": "foo"}
+
+    # --- Schema without properties ---
+
+    def test_schema_missing_properties_key(self):
+        """Schema missing 'properties' key → skip array coercion."""
+        schema = {"type": "object"}
+        args = {"entities": {"name": "foo"}}
+        result = coerce_tool_arg_types(args, schema=schema)
+        assert result["entities"] == {"name": "foo"}
+
+    # --- Mixed: array + numeric coercion ---
+
+    def test_mixed_array_and_numeric_coercion(self):
+        """Both array and numeric coercion apply in same call (F-6)."""
+        schema = {
+            "type": "object",
+            "properties": {
+                "entities": {"type": "array"},
+                "limit": {"type": "integer"},
+            },
+        }
+        args = {"entities": {"name": "foo"}, "limit": "10"}
+        result = coerce_tool_arg_types(args, schema=schema)
+        # Array coercion: dict → [dict]
+        assert result["entities"] == [{"name": "foo"}]
+        # Numeric coercion: "10" → 10 (existing behavior)
+        assert result["limit"] == 10
+        assert isinstance(result["limit"], int)
+
+    # --- safe_call_tool: schema param ---
+
+    @pytest.mark.asyncio
+    async def test_safe_call_tool_passes_schema(self):
+        """safe_call_tool passes schema through to coerce_tool_arg_types."""
+        mock_session = AsyncMock()
+        mock_session.call_tool = AsyncMock(return_value="ok")
+        schema = self.ARRAY_SCHEMA
+        args = {"entities": {"name": "foo"}}
+
+        await safe_call_tool(mock_session, "test_tool", args, schema=schema)
+
+        # Verify call_tool received coerced args (dict wrapped in list)
+        called_args = mock_session.call_tool.call_args[0][1]
+        assert called_args["entities"] == [{"name": "foo"}]
+
+    @pytest.mark.asyncio
+    async def test_safe_call_tool_backward_compat(self):
+        """safe_call_tool works without schema param (backward compat)."""
+        mock_session = AsyncMock()
+        mock_session.call_tool = AsyncMock(return_value="ok")
+        args = {"entities": {"name": "foo"}}
+
+        await safe_call_tool(mock_session, "test_tool", args)
+
+        # Without schema, dict NOT wrapped
+        called_args = mock_session.call_tool.call_args[0][1]
+        assert called_args["entities"] == {"name": "foo"}
+
+    # --- Dispatch: schema wiring ---
+
+    @pytest.mark.asyncio
+    async def test_single_session_dispatcher_passes_schema(self):
+        """_SingleSessionDispatcher.dispatch passes schema to safe_call_tool."""
+        from tools.dynamic_autonomous import _SingleSessionDispatcher
+
+        mock_session = AsyncMock()
+        mock_session.call_tool = AsyncMock(return_value=AsyncMock(content=[]))
+        dispatcher = _SingleSessionDispatcher(mock_session)
+
+        schema = self.ARRAY_SCHEMA
+        await dispatcher.dispatch("test_tool", {"entities": {"name": "foo"}}, schema=schema)
+
+        called_args = mock_session.call_tool.call_args[0][1]
+        assert called_args["entities"] == [{"name": "foo"}]
+
+    @pytest.mark.asyncio
+    async def test_multi_session_dispatcher_passes_schema(self):
+        """_MultiSessionDispatcher.dispatch passes schema to safe_call_tool."""
+        from tools.dynamic_autonomous import _MultiSessionDispatcher
+
+        mock_session = AsyncMock()
+        mock_session.call_tool = AsyncMock(return_value=AsyncMock(content=[]))
+        tool_to_session = {"ns__test_tool": ("test_tool", mock_session)}
+        dispatcher = _MultiSessionDispatcher(tool_to_session)
+
+        schema = self.ARRAY_SCHEMA
+        await dispatcher.dispatch("ns__test_tool", {"entities": {"name": "foo"}}, schema=schema)
+
+        called_args = mock_session.call_tool.call_args[0][1]
+        assert called_args["entities"] == [{"name": "foo"}]
 
 
 if __name__ == "__main__":
