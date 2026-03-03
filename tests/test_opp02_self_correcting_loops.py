@@ -206,7 +206,7 @@ class TestConsecutiveErrorCounter(unittest.TestCase):
 
         call_count = {"n": 0}
 
-        async def fake_safe_call_tool(session_, name, args):
+        async def fake_safe_call_tool(session_, name, args, **kwargs):
             call_count["n"] += 1
             if call_count["n"] == 1:
                 raise RuntimeError("transient failure")
@@ -247,7 +247,7 @@ class TestConsecutiveErrorCounter(unittest.TestCase):
         agent = _make_agent(MagicMock(side_effect=create_response_side_effect))
         session = self._mock_session()
 
-        async def fake_safe_call_tool(session_, name, args):
+        async def fake_safe_call_tool(session_, name, args, **kwargs):
             raise RuntimeError("persistent tool failure")
 
         with patch(
@@ -422,7 +422,7 @@ class TestConsecutiveErrorCounter(unittest.TestCase):
 
         tool_call_count = {"n": 0}
 
-        async def alternating_tool(session_, name, args):
+        async def alternating_tool(session_, name, args, **kwargs):
             tool_call_count["n"] += 1
             if tool_call_count["n"] % 2 == 1:
                 raise RuntimeError("odd failure")
@@ -581,7 +581,7 @@ class TestExceptionHandling(unittest.TestCase):
         agent = _make_agent(MagicMock(side_effect=create_response_side_effect))
         session = self._mock_session()
 
-        async def always_fail_tool(session_, name, args):
+        async def always_fail_tool(session_, name, args, **kwargs):
             raise RuntimeError("tool always fails")
 
         with patch(
@@ -745,7 +745,7 @@ class TestReasoningOutputLogged(unittest.TestCase):
 
         logged_info_messages = []
 
-        async def fake_safe_call_tool(session_, name, args):
+        async def fake_safe_call_tool(session_, name, args, **kwargs):
             return success_result
 
         with patch(

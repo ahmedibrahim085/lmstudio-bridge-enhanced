@@ -59,9 +59,9 @@ class _SingleSessionDispatcher:
     def __init__(self, session: ClientSession):
         self._session = session
 
-    async def dispatch(self, fc_name: str, tool_args: dict) -> tuple:
+    async def dispatch(self, fc_name: str, tool_args: dict, schema=None) -> tuple:
         """Execute tool on the single session. Returns (display_name, result_text)."""
-        result = await safe_call_tool(self._session, fc_name, tool_args)
+        result = await safe_call_tool(self._session, fc_name, tool_args, schema=schema)
         return fc_name, ToolExecutor.extract_text_content(result)
 
 
@@ -71,7 +71,7 @@ class _MultiSessionDispatcher:
     def __init__(self, tool_to_session: Dict[str, tuple]):
         self._tool_to_session = tool_to_session
 
-    async def dispatch(self, fc_name: str, tool_args: dict) -> tuple:
+    async def dispatch(self, fc_name: str, tool_args: dict, schema=None) -> tuple:
         """Resolve namespaced tool and execute. Returns (display_name, result_text).
 
         Raises:
@@ -81,7 +81,7 @@ class _MultiSessionDispatcher:
             raise KeyError(f"Unknown tool {fc_name}")
         original_name, session = self._tool_to_session[fc_name]
         log_info(f"Executing {fc_name} (original: {original_name})")
-        result = await safe_call_tool(session, original_name, tool_args)
+        result = await safe_call_tool(session, original_name, tool_args, schema=schema)
         return fc_name, ToolExecutor.extract_text_content(result)
 
 
@@ -652,7 +652,7 @@ Continue with the task based on these results."""
 
         return input_text
 
-    async def _execute_tools_sequential(self, dispatcher, fc_list):
+    async def _execute_tools_sequential(self, dispatcher, fc_list, tool_schemas=None):
         """Execute tools sequentially. Returns list of (name, result_text) tuples.
 
         Updates self.consecutive_error_count:
@@ -678,7 +678,8 @@ Continue with the task based on these results."""
             log_info(f"Executing {fc_name}")
 
             try:
-                display_name, tool_result = await dispatcher.dispatch(fc_name, tool_args)
+                schema = (tool_schemas or {}).get(fc_name)
+                display_name, tool_result = await dispatcher.dispatch(fc_name, tool_args, schema=schema)
                 self.consecutive_error_count = 0  # Reset on success
                 log_info(f"Tool result: {str(tool_result)[:200]}...")
             except KeyError as e:
@@ -694,7 +695,7 @@ Continue with the task based on these results."""
 
         return results
 
-    async def _execute_tools_parallel(self, dispatcher, fc_list):
+    async def _execute_tools_parallel(self, dispatcher, fc_list, tool_schemas=None):
         """Execute tools in parallel using asyncio.gather(). Returns list of (name, result_text) tuples.
 
         Error counting (batch semantics):
@@ -716,7 +717,8 @@ Continue with the task based on these results."""
                     return fc_name, f"Error: {error_msg}", False
 
             try:
-                display_name, tool_result = await dispatcher.dispatch(fc_name, tool_args)
+                schema = (tool_schemas or {}).get(fc_name)
+                display_name, tool_result = await dispatcher.dispatch(fc_name, tool_args, schema=schema)
                 log_info(f"Tool result: {str(tool_result)[:200]}...")
                 return fc_name, tool_result, True  # True = success
             except KeyError as e:
@@ -793,7 +795,8 @@ Continue with the task based on these results."""
         max_rounds: int,
         max_tokens: int,
         model: Optional[str] = None,
-        parallel_tools: bool = False
+        parallel_tools: bool = False,
+        tool_schemas: Optional[Dict[str, dict]] = None,
     ) -> str:
         """Core autonomous loop using stateful /v1/responses API with explicit tool result injection.
 
@@ -925,9 +928,9 @@ Continue with the task based on these results."""
                     log_info(f"LLM requested {len(function_calls)} tool call(s)")
 
                     if parallel_tools and len(function_calls) > 1:
-                        pending_tool_results = await self._execute_tools_parallel(dispatcher, function_calls)
+                        pending_tool_results = await self._execute_tools_parallel(dispatcher, function_calls, tool_schemas)
                     else:
-                        pending_tool_results = await self._execute_tools_sequential(dispatcher, function_calls)
+                        pending_tool_results = await self._execute_tools_sequential(dispatcher, function_calls, tool_schemas)
 
                     # Track tool call metrics (after execution)
                     for tc_name, tc_result in pending_tool_results:
@@ -992,6 +995,7 @@ Continue with the task based on these results."""
         max_tokens: int,
         model: Optional[str] = None,
         parallel_tools: bool = False,
+        tool_schemas: Optional[Dict[str, dict]] = None,
     ) -> str:
         """Core autonomous loop using Anthropic /v1/messages API.
 
@@ -1069,7 +1073,8 @@ Continue with the task based on these results."""
 
                     log_info(f"Executing {tc_name}")
                     try:
-                        _, tool_result = await dispatcher.dispatch(tc_name, tc_input)
+                        schema = (tool_schemas or {}).get(tc_name)
+                        _, tool_result = await dispatcher.dispatch(tc_name, tc_input, schema=schema)
                         self.consecutive_error_count = 0
                         log_info(f"Tool result: {str(tool_result)[:200]}...")
                     except Exception as e:
@@ -1140,6 +1145,14 @@ Continue with the task based on these results."""
             parallel_tools: If True, execute multiple tool calls in parallel
             api_format: API format string (FORMAT_RESPONSES, FORMAT_ANTHROPIC, etc.)
         """
+        # OPP-32: Build tool name → schema lookup for type coercion
+        tool_schemas: dict[str, dict] = {}
+        for tool_def in openai_tools:
+            func = tool_def.get("function", {})
+            name = func.get("name", "")
+            if name:
+                tool_schemas[name] = func.get("parameters", {})
+
         if api_format == FORMAT_ANTHROPIC:
             return await self._autonomous_loop_anthropic(
                 dispatcher=dispatcher,
@@ -1149,6 +1162,7 @@ Continue with the task based on these results."""
                 max_tokens=max_tokens,
                 model=model,
                 parallel_tools=parallel_tools,
+                tool_schemas=tool_schemas,
             )
         return await self._autonomous_loop(
             dispatcher=dispatcher,
@@ -1158,6 +1172,7 @@ Continue with the task based on these results."""
             max_tokens=max_tokens,
             model=model,
             parallel_tools=parallel_tools,
+            tool_schemas=tool_schemas,
         )
 
 

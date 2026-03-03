@@ -367,7 +367,7 @@ class TestAnthropicLoopToolCalling(unittest.TestCase):
             )
         )
 
-        dispatcher.dispatch.assert_awaited_once_with("read_file", {"path": "/etc/hosts"})
+        dispatcher.dispatch.assert_awaited_once_with("read_file", {"path": "/etc/hosts"}, schema=None)
 
 
 # ---------------------------------------------------------------------------
