@@ -20,9 +20,10 @@ Configuration:
     This allows adding custom numeric parameters without code changes.
 """
 
+import json
 import logging
 import os
-from typing import Any, Dict, Set
+from typing import Any, Dict, Optional, Set
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +64,10 @@ def _load_numeric_params() -> Set[str]:
 NUMERIC_PARAMS = _load_numeric_params()
 
 
-def coerce_tool_arg_types(args: Dict[str, Any]) -> Dict[str, Any]:
+def coerce_tool_arg_types(
+    args: Dict[str, Any],
+    schema: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
     """Coerce tool argument types to help smaller models.
 
     Some LLMs (especially smaller ones like llama-3.2-3b) may pass numeric
@@ -74,9 +78,11 @@ def coerce_tool_arg_types(args: Dict[str, Any]) -> Dict[str, Any]:
     This function attempts to coerce common patterns:
     - Numeric strings to integers for known numeric params (head, tail, limit, offset)
     - Boolean strings to booleans ("true"/"false")
+    - Dict/JSON-string to list when schema declares type:"array" (OPP-32)
 
     Args:
         args: Tool arguments dictionary
+        schema: Optional tool input schema for type-aware coercion
 
     Returns:
         Arguments with coerced types where applicable
@@ -105,10 +111,38 @@ def coerce_tool_arg_types(args: Dict[str, Any]) -> Dict[str, Any]:
         else:
             coerced[key] = value
 
+    # Schema-aware array coercion (OPP-32)
+    # Runs AFTER numeric/bool coercion so it operates on the coerced dict.
+    if schema and "properties" in schema:
+        for key in list(coerced.keys()):
+            prop_schema = schema["properties"].get(key, {})
+            if prop_schema.get("type") == "array":
+                value = coerced[key]
+                if isinstance(value, dict):
+                    coerced[key] = [value]
+                    logger.debug(f"Coerced '{key}' from dict to single-element list")
+                elif isinstance(value, str) and value:
+                    try:
+                        parsed = json.loads(value)
+                        if isinstance(parsed, list):
+                            coerced[key] = parsed
+                            logger.debug(f"Coerced '{key}' from JSON string to list")
+                        elif isinstance(parsed, dict):
+                            coerced[key] = [parsed]
+                            logger.debug(f"Coerced '{key}' from JSON dict string to single-element list")
+                        # else: scalar (int, str, bool) — leave as-is
+                    except json.JSONDecodeError:
+                        pass  # Leave as-is, let MCP validate
+
     return coerced
 
 
-async def safe_call_tool(session, tool_name: str, arguments: Dict[str, Any]):
+async def safe_call_tool(
+    session,
+    tool_name: str,
+    arguments: Dict[str, Any],
+    schema: Optional[Dict[str, Any]] = None,
+):
     """Wrapper for session.call_tool that always applies type coercion.
 
     This is the SINGLE ENTRY POINT for all tool calls. Using this wrapper
@@ -118,6 +152,7 @@ async def safe_call_tool(session, tool_name: str, arguments: Dict[str, Any]):
         session: MCP ClientSession with call_tool method
         tool_name: Name of the tool to call
         arguments: Tool arguments (will be coerced)
+        schema: Optional tool input schema for array coercion (OPP-32)
 
     Returns:
         CallToolResult from the MCP server
@@ -126,7 +161,7 @@ async def safe_call_tool(session, tool_name: str, arguments: Dict[str, Any]):
         result = await safe_call_tool(session, "read_file", {"path": "/test", "head": "10"})
         # "head": "10" is automatically coerced to "head": 10
     """
-    coerced_args = coerce_tool_arg_types(arguments)
+    coerced_args = coerce_tool_arg_types(arguments, schema=schema)
     return await session.call_tool(tool_name, coerced_args)
 
 
