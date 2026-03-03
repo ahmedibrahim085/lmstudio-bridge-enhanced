@@ -1,6 +1,6 @@
 # LM Studio Bridge Enhanced — Execution Backlog
 
-> Updated: 2026-03-02 | Post-v5.0.0 + Log Analysis (4 rounds) | Baseline: ~1969 tests passing, 91% coverage
+> Updated: 2026-03-03 | Post-v5.0.0 + Log Analysis (4 rounds) + OPP-38 merged | Baseline: ~1991 tests passing, 91% coverage
 
 ---
 
@@ -8,13 +8,13 @@
 
 | Metric | Value |
 |--------|-------|
-| Branch | `feat/arch-2-constants-split` |
-| Tests | ~1969 passed, 0 failures |
+| Branch | `main` (OPP-38 merged via PR #11) |
+| Tests | ~1991 passed, 0 failures |
 | Coverage | **91%+** |
 | Coverage target | **80% minimum / 89% goal (exceeded)** |
 | VERSION | 5.0.0 (in config/constants/version.py) |
-| Completed rounds | Phase 1, 1.5, Round A-D, Error Audit, Code Quality, v5.0.0 (Pre-flight + Phase A + Phase B + Phase C), Log Analysis (4 rounds) |
-| Next | Round G Phase 2: OPP-32 (schema coercion), OPP-39 (context guard), OPP-43 (poll limiter) |
+| Completed rounds | Phase 1, 1.5, Round A-D, Error Audit, Code Quality, v5.0.0, Log Analysis (4 rounds), Round G Phase 1 (OPP-38), Phase 2a (OPP-32) |
+| Next | Round G Phase 2b: OPP-39 (context guard), then Phase 3: OPP-33 (pre-dispatch validation) |
 
 ---
 
@@ -419,10 +419,10 @@ These are not individual OPPs — they are **synergy effects** from combining mu
 
 | Step | OPP | Name | Type | Fixes | Effort | Files |
 |------|-----|------|------|-------|--------|-------|
-| G-1 | OPP-32 | Schema-Aware Type Coercion | EVOLUTION | 11/13 WARNs, 15 orphans | MEDIUM | `mcp_client/type_coercion.py` |
+| G-1 | OPP-32 | Schema-Aware Type Coercion | EVOLUTION | 11/13 WARNs, 15 orphans | MEDIUM | ✅ **DONE** — 4 commits, 19 new tests, 1993 pass |
 | G-2 | OPP-38 | Fix "model: default" Fallback | BUGFIX | 167 ERRORs, 135 rejected requests | LOW | ✅ **DONE** — 6 commits, 22 tests |
 | G-3 | OPP-39 | Context Window Guard | NEW | 282K wasted tokens (3 × 94K overflow) | MEDIUM | `tools/dynamic_autonomous.py` |
-| G-4 | OPP-43 | Poll Rate Limiter (backoff + idle suspension) | NEW | 11,613 polls (85% of events), 789/min peak | MEDIUM | `utils/lms_helper.py`, `llm/llm_client.py` |
+| ~~G-4~~ | ~~OPP-43~~ | ~~Poll Rate Limiter (backoff + idle suspension)~~ | ~~NEW~~ | **DEPRIORITIZED (2026-03-03)**: Semantic search + call graph analysis (grepai) confirmed 85% of polling is LM Studio INTERNAL (`lms-cli`), not our bridge. Our `list_all_models()` already cached at 30s TTL (`lms_helper.py:92-96`). OPP-38 fix eliminated error-amplified retries. Same root cause as removed OPP-35. Moved to P2 for potential narrow redefinition | — | — |
 
 ### Priority 1 (High — Reliability / Efficiency)
 
@@ -458,8 +458,8 @@ These are not individual OPPs — they are **synergy effects** from combining mu
 
 ```
 Root Cause 1: Missing Model Lifecycle State Machine
-  OPP-38 (fix "default") → OPP-43 (poll limiter)
-  (fixing "default" eliminates error-amplified polling)
+  OPP-38 ✅ (fix "default") → OPP-43 DEPRIORITIZED
+  (OPP-38 fix eliminated error-amplified polling; remaining polls are LM Studio internal)
 
 Root Cause 2: dynamic_autonomous.py God Module — Missing ToolCallContext
   OPP-32 (schema coercion) ─┐
@@ -478,16 +478,24 @@ Independent:
   OPP-50 (tool schema dedup experiment)
 ```
 
-### Execution Order (Revised — Root Cause Driven)
+### Execution Order (Revised 2026-03-03 — Evidence-Based Re-Prioritization)
+
+> **Re-prioritization (2026-03-03)**: Semantic search (grepai, code-search) + call graph tracing
+> confirmed OPP-32 has highest cascading benefit (unblocks Phase 3, fixes glm 31% failure rate).
+> OPP-43 deprioritized: 85% of polling is LM Studio internal, not our bridge code.
+> OPP-32 moved from parallel to FIRST (schema already flows through system but bypasses coercion).
 
 ```
 Phase 1: Kill the Cascade ✅ DONE
-  OPP-38 ✅ ──→ fix "default" sentinel escape (6 commits, 22 tests, 1991 pass)
+  OPP-38 ✅ ──→ fix "default" sentinel escape (7 commits, 22 tests, 1991 pass, PR #11 merged)
 
-Phase 2: Foundations (parallel)
-  OPP-39 ═══╗ context window guard
-  OPP-32 ═══╣ schema-aware type coercion
-  OPP-43 ═══╝ poll rate limiter (after OPP-38 removes error amplification)
+Phase 2a: Highest-ROI Fix ✅ DONE
+  OPP-32 ✅ ──→ schema-aware type coercion (4 commits, 19 new tests, 1993 pass)
+               Fixed: 11 WARNs + 15 orphans + 7-retry loops + glm 31% failure rate
+
+Phase 2b: Critical Safety Net
+  OPP-39 ────→ context window guard (_autonomous_loop has ZERO context guard despite comment claiming otherwise)
+               Fixes: 282K wasted tokens (3 × 94K overflow → 0 output)
 
 Phase 3: Build ToolCallContext (sequential pair, then parallel)
   OPP-33 + OPP-44 ═══╗ pre-dispatch validation + circuit breaker (shared foundation)
@@ -507,17 +515,18 @@ Phase 6: Quick Experiment
 
 | Status | Count | OPPs |
 |--------|-------|------|
-| **Active** | 9 | OPP-32, 33, 37, 39, 40, 43, 44, 45, 46 |
-| **Done (Round G)** | 1 | OPP-38 |
+| **Active** | 7 | OPP-33, 37, 39, 40, 44, 45, 46 |
+| **Done (Round G)** | 2 | OPP-32, OPP-38 |
 | **Experiment** | 1 | OPP-50 |
 | **Deferred** | 1 | OPP-42 (re-measure after OPP-39) |
+| **Deprioritized** | 1 | OPP-43 (polling is LM Studio internal, not our bridge) |
 | **Merged** | 4 | OPP-34→45, OPP-47→40, OPP-48→44, OPP-49→46 |
 | **Removed** | 3 | OPP-35, 36, 41 |
 | **Total original** | 19 | OPP-32 through OPP-50 |
 
 ### Gate
 
-- [ ] All P0 OPPs (32, 38, 39, 43) implemented and tested
+- [ ] P0 OPPs (32, 38 ✅, 39) implemented and tested
 - [ ] ToolCallContext pattern implemented (enables OPP-33, 37, 40, 44)
 - [ ] Coverage >= 91% maintained
 - [ ] All existing tests pass
@@ -557,3 +566,5 @@ Phase 6: Quick Experiment
 | 2026-03-02 | Round G updated: 19 OPPs across 6 batches, 7 dependency chains (J-O + independent), evidence updated for OPP-43/45/46 |
 | 2026-03-02 | Root cause analysis: 4 parallel architect agents traced every OPP through codebase. Found 2 root causes (missing model lifecycle state machine + `dynamic_autonomous.py` god module). Consolidated 19 raw OPPs → 10 active + 1 experiment + 1 deferred + 4 merged (34→45, 47→40, 48→44, 49→46) + 3 removed (35, 36, 41). Replaced batch execution with 6-phase root-cause-driven plan |
 | 2026-03-02 | OPP-38 DONE: 6 atomic TDD commits on `feat/opp-38-default-sentinel-fix`. Added `is_model_sentinel()` helper, fixed 4 vulnerable clients (V1-V4), refactored 8 files to use centralized helper. 22 new tests, 1991 total pass, 0 fail |
+| 2026-03-03 | OPP-38 merged to main via PR #11, branch deleted. All 5 CI checks green |
+| 2026-03-03 | Evidence-based re-prioritization using semantic search (grepai) + call graph tracing: OPP-32 moved to FIRST (highest cascading benefit — schema already flows through system but bypasses coercion, fixes glm 31% failure rate, unblocks Phase 3). OPP-43 DEPRIORITIZED (85% of polling is LM Studio internal `lms-cli`, same root cause as removed OPP-35; our `list_all_models()` already cached at 30s TTL). Phase 2 changed from parallel to sequential: OPP-32 first → OPP-39 second. Active OPPs: 9 → 8 |

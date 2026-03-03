@@ -1,6 +1,6 @@
 # LM Studio Bridge Enhanced — OPP Roadmap
 
-> Updated: 2026-03-02 | LM Studio target: 0.4.4+ | Baseline: ~1969 tests passing, 91% coverage | Log Analysis: 4 rounds
+> Updated: 2026-03-03 | LM Studio target: 0.4.4+ | Baseline: ~1991 tests passing, 91% coverage | Log Analysis: 4 rounds
 
 ---
 
@@ -325,7 +325,7 @@ Final completed state: ~1969 tests, 91% coverage, VERSION 5.0.0.
 | Rank | OPP | Name | R | I | C | E | RICE | Priority | Status |
 |------|-----|------|---|---|---|---|------|----------|--------|
 | 1 | OPP-38 | Fix "model: default" Fallback | 10 | 10 | 1.0 | 0.5 | **200** | P0 | **DONE** |
-| 2 | OPP-32 | Schema-Aware Type Coercion | 8 | 9 | 0.9 | 2 | **32.4** | P0 | PROPOSED |
+| 2 | OPP-32 | Schema-Aware Type Coercion | 8 | 9 | 0.9 | 2 | **32.4** | P0 | **DONE** |
 | 3 | OPP-39 | Context Window Guard | 7 | 9 | 0.8 | 2 | **25.2** | P0 | PROPOSED |
 | 4 | OPP-40 | Tool Result Caching (+OPP-47) | 7 | 8 | 0.9 | 2 | **25.2** | P1 | PROPOSED |
 | 5 | OPP-37 | Orphan Detection with Fast-Fail | 6 | 8 | 0.8 | 2 | **19.2** | P1 | PROPOSED |
@@ -335,7 +335,7 @@ Final completed state: ~1969 tests, 91% coverage, VERSION 5.0.0.
 | ~~9~~ | ~~OPP-36~~ | ~~Logprobs Response Bloat Suppression~~ | — | — | — | — | — | — | **REMOVED** (server-side issue, bridge never requests logprobs) |
 | ~~10~~ | ~~OPP-41~~ | ~~Conversation Chain Health Monitoring~~ | — | — | — | — | — | — | **REMOVED** (short chains = efficient, not a bug) |
 | 11 | OPP-42 | Token Budget Monitoring & Alerting | 4 | 5 | 0.8 | 1 | **16** | P2 | **DEFERRED** (re-measure after OPP-39) |
-| 12 | OPP-43 | Poll Rate Limiter (backoff + idle) | 9 | 9 | 0.9 | 2 | **36.5** | P0 | PROPOSED |
+| ~~12~~ | ~~OPP-43~~ | ~~Poll Rate Limiter (backoff + idle)~~ | — | — | — | — | — | — | **DEPRIORITIZED** (85% of polls are LM Studio internal `lms-cli`, not our bridge; `list_all_models()` already cached at 30s TTL; same root cause as removed OPP-35) |
 | 13 | OPP-44 | Tool Call Circuit Breaker (+OPP-48) | 7 | 8 | 0.8 | 2 | **22.4** | P1 | PROPOSED |
 | 14 | OPP-45 | Per-Model Error Budget + Auto-Demotion (+OPP-34) | 7 | 8 | 0.8 | 2 | **22.4** | P1 | PROPOSED |
 | 15 | OPP-46 | Adaptive Timeout — Both Phases (+OPP-49) | 6 | 7 | 0.8 | 2 | **16.8** | P1 | PROPOSED |
@@ -358,7 +358,7 @@ Final completed state: ~1969 tests, 91% coverage, VERSION 5.0.0.
 | ~~6,273 uncached getModelInfo~~ | ~~HIGH~~ | ~~789 calls/min peak~~ | ~~OPP-35~~ **REMOVED** (LM Studio internal) |
 | ~~18,211 logprobs lines~~ | ~~HIGH~~ | ~~9.7% log bloat~~ | ~~OPP-36~~ **REMOVED** (server-side) |
 | 27:1 input/output ratio | MEDIUM | 96.5% tokens are overhead | OPP-42 |
-| 11,613 lms-cli polls (85% of events) | CRITICAL | 789/min peak, getModelInfo uncached | OPP-43 |
+| ~~11,613 lms-cli polls (85% of events)~~ | ~~CRITICAL~~ | ~~789/min peak, getModelInfo uncached~~ | ~~OPP-43~~ **DEPRIORITIZED** (LM Studio internal, not our bridge) |
 | 10 silently dropped tool calls | CRITICAL | Truncated JSON generation, no circuit breaker | OPP-44 |
 | glm 80% events + 100% errors | HIGH | Error density accelerates 1.75→5.33/min | OPP-45 |
 | 3× wasted prompt processing | HIGH | 94K tokens processed then 0 output | OPP-46 |
@@ -366,7 +366,7 @@ Final completed state: ~1969 tests, 91% coverage, VERSION 5.0.0.
 | 10 truncated tool call parse failures | HIGH | ALL `read_text_file`, ALL glm-4.6v-flash | OPP-44 (absorbed OPP-48) |
 | 9 client disconnects post-100% prompt | HIGH | 37s gap between prompt processing complete and timeout | OPP-46 (absorbed OPP-49) |
 | 3,909 repeated tool schema definitions | HIGH | 127 tool arrays × ~30 tools/array, ~50% of log volume | OPP-50 (EXPERIMENT) |
-| getModelInfo is 54% of internal calls | CRITICAL (R4 update) | LMSAuthenticator: 6,273 getModelInfo, cache strategy per endpoint | OPP-43 |
+| ~~getModelInfo is 54% of internal calls~~ | ~~CRITICAL (R4 update)~~ | ~~LMSAuthenticator: 6,273 getModelInfo, cache strategy per endpoint~~ | ~~OPP-43~~ **DEPRIORITIZED** (LM Studio internal) |
 | glm 31.1% tool call failure rate | HIGH (R4 update) | 23/74 orphaned vs 0% for qwen/magistral | OPP-45 |
 | 126 prompt re-starts (91% re-processing) | HIGH (R4 update) | 9 disconnects during generation phase | OPP-46 |
 
@@ -376,10 +376,11 @@ Final completed state: ~1969 tests, 91% coverage, VERSION 5.0.0.
 Phase 1: Kill the Cascade ✅ DONE
   OPP-38 ✅ ──→ fix "default" sentinel escape (6 commits, 22 tests)
 
-Phase 2: Foundations (parallel)
-  OPP-39 ═══╗ context window guard
-  OPP-32 ═══╣ schema-aware type coercion
-  OPP-43 ═══╝ poll rate limiter (after OPP-38 removes error amplification)
+Phase 2a: Schema Fix FIRST (highest cascading ROI — unblocks OPP-33, OPP-37, OPP-44)
+  OPP-32 ────→ schema-aware type coercion (schema already in system, not wired to coercion)
+
+Phase 2b: Context Guard SECOND
+  OPP-39 ────→ context window guard (3 occurrences, lower urgency than OPP-32)
 
 Phase 3: Build ToolCallContext (sequential pair, then parallel)
   OPP-33 + OPP-44 ═══╗ pre-dispatch validation + circuit breaker
@@ -393,16 +394,21 @@ Phase 5: Streaming Refactor (most invasive, do last)
 
 Phase 6: Quick Experiment
   OPP-50 ────→ test omitting tools after round 0 with previous_response_id
+
+NOTE: OPP-43 DEPRIORITIZED — 85% of 11,613 polls are LM Studio internal (lms-cli),
+      not our bridge. list_all_models() already cached at 30s TTL. Same root cause
+      as removed OPP-35. OPP-38 fix eliminated error-amplified retries.
 ```
 
 ### Consolidated Summary
 
 | Status | Count | OPPs |
 |--------|-------|------|
-| **Active** | 9 | OPP-32, 33, 37, 39, 40, 43, 44, 45, 46 |
-| **Done (Round G)** | 1 | OPP-38 |
+| **Active** | 7 | OPP-33, 37, 39, 40, 44, 45, 46 |
+| **Done (Round G)** | 2 | OPP-32, OPP-38 |
 | **Experiment** | 1 | OPP-50 |
 | **Deferred** | 1 | OPP-42 (re-measure after OPP-39) |
+| **Deprioritized** | 1 | OPP-43 (85% polls are LM Studio internal, bridge already cached) |
 | **Merged** | 4 | OPP-34→45, OPP-47→40, OPP-48→44, OPP-49→46 |
 | **Removed** | 3 | OPP-35, 36, 41 |
 
