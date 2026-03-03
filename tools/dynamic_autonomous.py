@@ -30,7 +30,10 @@ from mcp.client.stdio import StdioServerParameters, stdio_client
 
 from config.constants import (
     ANTHROPIC_AUTONOMOUS_SYSTEM_TEMPLATE,
+    CHARS_PER_TOKEN_ESTIMATE,
+    CONTEXT_GUARD_THRESHOLD,
     DEFAULT_AUTONOMOUS_FORMAT,
+    DEFAULT_CONTEXT_WINDOW,
     DEFAULT_MAX_ROUNDS,
     DEFAULT_MAX_TOKENS,
     DEFAULT_TEMPERATURE,
@@ -625,6 +628,19 @@ class DynamicAutonomousAgent:
         )
 
     @staticmethod
+    def _estimate_tokens(payload) -> int:
+        """Estimate token count from a payload's JSON-serialized size.
+
+        Uses CHARS_PER_TOKEN_ESTIMATE (4 chars ≈ 1 token) for rough estimation.
+        Returns 0 if the payload cannot be serialized (safe fallback).
+        """
+        try:
+            serialized = json.dumps(payload)
+            return len(serialized) // CHARS_PER_TOKEN_ESTIMATE
+        except (TypeError, ValueError):
+            return 0
+
+    @staticmethod
     def _build_input_text(
         round_num: int,
         task: str,
@@ -919,7 +935,8 @@ Continue with the task based on these results."""
         max_rounds: int,
         max_tokens: int,
         model: Optional[str] = None,
-        parallel_tools: bool = False
+        parallel_tools: bool = False,
+        context_window: Optional[int] = None,
     ) -> str:
         """Core autonomous loop using stateful /v1/responses API with explicit tool result injection.
 
@@ -956,6 +973,7 @@ Continue with the task based on these results."""
         cache = ToolResultCache()    # Tool result cache per loop execution (OPP-40)
         health_tracker = ModelHealthTracker()  # Per-model error budget (OPP-45)
         timeout_mgr = AdaptiveTimeoutManager()  # Adaptive timeout (OPP-46)
+        cumulative_tokens = 0  # OPP-39: running token estimate across rounds
 
         # --- OPP-07: Metrics tracking initialisation ---
         self.last_loop_metrics = None
@@ -980,6 +998,24 @@ Continue with the task based on these results."""
                 )
                 if round_num > 0:
                     pending_tool_results = []
+
+                # OPP-39: Context guard — prevent context window overflow
+                effective_window = context_window if context_window is not None else DEFAULT_CONTEXT_WINDOW
+                token_threshold = int(CONTEXT_GUARD_THRESHOLD * effective_window)
+                round_estimate = self._estimate_tokens(input_text) + self._estimate_tokens(openai_tools)
+                cumulative_tokens = cumulative_tokens + round_estimate
+                if cumulative_tokens > token_threshold:
+                    log_error(
+                        f"Context guard triggered: cumulative token estimate {cumulative_tokens} "
+                        f"exceeds {CONTEXT_GUARD_THRESHOLD*100:.0f}% of context window "
+                        f"({token_threshold}/{effective_window})"
+                    )
+                    final_status = "context_overflow"
+                    return (
+                        f"Task aborted: context window nearly full "
+                        f"(~{cumulative_tokens} tokens estimated, "
+                        f"limit {token_threshold}/{effective_window})"
+                    )
 
                 # Call /v1/responses with tools (stateful API!)
                 # Use tool_choice="required" on first round to FORCE tool usage
@@ -1041,11 +1077,16 @@ Continue with the task based on these results."""
                 previous_response_id = response["id"]
                 log_info(f"Response ID: {previous_response_id}")
 
+                # OPP-39: Add response size to cumulative token estimate
+                cumulative_tokens += self._estimate_tokens(response)
+
                 # Check for incomplete response (truncation)
                 status = response.get("status")
                 if status == "incomplete":
                     incomplete_reason = response.get("incomplete_details", {}).get("reason", "unknown")
                     log_error(f"Response incomplete: {incomplete_reason}")
+                    # OPP-39: Incomplete response suggests context pressure — boost estimate
+                    cumulative_tokens += effective_window // 2
 
                 # Process output array (not choices - different format!)
                 output = response.get("output", [])
@@ -1116,6 +1157,20 @@ Continue with the task based on these results."""
                     completed_rounds += 1
                     self._record_round_metrics(round_metrics_list, completed_rounds, llm_call_duration, round_tool_calls, round_errors, tracker=tracker, cache=cache)
 
+                    # OPP-39: Post-response guard — check after response is accumulated
+                    if cumulative_tokens > token_threshold:
+                        log_error(
+                            f"Context guard triggered: cumulative token estimate {cumulative_tokens} "
+                            f"exceeds {CONTEXT_GUARD_THRESHOLD*100:.0f}% of context window "
+                            f"({token_threshold}/{effective_window})"
+                        )
+                        final_status = "context_overflow"
+                        return (
+                            f"Task aborted: context window nearly full "
+                            f"(~{cumulative_tokens} tokens estimated, "
+                            f"limit {token_threshold}/{effective_window})"
+                        )
+
                     final_status = "completed"
                     if text_content:
                         return text_content
@@ -1149,6 +1204,7 @@ Continue with the task based on these results."""
         max_tokens: int,
         model: Optional[str] = None,
         parallel_tools: bool = False,
+        context_window: Optional[int] = None,
     ) -> str:
         """Core autonomous loop using Anthropic /v1/messages API.
 
@@ -1195,6 +1251,22 @@ Continue with the task based on these results."""
                     log_info(f"Model '{model}' health: {model_status} (advisory only, continuing)")
 
             adaptive_timeout = timeout_mgr.get_timeout(model, "anthropic", DEFAULT_LLM_TIMEOUT) if timeout_mgr and model else DEFAULT_LLM_TIMEOUT
+
+            # OPP-39: Context guard — prevent context window overflow
+            effective_window = context_window if context_window is not None else DEFAULT_CONTEXT_WINDOW
+            token_threshold = int(CONTEXT_GUARD_THRESHOLD * effective_window)
+            cumulative_tokens = self._estimate_tokens(messages) + self._estimate_tokens(anthropic_tools or [])
+            if cumulative_tokens > token_threshold:
+                log_error(
+                    f"Anthropic context guard triggered: ~{cumulative_tokens} tokens "
+                    f"exceeds {CONTEXT_GUARD_THRESHOLD*100:.0f}% of context window "
+                    f"({token_threshold}/{effective_window})"
+                )
+                return (
+                    f"Task aborted: context window nearly full "
+                    f"(~{cumulative_tokens} tokens estimated, "
+                    f"limit {token_threshold}/{effective_window})"
+                )
 
             try:
                 response = await asyncio.to_thread(
@@ -1308,6 +1380,7 @@ Continue with the task based on these results."""
         model: Optional[str] = None,
         parallel_tools: bool = False,
         api_format: str = DEFAULT_AUTONOMOUS_FORMAT,
+        context_window: Optional[int] = None,
     ) -> str:
         """Dispatch to the correct autonomous loop based on api_format.
 
@@ -1333,6 +1406,7 @@ Continue with the task based on these results."""
                 max_tokens=max_tokens,
                 model=model,
                 parallel_tools=parallel_tools,
+                context_window=context_window,
             )
         return await self._autonomous_loop(
             dispatcher=dispatcher,
@@ -1342,6 +1416,7 @@ Continue with the task based on these results."""
             max_tokens=max_tokens,
             model=model,
             parallel_tools=parallel_tools,
+            context_window=context_window,
         )
 
 

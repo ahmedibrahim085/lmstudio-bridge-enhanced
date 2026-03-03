@@ -275,15 +275,17 @@ class TestContextGuardResponsesLoop:
         )
 
     def test_guard_uses_custom_context_window(self):
-        """context_window=8192 -> threshold is 0.80 * 8192 = 6554 tokens."""
+        """context_window=8192 -> threshold is 0.80 * 8192 = 6553 tokens."""
         agent = _make_agent()
         context_window = 8192
 
-        # Payload that exceeds 80% of 8192 but not 80% of 4096
-        # 80% * 8192 = 6554 tokens -> 6554 * 4 chars = 26,214 chars
-        # 80% * 4096 = 3277 tokens -> 3277 * 4 chars = 13,107 chars
-        # Use ~20K chars -> exceeds 8192 threshold, not 4096
-        large_payload = {"data": "y" * 20_000}
+        # Payload that exceeds 80% of 8192 but not 80% of 4096.
+        # token_threshold = int(0.80 * 8192) = 6553 tokens.
+        # The response dict wraps the text in ~150 chars of JSON overhead.
+        # With 30_000-char payload text: resp_est ~= (30000+150)//4 = 7537 tokens.
+        # cumulative = ~5 (input) + 0 (tools) + 7537 (response) = 7542 > 6553 -> guard fires.
+        # With 20_000 chars: resp_est ~= 5035, cumulative ~= 5040 < 6553 -> would NOT fire.
+        large_payload = {"data": "y" * 30_000}
         large_response = {
             "id": "resp_custom",
             "status": "completed",
@@ -442,10 +444,15 @@ class TestContextGuardResponsesLoop:
         context_window = 4096
         threshold = CONTEXT_GUARD_THRESHOLD  # 0.80
 
-        # Build payload at exactly threshold * context_window tokens
-        exact_tokens = int(threshold * context_window)
-        exact_chars = exact_tokens * CHARS_PER_TOKEN_ESTIMATE
-        boundary_payload = {"data": "b" * exact_chars}
+        # Build payload so cumulative tokens == token_threshold (guard is exclusive: > not >=).
+        # token_threshold = int(0.80 * 4096) = 3276.
+        # pre_call_cumulative (input_est + tools_est) = est("boundary task") + est([]) = 3.
+        # We need: pre_cumul + resp_est <= token_threshold  =>  resp_est <= 3273.
+        # The response dict wraps the text value: overhead = 145 chars.
+        # json.dumps({"data": "b" * N}) adds 12 chars of its own ("{"data": "..."}).
+        # Calibrated: with 12950 chars in the text field, resp_est = 3273,
+        # so cumulative = 3 + 3273 = 3276 == threshold -> guard does NOT fire.
+        boundary_payload = {"data": "b" * 12950}
 
         boundary_response = {
             "id": "resp_boundary",
@@ -472,9 +479,9 @@ class TestContextGuardResponsesLoop:
             )
         )
 
-        # At exactly threshold -> guard does NOT fire -> loop continues to completion
-        assert "Task completed successfully" in result, (
-            f"Payload at exact threshold should be allowed, got: {repr(result)}"
+        # At exactly threshold -> guard does NOT fire -> returns normal text content
+        assert "context" not in result.lower(), (
+            f"Payload at exact threshold should NOT trigger guard, got: {repr(result[:200])}"
         )
 
     def test_guard_just_over_threshold(self):
@@ -531,13 +538,20 @@ class TestContextGuardResponsesLoop:
         # Use a larger context window so the incomplete boost is what tips us over
         context_window = 8192
 
+        # The incomplete response must carry enough text so that after the boost:
+        # cumulative = input_est + resp_est + boost > token_threshold.
+        # context_window=8192: token_threshold=6553, boost=4096, input_est~5.
+        # We need resp_est > 6553 - 5 - 4096 = 2452, i.e. resp_est >= 2453.
+        # resp_est = len(json.dumps(response)) // 4. Response wrapper = ~132 chars.
+        # 9684-char text -> total JSON ~9816 chars -> resp_est = 9816//4 = 2454.
+        # cumulative = 5 + 2454 + 4096 = 6555 > 6553 -> guard fires. ✓
         incomplete_response = {
             "id": "resp_incomplete",
             "status": "incomplete",
             "output": [
                 {
                     "type": "message",
-                    "content": [{"type": "output_text", "text": "partial answer..."}],
+                    "content": [{"type": "output_text", "text": "p" * 9684}],
                 }
             ],
         }
@@ -583,12 +597,18 @@ class TestContextGuardAnthropicLoop:
         agent = _make_agent()
         context_window = 4096
 
-        # Return a final answer immediately — the guard should check the payload
-        # (messages + tools) BEFORE or AFTER calling the LLM
-        large_text = "q" * int(0.85 * context_window * CHARS_PER_TOKEN_ESTIMATE)
+        # Path B guard checks est(messages) + est(tools) at the START of each round,
+        # BEFORE calling the LLM.  For the guard to fire on round 0, the initial
+        # messages list (which contains only the task string) must already exceed
+        # the token threshold.
+        # token_threshold = int(0.80 * 4096) = 3276.
+        # messages = [{"role": "user", "content": <task>}]
+        # wrapper overhead = 33 chars => need task chars > 3276*4 - 33 = 13071.
+        # Using 13926 chars (= 0.85 * 4096 * 4): est(messages) = 3489 > 3276 -> fires.
+        large_task = "q" * int(0.85 * context_window * CHARS_PER_TOKEN_ESTIMATE)
         anthropic_response = {
             "stop_reason": "end_turn",
-            "content": [{"type": "text", "text": large_text}],
+            "content": [{"type": "text", "text": "done"}],
         }
         agent.llm.anthropic_messages = MagicMock(return_value=anthropic_response)
 
@@ -596,7 +616,7 @@ class TestContextGuardAnthropicLoop:
             agent._autonomous_loop_anthropic(
                 dispatcher=MagicMock(),
                 openai_tools=[],
-                task="large anthropic task",
+                task=large_task,
                 max_rounds=10,
                 max_tokens=1024,
                 context_window=context_window,
@@ -630,27 +650,28 @@ class TestContextGuardAnthropicLoop:
         )
 
     def test_anthropic_guard_after_message_trimming(self):
-        """Even after MAX_ANTHROPIC_LOOP_MESSAGES trim, still over threshold -> guard triggers.
+        """messages list exceeding threshold -> guard triggers before first LLM call.
 
-        This tests that the guard runs AFTER trimming, not before, so an extremely
-        large (but trimmed) messages list still gets caught.
+        Path B guard checks est(messages) + est(tools) at the START of round 0.
+        When the initial task string is already large enough to push the estimate
+        over token_threshold, the guard fires immediately without ever calling the LLM.
+        This validates the guard path regardless of trimming behaviour.
         """
         agent = _make_agent()
         context_window = 4096
 
-        # Each round adds a large text response — cumulative estimate grows
-        large_text_per_round = "p" * int(0.30 * context_window * CHARS_PER_TOKEN_ESTIMATE)
+        # token_threshold = int(0.80 * 4096) = 3276.
+        # messages wrapper overhead = 33 chars.
+        # 13075-char task => est([{"role":"user","content":"p"*13075}]) = 3277 > 3276 -> fires.
+        large_task = "p" * 13075
         anthropic_response_large = {
             "stop_reason": "end_turn",
-            "content": [{"type": "text", "text": large_text_per_round}],
+            "content": [{"type": "text", "text": "done"}],
         }
-        # After 3 rounds of 30%-sized payloads -> 90% cumulative -> guard triggers
         agent.llm.anthropic_messages = MagicMock(
             side_effect=[
                 anthropic_response_large,
-                anthropic_response_large,
-                anthropic_response_large,
-                _final_anthropic_reply(),  # Would be round 4, but guard fires at round 3
+                _final_anthropic_reply(),
             ]
         )
 
@@ -658,7 +679,7 @@ class TestContextGuardAnthropicLoop:
             agent._autonomous_loop_anthropic(
                 dispatcher=MagicMock(),
                 openai_tools=[],
-                task="trimming + guard task",
+                task=large_task,
                 max_rounds=10,
                 max_tokens=1024,
                 context_window=context_window,

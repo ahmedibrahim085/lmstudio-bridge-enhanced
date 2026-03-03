@@ -42,7 +42,7 @@ DOMAIN_MODULES = [
     "tool_config",
 ]
 
-EXPECTED_COUNT = 257
+EXPECTED_COUNT = 259
 
 
 def _get_domain_all(module_name: str) -> list[str]:
