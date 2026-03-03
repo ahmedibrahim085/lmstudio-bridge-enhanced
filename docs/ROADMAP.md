@@ -326,7 +326,7 @@ Final completed state: ~1969 tests, 91% coverage, VERSION 5.0.0.
 |------|-----|------|---|---|---|---|------|----------|--------|
 | 1 | OPP-38 | Fix "model: default" Fallback | 10 | 10 | 1.0 | 0.5 | **200** | P0 | **DONE** |
 | 2 | OPP-32 | Schema-Aware Type Coercion | 8 | 9 | 0.9 | 2 | **32.4** | P0 | **DONE** |
-| 3 | OPP-39 | Context Window Guard | 7 | 9 | 0.8 | 2 | **25.2** | P0 | PROPOSED |
+| 3 | OPP-39 | Context Window Guard | 7 | 9 | 0.8 | 2 | **25.2** | P0 | **DONE** |
 | 4 | OPP-40 | Tool Result Caching (+OPP-47) | 7 | 8 | 0.9 | 2 | **25.2** | P1 | **DONE** |
 | 5 | OPP-37 | Orphan Detection with Fast-Fail | 6 | 8 | 0.8 | 2 | **19.2** | P1 | **DONE** |
 | 6 | OPP-33 | Pre-Dispatch Tool Argument Validation | 6 | 7 | 0.9 | 1 | **37.8** | P1 | **DONE** |
