@@ -14,7 +14,7 @@
 | Coverage target | **80% minimum / 89% goal (exceeded)** |
 | VERSION | 5.0.0 (in config/constants/version.py) |
 | Completed rounds | Phase 1, 1.5, Round A-D, Error Audit, Code Quality, v5.0.0 (Pre-flight + Phase A + Phase B + Phase C), Log Analysis (4 rounds) |
-| Next | Round G Phase 2: OPP-32 (schema coercion), OPP-39 (context guard), OPP-43 (poll limiter) |
+| Next | Round G Phase 2: OPP-32 (schema coercion) |
 
 ---
 
@@ -422,7 +422,7 @@ These are not individual OPPs — they are **synergy effects** from combining mu
 | G-1 | OPP-32 | Schema-Aware Type Coercion | EVOLUTION | 11/13 WARNs, 15 orphans | MEDIUM | `mcp_client/type_coercion.py` |
 | G-2 | OPP-38 | Fix "model: default" Fallback | BUGFIX | 167 ERRORs, 135 rejected requests | LOW | ✅ **DONE** — 6 commits, 22 tests |
 | G-3 | OPP-39 | Context Window Guard | NEW | 282K wasted tokens (3 × 94K overflow) | MEDIUM | `tools/dynamic_autonomous.py` |
-| G-4 | OPP-43 | Poll Rate Limiter (backoff + idle suspension) | NEW | 11,613 polls (85% of events), 789/min peak | MEDIUM | `utils/lms_helper.py`, `llm/llm_client.py` |
+| G-4 | OPP-43 | Poll Rate Limiter (JIT memoization) | DONE | 11,613 polls (85% of events), 789/min peak | MEDIUM | ✅ **DONE** — 2 commits, 21 tests, 60s JIT guard TTL |
 
 ### Priority 1 (High — Reliability / Efficiency)
 
