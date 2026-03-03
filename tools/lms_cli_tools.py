@@ -28,6 +28,7 @@ Requirements:
 
 from typing import Any, Dict, Optional
 
+from llm.jit_loader import invalidate_jit_cache
 from utils.lms_helper import LMSHelper
 from utils.model_fallback import get_fallback_manager
 
@@ -211,6 +212,7 @@ def lms_unload_model(model_name: str) -> Dict[str, Any]:
     success = LMSHelper.unload_model(model_name)
 
     if success:
+        invalidate_jit_cache(model_name)  # OPP-43: clear JIT memo on explicit unload
         return {
             "success": True,
             "model": model_name,

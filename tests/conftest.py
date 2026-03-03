@@ -95,6 +95,18 @@ def _prevent_rest_api_leaks(request):
         yield
 
 
+@pytest.fixture(autouse=True)
+def _clear_jit_memo():
+    """Reset JIT poll guard memoization before each test (OPP-43).
+
+    Without this, a test that confirms a model as loaded via jit_loader
+    would silently cause subsequent tests to skip is_model_loaded() checks
+    for up to POLL_JIT_GUARD_TTL seconds, breaking assertions.
+    """
+    from llm.jit_loader import invalidate_jit_cache
+    invalidate_jit_cache()
+
+
 # ============================================================================
 # Pytest Fixtures for MCP Health Checks
 # ============================================================================

@@ -227,6 +227,10 @@ class TestCreateResponsePayload(unittest.TestCase):
 class TestCreateResponseJITGuard(unittest.TestCase):
     """Verify the JIT guard in create_response() calls LMSHelper correctly."""
 
+    def setUp(self):
+        from llm.jit_loader import invalidate_jit_cache
+        invalidate_jit_cache()
+
     def _make_client(self):
         from llm.llm_client import LLMClient
         client = LLMClient.__new__(LLMClient)
