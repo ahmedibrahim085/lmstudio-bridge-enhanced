@@ -21,7 +21,7 @@
 | v5.0.0 Phase B (Features) | OPP-21, 24, 27, 28, 29, 31 | **DONE** | v5.0.0 | ~100 |
 | v5.0.0 Phase C (Major) | OPP-19, 25 | **DONE** | v5.0.0 | ~60 |
 | Log Analysis | 31 issues (4 rounds), 19 raw → 10 active OPPs | **ANALYSIS DONE** | — | — |
-| Round G (Log Analysis OPPs) | 10 active + 1 experiment + 1 deferred | **PROPOSED** | v5.1.0 | ~TBD |
+| Round G (Log Analysis OPPs) | 10 active + 1 experiment + 1 deferred | **DONE** | v5.1.0 | ~TBD |
 
 ---
 
@@ -314,7 +314,7 @@ Final completed state: ~1969 tests, 91% coverage, VERSION 5.0.0.
 
 ---
 
-## Round G — Log Analysis OPPs (PROPOSED)
+## Round G — Log Analysis OPPs (DONE)
 
 > Source: 4-round deep analysis of 188K-line LM Studio server log (`docs/LOG_ANALYSIS_2026-03-02.md`)
 > 31 issues found → 19 raw OPPs → **10 active** after root cause analysis (4 merged, 3 removed, 1 deferred, 1 experiment)

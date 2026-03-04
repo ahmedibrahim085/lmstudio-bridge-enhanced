@@ -190,7 +190,7 @@ Log Analysis ──────────┘ DONE (4-round deep analysis)
   Source: 188K-line LM Studio server log
   31 issues → 19 OPPs proposed (OPP-32 to OPP-50)
                         │
-Round G ───────────────┘ PROPOSED (10 active OPPs after root cause analysis)
+Round G ───────────────┘ DONE (10 active OPPs after root cause analysis)
   Phase 1: OPP-38 ────→ kill "default" cascade (highest ROI)
   Phase 2: OPP-39 ═══╗ foundations (parallel)
            OPP-32 ═══╣
@@ -406,7 +406,7 @@ These are not individual OPPs — they are **synergy effects** from combining mu
 
 ---
 
-## Round G — Log Analysis OPPs (PROPOSED)
+## Round G — Log Analysis OPPs (DONE)
 
 > Source: `docs/LOG_ANALYSIS_2026-03-02.md` — 4-round deep analysis of 188K-line LM Studio server log
 > 31 issues found (8 CRITICAL, 12 HIGH, 8 MEDIUM, 3 LOW) → 19 raw OPPs → **10 actionable** after root cause analysis
