@@ -21,6 +21,7 @@ class BreakerState:
     failure_count: int = 0
     last_failure_time: float = 0.0
     opened_at: float | None = None
+    probe_in_flight: bool = False
 
 
 class ToolCallGuard:
@@ -51,6 +52,10 @@ class ToolCallGuard:
 
     @staticmethod
     def _type_matches(value: Any, expected_type: str) -> bool:
+        # In Python, bool is a subclass of int, so isinstance(True, int) is True.
+        # For JSON Schema semantics, booleans must NOT match integer or number.
+        if expected_type in ("integer", "number") and isinstance(value, bool):
+            return False
         type_map: dict[str, type | tuple[type, ...]] = {
             "string": str,
             "integer": int,
@@ -78,9 +83,13 @@ class ToolCallGuard:
                 elapsed = time.monotonic() - (state.opened_at or 0.0)
                 if elapsed >= CIRCUIT_BREAKER_RESET_SECONDS:
                     state.status = "half_open"
+                    state.probe_in_flight = True
                     return True, None  # Allow one probe
                 return False, f"Circuit breaker OPEN for '{tool_name}' ({state.failure_count} failures)"
             if state.status == "half_open":
+                if state.probe_in_flight:
+                    return False, f"Probe already in-flight for '{tool_name}'"
+                state.probe_in_flight = True
                 return True, None  # Allow the probe call
             return True, None
 
@@ -92,6 +101,7 @@ class ToolCallGuard:
                 state.status = "closed"
                 state.failure_count = 0
                 state.opened_at = None
+                state.probe_in_flight = False
 
     def record_failure(self, tool_name: str) -> None:
         """Record a failed tool call; opens breaker when threshold is reached."""
@@ -102,6 +112,7 @@ class ToolCallGuard:
                 self._breaker_state[tool_name] = state
             state.failure_count += 1
             state.last_failure_time = time.monotonic()
+            state.probe_in_flight = False
             if state.failure_count >= CIRCUIT_BREAKER_THRESHOLD:
                 if state.status in ("half_open", "closed"):
                     state.status = "open"
