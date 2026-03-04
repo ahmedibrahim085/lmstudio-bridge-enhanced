@@ -1246,6 +1246,7 @@ Continue with the task based on these results."""
         completed_rounds = 0
         round_metrics_list: list[Any] = []
         final_status = "max_rounds"
+        cumulative_tokens = 0  # G-2: Running counter — never decreases after message trimming
 
         for round_num in range(max_rounds):
             log_info(f"\n--- Anthropic Round {round_num + 1}/{max_rounds} ---")
@@ -1265,7 +1266,10 @@ Continue with the task based on these results."""
             # OPP-39: Context guard — prevent context window overflow
             effective_window = context_window if context_window is not None else DEFAULT_CONTEXT_WINDOW
             token_threshold = int(CONTEXT_GUARD_THRESHOLD * effective_window)
-            cumulative_tokens = self._estimate_tokens(messages) + self._estimate_tokens(anthropic_tools or [])
+            # G-2: Accumulate round estimate like responses loop (line 1006)
+            # Estimate tokens for this round: system prompt + tools + current messages
+            round_estimate = self._estimate_tokens(messages) + self._estimate_tokens(anthropic_tools or [])
+            cumulative_tokens = cumulative_tokens + round_estimate
             if cumulative_tokens > token_threshold:
                 log_error(
                     f"Anthropic context guard triggered: ~{cumulative_tokens} tokens "
