@@ -33,6 +33,9 @@ ADAPTIVE_TIMEOUT_ENABLED: bool = True
 ADAPTIVE_TIMEOUT_MULTIPLIER: float = 1.5
 ADAPTIVE_TIMEOUT_MIN_OBSERVATIONS: int = 10
 
+# OPP-50: Tool schema dedup experiment — omit tool schemas on follow-up turns
+TOOL_SCHEMA_DEDUP_ENABLED: bool = False
+
 __all__: list[str] = [
     "SCHEMA_COERCION_ENABLED",
     "CIRCUIT_BREAKER_THRESHOLD",
@@ -48,4 +51,5 @@ __all__: list[str] = [
     "ADAPTIVE_TIMEOUT_ENABLED",
     "ADAPTIVE_TIMEOUT_MULTIPLIER",
     "ADAPTIVE_TIMEOUT_MIN_OBSERVATIONS",
+    "TOOL_SCHEMA_DEDUP_ENABLED",
 ]
