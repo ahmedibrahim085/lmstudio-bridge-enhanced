@@ -30,7 +30,7 @@ class LoopMetrics:
     total_duration_seconds: float
     total_tool_calls: int
     total_errors: int
-    final_status: str  # "completed" | "max_rounds" | "aborted"
+    final_status: str  # "completed" | "max_rounds" | "aborted" | "context_overflow"
     rounds: list[RoundMetrics] = field(default_factory=list)
     max_rounds_tracked: int = 100
 

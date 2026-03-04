@@ -907,7 +907,7 @@ Continue with the task based on these results."""
         """Record metrics for a single autonomous loop round.
 
         Silently swallows exceptions — metrics must never break the loop.
-        Caps the list at 100 entries, popping the oldest when full.
+        Caps the list at LoopMetrics.max_rounds_tracked entries, popping the oldest when full.
         """
         try:
             rm = RoundMetrics(
@@ -919,7 +919,7 @@ Continue with the task based on these results."""
                 cache_hits=cache.hits if cache else 0,
                 cache_misses=cache.misses if cache else 0,
             )
-            if len(round_metrics_list) < 100:
+            if len(round_metrics_list) < LoopMetrics.max_rounds_tracked:
                 round_metrics_list.append(rm)
             else:
                 round_metrics_list.pop(0)
