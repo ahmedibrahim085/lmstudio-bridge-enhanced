@@ -165,3 +165,58 @@ class TestAnthropicCumulativeGuard:
         assert "Done" in result or "No content" not in result
         # _estimate_tokens should have been called (guard is active)
         assert call_count["n"] > 0, "_estimate_tokens must be called for context guard"
+
+    def test_guard_triggers_despite_message_trimming(self) -> None:
+        """Context guard must trigger even after messages are trimmed.
+
+        MAX_ANTHROPIC_LOOP_MESSAGES = 100. Each round adds 2 messages
+        (~40 tokens each = ~80 tokens/round). After 50+ rounds, messages
+        get trimmed to 100.
+
+        With context_window=20000, threshold = 16000 tokens (80%).
+        After trimming, 100 messages × ~40 tokens = ~4000 tokens.
+        A naive recalculation would see 4000 < 16000 — guard never fires.
+
+        But with cumulative tracking, the running total continues growing:
+        150 rounds × ~80 tokens/round = ~12000 + initial ≈ 12500 tokens.
+        At ~200 rounds: ~16000+ tokens — guard fires.
+
+        Without cumulative tracking (bug), the loop runs all max_rounds.
+        """
+        agent = _make_agent()
+        dispatcher = MagicMock()
+        # Small results so trimmed messages stay well below threshold
+        dispatcher.dispatch = AsyncMock(return_value=("search", "found it"))
+
+        # Small tool call responses
+        agent.llm.anthropic_messages = MagicMock(
+            return_value=_make_anthropic_tool_response("search", {"query": "q"})
+        )
+
+        result = asyncio.get_event_loop().run_until_complete(
+            agent._autonomous_loop_anthropic(
+                dispatcher=dispatcher,
+                openai_tools=_OPENAI_TOOLS,
+                task="Search.",
+                max_rounds=300,  # well past where cumulative should trigger
+                max_tokens=1024,
+                model="test-model",
+                context_window=20000,  # large enough that trimmed msgs stay below
+            )
+        )
+
+        metrics = agent.last_loop_metrics
+        assert metrics is not None
+
+        # Guard MUST trigger before max_rounds
+        if metrics.total_rounds >= 300:
+            pytest.fail(
+                f"Context guard did not trigger — ran all {metrics.total_rounds} rounds. "
+                f"After message trimming, cumulative_tokens likely dropped (G-2 bug). "
+                f"final_status={metrics.final_status}"
+            )
+
+        assert metrics.final_status == "context_overflow", (
+            f"Expected context_overflow, got {metrics.final_status}. "
+            f"Cumulative tracking must survive message trimming."
+        )
