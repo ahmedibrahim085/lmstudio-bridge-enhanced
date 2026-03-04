@@ -76,10 +76,7 @@ class TestToolSchemaDedup:
                 previous_response_id="prev-123",
             )
 
-        call_kwargs = mock_session.post.call_args
-        payload: Dict[str, Any] = call_kwargs.kwargs.get(
-            "json", call_kwargs[1].get("json", call_kwargs[0][1])
-        )
+        payload: Dict[str, Any] = mock_session.post.call_args.kwargs["json"]
         assert "tools" not in payload, (
             "Expected tools to be omitted when TOOL_SCHEMA_DEDUP_ENABLED=True "
             "and previous_response_id is set, but 'tools' was present in payload"
@@ -103,10 +100,7 @@ class TestToolSchemaDedup:
                 previous_response_id=None,
             )
 
-        call_kwargs = mock_session.post.call_args
-        payload: Dict[str, Any] = call_kwargs.kwargs.get(
-            "json", call_kwargs[1].get("json", call_kwargs[0][1])
-        )
+        payload: Dict[str, Any] = mock_session.post.call_args.kwargs["json"]
         assert "tools" in payload, (
             "Expected tools to be present when previous_response_id is None, "
             "even with TOOL_SCHEMA_DEDUP_ENABLED=True"
@@ -130,10 +124,7 @@ class TestToolSchemaDedup:
                 previous_response_id="prev-456",
             )
 
-        call_kwargs = mock_session.post.call_args
-        payload: Dict[str, Any] = call_kwargs.kwargs.get(
-            "json", call_kwargs[1].get("json", call_kwargs[0][1])
-        )
+        payload: Dict[str, Any] = mock_session.post.call_args.kwargs["json"]
         assert "tools" in payload, (
             "Expected tools to be present when TOOL_SCHEMA_DEDUP_ENABLED=False "
             "(the default), but 'tools' was absent from payload"

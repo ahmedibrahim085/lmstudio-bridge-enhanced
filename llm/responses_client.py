@@ -11,6 +11,7 @@ from config.constants import (
     JIT_TTL_DEFAULT,
     is_model_sentinel,
 )
+from config.constants.tool_config import TOOL_SCHEMA_DEDUP_ENABLED
 from llm.exceptions import LLMResponseError, LLMTimeoutError
 from llm.format_adapter import FormatAdapter
 from llm.http_transport import HTTPTransport, handle_request_exception
@@ -71,9 +72,14 @@ class ResponsesClient:
         if previous_response_id:
             payload["previous_response_id"] = previous_response_id
         if tools:
-            payload["tools"] = FormatAdapter.openai_tools_to_responses(tools)
-            if tool_choice:
-                payload["tool_choice"] = tool_choice
+            # OPP-50: skip sending tool schemas when dedup is enabled and
+            # a previous_response_id already carries tool context forward.
+            if TOOL_SCHEMA_DEDUP_ENABLED and previous_response_id:
+                pass  # rely on previous_response_id to carry tool context
+            else:
+                payload["tools"] = FormatAdapter.openai_tools_to_responses(tools)
+                if tool_choice:
+                    payload["tool_choice"] = tool_choice
         if temperature is not None:
             payload["temperature"] = temperature
         if draft_model is not None:
