@@ -48,6 +48,16 @@ class ToolCallGuard:
                         f"Parameter '{param_name}' expected type '{expected_type}', "
                         f"got {type(args[param_name]).__name__}"
                     )
+        # M-2: Also type-check optional params that ARE provided
+        optional_params = set(properties.keys()) - set(required)
+        for param_name in optional_params:
+            if param_name in args:
+                expected_type = properties[param_name].get("type")
+                if expected_type and not self._type_matches(args[param_name], expected_type):
+                    errors.append(
+                        f"Parameter '{param_name}' expected type '{expected_type}', "
+                        f"got {type(args[param_name]).__name__}"
+                    )
         return errors
 
     @staticmethod

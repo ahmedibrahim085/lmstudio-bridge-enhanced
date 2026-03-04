@@ -6,13 +6,12 @@ from collections import deque
 
 from config.constants.tool_config import (
     ADAPTIVE_TIMEOUT_ENABLED,
+    ADAPTIVE_TIMEOUT_MAX_OBSERVATIONS,
     ADAPTIVE_TIMEOUT_MIN_OBSERVATIONS,
     ADAPTIVE_TIMEOUT_MULTIPLIER,
 )
 
 logger = logging.getLogger(__name__)
-
-_MAX_OBSERVATIONS = 100
 
 
 class AdaptiveTimeoutManager:
@@ -44,7 +43,7 @@ class AdaptiveTimeoutManager:
         key = f"{model}:{endpoint_type}"
         with self._lock:
             if key not in self._observations:
-                self._observations[key] = deque(maxlen=_MAX_OBSERVATIONS)
+                self._observations[key] = deque(maxlen=ADAPTIVE_TIMEOUT_MAX_OBSERVATIONS)
             self._observations[key].append(elapsed)
 
     def get_timeout(self, model: str, endpoint_type: str, default: float) -> float:
