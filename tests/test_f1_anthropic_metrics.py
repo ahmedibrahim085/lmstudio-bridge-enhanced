@@ -13,7 +13,7 @@ Test categories:
 
 import asyncio
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -259,3 +259,58 @@ class TestAnthropicMetricsMaxRounds:
         assert agent.last_loop_metrics is not None
         assert agent.last_loop_metrics.final_status == "max_rounds"
         assert agent.last_loop_metrics.total_rounds == 3
+
+
+# ---------------------------------------------------------------------------
+# Test 5: G-1 — Metrics set even on unexpected exception (try/finally safety)
+# ---------------------------------------------------------------------------
+
+
+class TestAnthropicMetricsTryFinally:
+    """G-1: last_loop_metrics must be set even on unexpected exceptions.
+
+    If an uncaught exception escapes the loop (e.g., from FormatAdapter
+    or message building), the try/finally block must still set metrics.
+    Without try/finally, last_loop_metrics stays None.
+    """
+
+    def test_metrics_set_on_unexpected_exception(self) -> None:
+        """Unexpected exception mid-loop must still produce last_loop_metrics.
+
+        The exception must occur AFTER the LLM call succeeds (outside the
+        try/except for anthropic_messages) — e.g., in FormatAdapter response
+        processing at line 1348. This is the uncovered path G-1 targets.
+        """
+        agent = _make_agent()
+        dispatcher = MagicMock()
+        dispatcher.dispatch = AsyncMock(return_value=("read_file", "content"))
+
+        # LLM returns a valid tool-call response
+        agent.llm.anthropic_messages = MagicMock(
+            return_value=_make_anthropic_tool_response("read_file", {"path": "/f"})
+        )
+
+        # Patch FormatAdapter.extract_anthropic_tool_calls to crash
+        # This simulates a bug in response parsing AFTER the LLM call succeeds
+        with patch(
+            "tools.dynamic_autonomous.FormatAdapter.extract_anthropic_tool_calls",
+            side_effect=TypeError("unexpected NoneType in response parsing"),
+        ), pytest.raises(TypeError, match="unexpected NoneType"):
+            asyncio.get_event_loop().run_until_complete(
+                agent._autonomous_loop_anthropic(
+                    dispatcher=dispatcher,
+                    openai_tools=_OPENAI_TOOLS,
+                    task="test",
+                    max_rounds=5,
+                    max_tokens=4096,
+                    model="test-model",
+                )
+            )
+
+        # G-1: Even though an exception escaped, metrics must be set
+        assert agent.last_loop_metrics is not None, (
+            "last_loop_metrics must be set even when unexpected exception escapes. "
+            "Wrap the for-loop in try/finally like _autonomous_loop()."
+        )
+        assert agent.last_loop_metrics.total_rounds >= 0
+        assert agent.last_loop_metrics.total_duration_seconds > 0
