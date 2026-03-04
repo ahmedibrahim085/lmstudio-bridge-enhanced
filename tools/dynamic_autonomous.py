@@ -1239,10 +1239,20 @@ Continue with the task based on these results."""
         health_tracker = ModelHealthTracker()  # Per-model error budget (OPP-45)
         timeout_mgr = AdaptiveTimeoutManager()  # Adaptive timeout (OPP-46)
 
+        # --- F-1: Metrics tracking initialisation (mirrors _autonomous_loop) ---
+        self.last_loop_metrics = None
+        loop_start_time = time.monotonic()
+        total_error_count = 0
+        completed_rounds = 0
+        round_metrics_list: list[Any] = []
+        final_status = "max_rounds"
+
         for round_num in range(max_rounds):
             log_info(f"\n--- Anthropic Round {round_num + 1}/{max_rounds} ---")
 
             round_start_time = time.monotonic()
+            round_tool_calls: list[dict[str, Any]] = []
+            round_errors = 0
 
             # H-5: Advisory health check before Anthropic LLM call
             if health_tracker and model:
@@ -1262,6 +1272,12 @@ Continue with the task based on these results."""
                     f"exceeds {CONTEXT_GUARD_THRESHOLD*100:.0f}% of context window "
                     f"({token_threshold}/{effective_window})"
                 )
+                final_status = "context_overflow"
+                self.last_loop_metrics = LoopMetrics(
+                    total_rounds=completed_rounds, total_duration_seconds=time.monotonic() - loop_start_time,
+                    total_tool_calls=sum(len(rm.tool_calls) for rm in round_metrics_list),
+                    total_errors=total_error_count, final_status=final_status, rounds=round_metrics_list,
+                )
                 return (
                     f"Task aborted: context window nearly full "
                     f"(~{cumulative_tokens} tokens estimated, "
@@ -1280,12 +1296,23 @@ Continue with the task based on these results."""
                 )
             except Exception as e:
                 self.consecutive_error_count += 1
+                total_error_count += 1
+                round_errors += 1
                 if health_tracker and model:
                     health_tracker.record_llm_call(model, success=False, elapsed=time.monotonic() - round_start_time)
                 log_error(
                     f"Anthropic LLM call failed (consecutive: {self.consecutive_error_count}): {e}"
                 )
                 if self.consecutive_error_count >= MAX_CONSECUTIVE_ERRORS:
+                    final_status = "aborted"
+                    completed_rounds += 1
+                    llm_call_duration = time.monotonic() - round_start_time
+                    self._record_round_metrics(round_metrics_list, completed_rounds, llm_call_duration, round_tool_calls, round_errors, tracker=tracker, cache=cache)
+                    self.last_loop_metrics = LoopMetrics(
+                        total_rounds=completed_rounds, total_duration_seconds=time.monotonic() - loop_start_time,
+                        total_tool_calls=sum(len(rm.tool_calls) for rm in round_metrics_list),
+                        total_errors=total_error_count, final_status=final_status, rounds=round_metrics_list,
+                    )
                     return (
                         f"Task aborted: {self.consecutive_error_count} consecutive errors. Last: {e}"
                     )
@@ -1296,7 +1323,10 @@ Continue with the task based on these results."""
                         "role": "user",
                         "content": f"Previous LLM call failed: {e}. Please try again.",
                     })
-                # Otherwise just retry with existing context (error is already logged)
+                # Record round and continue
+                completed_rounds += 1
+                llm_call_duration = time.monotonic() - round_start_time
+                self._record_round_metrics(round_metrics_list, completed_rounds, llm_call_duration, round_tool_calls, round_errors, tracker=tracker, cache=cache)
                 continue
 
             # Reset error count on success
@@ -1332,8 +1362,24 @@ Continue with the task based on these results."""
                 if tracker is not None:
                     tracker.check_orphans()
 
+                # F-1: Track tool call metrics
+                for tc_name, tc_result in results:
+                    is_error = "error" in str(tc_result).lower()[:20]
+                    round_tool_calls.append({
+                        "name": tc_name,
+                        "duration_seconds": 0.0,
+                        "success": not is_error,
+                    })
+                    if is_error:
+                        round_errors += 1
+                        total_error_count += 1
+
+                # Record completed round metrics
+                completed_rounds += 1
+                self._record_round_metrics(round_metrics_list, completed_rounds, llm_elapsed, round_tool_calls, round_errors, tracker=tracker, cache=cache)
+
                 # Build Anthropic tool result messages with tool_use_ids
-                for tc, (fc_name, tool_result) in zip(tool_calls, results):
+                for tc, (_tc_name, tool_result) in zip(tool_calls, results):
                     tool_result_msg = FormatAdapter.build_anthropic_tool_result(
                         tool_use_id=tc["id"],
                         content=tool_result,
@@ -1349,6 +1395,12 @@ Continue with the task based on these results."""
 
                 # Check abort threshold after tool execution
                 if self.consecutive_error_count >= MAX_CONSECUTIVE_ERRORS:
+                    final_status = "aborted"
+                    self.last_loop_metrics = LoopMetrics(
+                        total_rounds=completed_rounds, total_duration_seconds=time.monotonic() - loop_start_time,
+                        total_tool_calls=sum(len(rm.tool_calls) for rm in round_metrics_list),
+                        total_errors=total_error_count, final_status=final_status, rounds=round_metrics_list,
+                    )
                     return (
                         f"Task aborted: {self.consecutive_error_count} consecutive errors. "
                         "Last batch had failures."
@@ -1364,10 +1416,26 @@ Continue with the task based on these results."""
                         log_info(f"LLM text: {text_content[:100]}...")
                         break
 
+                # F-1: Record final round metrics
+                completed_rounds += 1
+                self._record_round_metrics(round_metrics_list, completed_rounds, llm_elapsed, round_tool_calls, round_errors, tracker=tracker, cache=cache)
+                final_status = "completed"
+                self.last_loop_metrics = LoopMetrics(
+                    total_rounds=completed_rounds, total_duration_seconds=time.monotonic() - loop_start_time,
+                    total_tool_calls=sum(len(rm.tool_calls) for rm in round_metrics_list),
+                    total_errors=total_error_count, final_status=final_status, rounds=round_metrics_list,
+                )
+
                 if text_content:
                     return text_content
                 return "No content in response"
 
+        # F-1: Record metrics on max_rounds exhaustion
+        self.last_loop_metrics = LoopMetrics(
+            total_rounds=completed_rounds, total_duration_seconds=time.monotonic() - loop_start_time,
+            total_tool_calls=sum(len(rm.tool_calls) for rm in round_metrics_list),
+            total_errors=total_error_count, final_status=final_status, rounds=round_metrics_list,
+        )
         return "Task incomplete: Maximum rounds reached"
 
     async def _run_autonomous_dispatch(
