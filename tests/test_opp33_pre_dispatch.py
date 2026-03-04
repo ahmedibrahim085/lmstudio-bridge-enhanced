@@ -234,6 +234,53 @@ NUMBER_SCHEMA: dict = {
 }
 
 
+class TestOptionalParamTypeValidation:
+    """M-2: Optional params that ARE provided should be type-checked."""
+
+    def test_optional_param_wrong_type_rejected(self) -> None:
+        """Schema says optional 'count' is integer, passing string should error."""
+        schema = {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string"},
+                "count": {"type": "integer"},
+            },
+            "required": ["name"],
+        }
+        guard = ToolCallGuard(tool_schemas={"tool": schema})
+        errors = guard.validate_args("tool", {"name": "ok", "count": "not_int"})
+        assert len(errors) >= 1
+        assert any("count" in e for e in errors)
+
+    def test_optional_param_correct_type_passes(self) -> None:
+        """Optional param with correct type should produce no error."""
+        schema = {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string"},
+                "count": {"type": "integer"},
+            },
+            "required": ["name"],
+        }
+        guard = ToolCallGuard(tool_schemas={"tool": schema})
+        errors = guard.validate_args("tool", {"name": "ok", "count": 42})
+        assert errors == []
+
+    def test_optional_param_not_provided_no_error(self) -> None:
+        """Optional param not in args should produce no error."""
+        schema = {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string"},
+                "count": {"type": "integer"},
+            },
+            "required": ["name"],
+        }
+        guard = ToolCallGuard(tool_schemas={"tool": schema})
+        errors = guard.validate_args("tool", {"name": "ok"})
+        assert errors == []
+
+
 class TestBooleanIntegerBypass:
     """H-1: bool must not pass validation for integer or number types."""
 

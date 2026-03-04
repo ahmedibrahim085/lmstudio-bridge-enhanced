@@ -131,6 +131,16 @@ class TestEdgeCases:
         mgr.observe("", "responses", 10.0)
         assert mgr.get_timeout("", "responses", default=58.0) == 58.0
 
+    def test_max_observations_from_constants(self):
+        """M-3: _MAX_OBSERVATIONS should be sourced from tool_config constants."""
+        from config.constants.tool_config import ADAPTIVE_TIMEOUT_MAX_OBSERVATIONS
+        mgr = AdaptiveTimeoutManager()
+        # Add more than the configured max
+        for i in range(ADAPTIVE_TIMEOUT_MAX_OBSERVATIONS + 20):
+            mgr.observe("model-x", "responses", float(i))
+        key = "model-x:responses"
+        assert len(mgr._observations[key]) == ADAPTIVE_TIMEOUT_MAX_OBSERVATIONS
+
     def test_concurrent_observations_thread_safe(self):
         mgr = AdaptiveTimeoutManager()
         errors = []
