@@ -204,3 +204,50 @@ class TestDataclass:
         )
         assert health.model_key == "test"
         assert health.status == "active"
+
+
+class TestErrorRateCapping:
+    """F-2: error_rate must never exceed 1.0 even with tool errors."""
+
+    def test_tool_errors_without_llm_calls_stay_bounded(self) -> None:
+        """record_tool_error without record_llm_call must not produce error_rate > 1.0."""
+        tracker = ModelHealthTracker(window_seconds=300, threshold=0.3, cooldown_seconds=60)
+        # Record 10 tool errors with NO LLM calls
+        for i in range(10):
+            tracker.record_tool_error("test-model", f"tool_{i}", "invalid_args")
+
+        # Check health — should NOT crash or produce unbounded rate
+        status = tracker.check_health("test-model")
+        # With the bug: windowed_errors=10, windowed_calls=0 → division by zero or
+        # if calls=0 is handled, errors still not counted as calls → rate > 1.0
+        # The model should be degraded (errors exist), NOT produce math errors
+        assert status in ("active", "degraded", "suspended")
+
+        # Verify internal state: error_rate should be <= 1.0
+        with tracker._lock:
+            health = tracker._models["test-model"]
+            windowed_calls = len(health.calls_in_window)
+            windowed_errors = len(health.errors_in_window)
+            # CRITICAL: errors must be a subset of calls
+            assert windowed_calls >= windowed_errors, (
+                f"calls={windowed_calls} < errors={windowed_errors} — error rate would exceed 1.0"
+            )
+
+    def test_mixed_llm_and_tool_errors_bounded(self) -> None:
+        """Mix of LLM calls and tool errors keeps error_rate <= 1.0."""
+        tracker = ModelHealthTracker(window_seconds=300, threshold=0.3, cooldown_seconds=60)
+        # 3 successful LLM calls
+        for _ in range(3):
+            tracker.record_llm_call("test-model", success=True, elapsed=1.0)
+        # 5 tool errors (should also count as calls)
+        for i in range(5):
+            tracker.record_tool_error("test-model", f"tool_{i}", "timeout")
+
+        with tracker._lock:
+            health = tracker._models["test-model"]
+            windowed_calls = len(health.calls_in_window)
+            windowed_errors = len(health.errors_in_window)
+            assert windowed_calls >= windowed_errors
+            # 3 LLM + 5 tool = 8 calls, 5 errors → rate = 5/8 = 0.625
+            assert windowed_calls == 8
+            assert windowed_errors == 5
