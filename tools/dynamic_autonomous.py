@@ -52,6 +52,7 @@ from mcp_client.type_coercion import safe_call_tool
 from tools.loop_metrics import LoopMetrics, RoundMetrics
 from tools.tool_call_guard import ToolCallGuard
 from tools.tool_call_tracker import ToolCallTracker
+from tools.model_health import ModelHealthTracker
 from tools.tool_result_cache import ToolResultCache
 from utils.custom_logging import log_error, log_info
 from utils.lms_helper import LMSHelper
@@ -663,6 +664,7 @@ Continue with the task based on these results."""
         guard: ToolCallGuard | None = None,
         tracker: ToolCallTracker | None = None,
         cache: ToolResultCache | None = None,
+        health_tracker: ModelHealthTracker | None = None,
     ):
         """Execute tools sequentially. Returns list of (name, result_text) tuples.
 
@@ -759,6 +761,7 @@ Continue with the task based on these results."""
         guard: ToolCallGuard | None = None,
         tracker: ToolCallTracker | None = None,
         cache: ToolResultCache | None = None,
+        health_tracker: ModelHealthTracker | None = None,
     ):
         """Execute tools in parallel using asyncio.gather(). Returns list of (name, result_text) tuples.
 
@@ -928,6 +931,7 @@ Continue with the task based on these results."""
         guard = ToolCallGuard()  # One guard instance per loop execution (OPP-33 + OPP-44)
         tracker = ToolCallTracker()  # Orphan detection per loop execution (OPP-37)
         cache = ToolResultCache()    # Tool result cache per loop execution (OPP-40)
+        health_tracker = ModelHealthTracker()  # Per-model error budget (OPP-45)
 
         # --- OPP-07: Metrics tracking initialisation ---
         self.last_loop_metrics = None
@@ -959,6 +963,12 @@ Continue with the task based on these results."""
                 # On subsequent rounds, use "auto" to allow final answers
                 current_tool_choice = "required" if round_num == 0 else "auto"
 
+                # OPP-45: Advisory health check before LLM call
+                if health_tracker and model:
+                    model_status = health_tracker.check_health(model)
+                    if model_status != "active":
+                        log_info(f"Model '{model}' health: {model_status} (advisory only, continuing)")
+
                 # CRITICAL: Run sync HTTP call in thread pool to avoid blocking event loop
                 # This prevents MCP connection TaskGroup failures during long LLM calls
                 try:
@@ -976,6 +986,8 @@ Continue with the task based on these results."""
                     self.consecutive_error_count += 1
                     total_error_count += 1
                     round_errors += 1
+                    if health_tracker and model:
+                        health_tracker.record_llm_call(model, success=False, elapsed=time.monotonic() - round_start_time)
                     log_error(f"LLM call failed (consecutive: {self.consecutive_error_count}): {e}")
                     if self.consecutive_error_count >= MAX_CONSECUTIVE_ERRORS:
                         final_status = "aborted"
@@ -992,6 +1004,8 @@ Continue with the task based on these results."""
                     continue
 
                 llm_call_duration = time.monotonic() - round_start_time
+                if health_tracker and model:
+                    health_tracker.record_llm_call(model, success=True, elapsed=llm_call_duration)
 
                 # Save response ID for next round (maintains conversation state)
                 previous_response_id = response["id"]
@@ -1034,9 +1048,9 @@ Continue with the task based on these results."""
                     log_info(f"LLM requested {len(function_calls)} tool call(s)")
 
                     if parallel_tools and len(function_calls) > 1:
-                        pending_tool_results = await self._execute_tools_parallel(dispatcher, function_calls, guard=guard, tracker=tracker, cache=cache)
+                        pending_tool_results = await self._execute_tools_parallel(dispatcher, function_calls, guard=guard, tracker=tracker, cache=cache, health_tracker=health_tracker)
                     else:
-                        pending_tool_results = await self._execute_tools_sequential(dispatcher, function_calls, guard=guard, tracker=tracker, cache=cache)
+                        pending_tool_results = await self._execute_tools_sequential(dispatcher, function_calls, guard=guard, tracker=tracker, cache=cache, health_tracker=health_tracker)
 
                     # Track tool call metrics (after execution)
                     for tc_name, tc_result in pending_tool_results:
@@ -1126,6 +1140,7 @@ Continue with the task based on these results."""
         guard = ToolCallGuard()    # One guard instance per loop execution (OPP-33 + OPP-44)
         tracker = ToolCallTracker()  # Orphan detection per loop execution (OPP-37)
         cache = ToolResultCache()    # Tool result cache per loop execution (OPP-40)
+        health_tracker = ModelHealthTracker()  # Per-model error budget (OPP-45)
 
         for round_num in range(max_rounds):
             log_info(f"\n--- Anthropic Round {round_num + 1}/{max_rounds} ---")
@@ -1180,7 +1195,7 @@ Continue with the task based on these results."""
                 ]
 
                 # Execute through shared dispatch path (same as /v1/responses)
-                results = await self._execute_tools_sequential(dispatcher, common_fc_list, guard=guard, tracker=tracker, cache=cache)
+                results = await self._execute_tools_sequential(dispatcher, common_fc_list, guard=guard, tracker=tracker, cache=cache, health_tracker=health_tracker)
 
                 # Build Anthropic tool result messages with tool_use_ids
                 for tc, (fc_name, tool_result) in zip(tool_calls, results):
