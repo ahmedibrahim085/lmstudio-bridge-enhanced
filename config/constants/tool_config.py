@@ -23,6 +23,11 @@ TOOL_RESULT_CACHE_ALLOWLIST: frozenset[str] = frozenset({
     "list_allowed_directories",
 })
 
+# OPP-45: Per-model error budget with advisory demotion
+ERROR_BUDGET_WINDOW_SECONDS: float = 300.0
+ERROR_BUDGET_THRESHOLD: float = 0.3
+DEMOTION_COOLDOWN_SECONDS: float = 120.0
+
 __all__: list[str] = [
     "SCHEMA_COERCION_ENABLED",
     "CIRCUIT_BREAKER_THRESHOLD",
@@ -32,4 +37,7 @@ __all__: list[str] = [
     "TOOL_RESULT_CACHE_TTL",
     "TOOL_RESULT_CACHE_MAX_SIZE",
     "TOOL_RESULT_CACHE_ALLOWLIST",
+    "ERROR_BUDGET_WINDOW_SECONDS",
+    "ERROR_BUDGET_THRESHOLD",
+    "DEMOTION_COOLDOWN_SECONDS",
 ]
