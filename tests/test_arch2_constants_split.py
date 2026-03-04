@@ -39,6 +39,7 @@ DOMAIN_MODULES = [
     "mcp",
     "selection",
     "testing",
+    "tool_config",
 ]
 
 EXPECTED_COUNT = 241
