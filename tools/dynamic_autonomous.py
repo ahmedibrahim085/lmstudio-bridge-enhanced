@@ -1061,25 +1061,19 @@ Continue with the task based on these results."""
                 # Append assistant response to conversation
                 messages.append({"role": "assistant", "content": response.get("content", [])})
 
-                # Execute each tool and collect results
-                for tc in tool_calls:
-                    tc_name = tc["name"]
-                    tc_input = tc.get("input", {})
-                    tc_id = tc["id"]
+                # Convert Anthropic format to common format for shared dispatch
+                common_fc_list = [
+                    {"name": tc["name"], "arguments": tc.get("input", {})}
+                    for tc in tool_calls
+                ]
 
-                    log_info(f"Executing {tc_name}")
-                    try:
-                        _, tool_result = await dispatcher.dispatch(tc_name, tc_input)
-                        self.consecutive_error_count = 0
-                        log_info(f"Tool result: {str(tool_result)[:200]}...")
-                    except Exception as e:
-                        tool_result = f"Error: {e}"
-                        log_error(f"Tool execution failed: {e}")
-                        self.consecutive_error_count += 1
+                # Execute through shared dispatch path (same as /v1/responses)
+                results = await self._execute_tools_sequential(dispatcher, common_fc_list)
 
-                    # Inject tool result back into messages using Anthropic format
+                # Build Anthropic tool result messages with tool_use_ids
+                for tc, (fc_name, tool_result) in zip(tool_calls, results):
                     tool_result_msg = FormatAdapter.build_anthropic_tool_result(
-                        tool_use_id=tc_id,
+                        tool_use_id=tc["id"],
                         content=tool_result,
                         is_error=str(tool_result).startswith("Error:"),
                     )
