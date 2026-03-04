@@ -342,7 +342,7 @@ Final completed state: ~1969 tests, 91% coverage, VERSION 5.0.0.
 | ~~16~~ | ~~OPP-47~~ | ~~Tool Name Normalization Layer~~ | — | — | — | — | — | — | **MERGED → OPP-40** |
 | ~~17~~ | ~~OPP-48~~ | ~~Truncated Tool Call Recovery~~ | — | — | — | — | — | — | **MERGED → OPP-44** |
 | ~~18~~ | ~~OPP-49~~ | ~~Generation-Aware Timeout~~ | — | — | — | — | — | — | **MERGED → OPP-46** |
-| 19 | OPP-50 | Tool Schema Dedup Experiment | 8 | 5 | 0.9 | 2 | **18** | P1 | EXPERIMENT |
+| 19 | OPP-50 | Tool Schema Dedup Experiment | 8 | 5 | 0.9 | 2 | **18** | P1 | **DONE** |
 
 ### Key Findings Driving These OPPs
 
