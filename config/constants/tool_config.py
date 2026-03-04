@@ -7,9 +7,29 @@ CIRCUIT_BREAKER_THRESHOLD: int = 5
 CIRCUIT_BREAKER_RESET_SECONDS: float = 60.0
 CIRCUIT_BREAKER_ENABLED: bool = True
 
+# OPP-37: Orphan detection timeout
+ORPHAN_TIMEOUT_SECONDS: float = 120.0
+
+# OPP-40: Tool result cache
+TOOL_RESULT_CACHE_TTL: float = 120.0
+TOOL_RESULT_CACHE_MAX_SIZE: int = 200
+TOOL_RESULT_CACHE_ALLOWLIST: frozenset[str] = frozenset({
+    "list_directory",
+    "read_file",
+    "read_text_file",
+    "search_files",
+    "get_file_info",
+    "directory_tree",
+    "list_allowed_directories",
+})
+
 __all__: list[str] = [
     "SCHEMA_COERCION_ENABLED",
     "CIRCUIT_BREAKER_THRESHOLD",
     "CIRCUIT_BREAKER_RESET_SECONDS",
     "CIRCUIT_BREAKER_ENABLED",
+    "ORPHAN_TIMEOUT_SECONDS",
+    "TOOL_RESULT_CACHE_TTL",
+    "TOOL_RESULT_CACHE_MAX_SIZE",
+    "TOOL_RESULT_CACHE_ALLOWLIST",
 ]
