@@ -258,3 +258,32 @@ class TestBreakerStateDataclass:
         assert state.failure_count == 0
         assert state.last_failure_time == 0.0
         assert state.opened_at is None
+
+
+# ---------------------------------------------------------------------------
+# HALF_OPEN race condition tests (C-5)
+# ---------------------------------------------------------------------------
+
+
+class TestHalfOpenProbeRace:
+    """C-5: Only one probe call should be allowed in half_open state."""
+
+    def test_half_open_only_allows_one_probe(self) -> None:
+        """Trip breaker, advance past reset, first check allows probe, second is rejected."""
+        guard = ToolCallGuard()
+        _trip_breaker(guard, "race_tool")
+
+        # Advance time past reset window to trigger half_open transition
+        state = guard._breaker_state["race_tool"]
+        state.opened_at = time.monotonic() - (CIRCUIT_BREAKER_RESET_SECONDS + 1.0)
+
+        # First check: should allow the probe (transitions to half_open)
+        allowed_1, reason_1 = guard.check_circuit("race_tool")
+        assert allowed_1 is True
+        assert reason_1 is None
+
+        # Second check: probe already in-flight, should be rejected
+        allowed_2, reason_2 = guard.check_circuit("race_tool")
+        assert allowed_2 is False
+        assert reason_2 is not None
+        assert "probe" in reason_2.lower()

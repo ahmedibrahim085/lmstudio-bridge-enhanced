@@ -211,3 +211,42 @@ class TestEdgeCases:
         result = guard.validate_args("search", {})
         assert isinstance(result, list)
         assert all(isinstance(e, str) for e in result)
+
+
+# ---------------------------------------------------------------------------
+# H-1: Bool/int validation bypass tests
+# ---------------------------------------------------------------------------
+
+INTEGER_SCHEMA: dict = {
+    "type": "object",
+    "properties": {
+        "count": {"type": "integer"},
+    },
+    "required": ["count"],
+}
+
+NUMBER_SCHEMA: dict = {
+    "type": "object",
+    "properties": {
+        "value": {"type": "number"},
+    },
+    "required": ["value"],
+}
+
+
+class TestBooleanIntegerBypass:
+    """H-1: bool must not pass validation for integer or number types."""
+
+    def test_boolean_rejected_for_integer_param(self) -> None:
+        """Schema says 'integer', passing True should produce a validation error."""
+        guard = ToolCallGuard(tool_schemas={"int_tool": INTEGER_SCHEMA})
+        errors = guard.validate_args("int_tool", {"count": True})
+        assert len(errors) >= 1
+        assert any("count" in e for e in errors)
+
+    def test_boolean_rejected_for_number_param(self) -> None:
+        """Schema says 'number', passing False should produce a validation error."""
+        guard = ToolCallGuard(tool_schemas={"num_tool": NUMBER_SCHEMA})
+        errors = guard.validate_args("num_tool", {"value": False})
+        assert len(errors) >= 1
+        assert any("value" in e for e in errors)
