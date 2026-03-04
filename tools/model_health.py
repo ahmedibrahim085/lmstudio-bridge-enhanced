@@ -110,8 +110,8 @@ class ModelHealthTracker:
     def record_tool_error(self, model: str, tool_name: str, error_type: str) -> None:
         """Record a tool-dispatch error attributed to *model*.
 
-        Tool errors are counted toward the error budget but do NOT increment
-        total_calls (they are not LLM calls themselves).
+        Tool errors are counted toward both the call budget and the error
+        budget so that error_rate = errors / calls never exceeds 1.0.
 
         Args:
             model: Model identifier string.
@@ -121,6 +121,8 @@ class ModelHealthTracker:
         now = time.monotonic()
         with self._lock:
             health = self._get_or_create(model)
+            health.total_calls += 1
+            health.calls_in_window.append(now)
             health.total_errors += 1
             health.errors_in_window.append(now)
             logger.debug(
