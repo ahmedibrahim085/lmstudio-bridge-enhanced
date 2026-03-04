@@ -1194,6 +1194,8 @@ Continue with the task based on these results."""
                 if model_status != "active":
                     log_info(f"Model '{model}' health: {model_status} (advisory only, continuing)")
 
+            adaptive_timeout = timeout_mgr.get_timeout(model, "anthropic", DEFAULT_LLM_TIMEOUT) if timeout_mgr and model else DEFAULT_LLM_TIMEOUT
+
             try:
                 response = await asyncio.to_thread(
                     self.llm.anthropic_messages,
@@ -1202,6 +1204,7 @@ Continue with the task based on these results."""
                     max_tokens=max_tokens,
                     tools=anthropic_tools if anthropic_tools else None,
                     model=model,
+                    timeout=adaptive_timeout,
                 )
             except Exception as e:
                 self.consecutive_error_count += 1
@@ -1230,7 +1233,7 @@ Continue with the task based on these results."""
             if health_tracker and model:
                 health_tracker.record_llm_call(model, success=True, elapsed=llm_elapsed)
             if model:
-                timeout_mgr.observe(model, "responses", llm_elapsed)
+                timeout_mgr.observe(model, "anthropic", llm_elapsed)
 
             stop_reason = response.get("stop_reason", "")
             log_info(f"stop_reason: {stop_reason}")
