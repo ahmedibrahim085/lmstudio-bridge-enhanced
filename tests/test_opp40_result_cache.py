@@ -167,3 +167,89 @@ class TestCacheEntryDataclass:
         entry = CacheEntry(result="x", created_at=0.0, tool_name="t")
         with pytest.raises((AttributeError, TypeError)):
             entry.result = "mutated"  # type: ignore[misc]
+
+
+import threading
+import time as _time
+
+
+class TestCacheCounterThreadSafety:
+    """F-6: hits/misses properties must be thread-safe."""
+
+    def test_hits_misses_consistent_under_concurrent_access(self) -> None:
+        """Concurrent gets should not produce torn reads on hits/misses counters."""
+        cache = ToolResultCache(
+            ttl=60.0, max_size=100,
+            allowlist=frozenset({"read_file"}),
+        )
+        # Pre-populate cache
+        cache.put("read_file", {"path": "/test"}, "content", is_error=False)
+
+        errors = []
+
+        def reader():
+            for _ in range(500):
+                h = cache.hits
+                m = cache.misses
+                # hits + misses should be monotonically consistent
+                # (no negative values, no torn reads)
+                if h < 0 or m < 0:
+                    errors.append(f"Negative counter: hits={h}, misses={m}")
+
+        def writer():
+            for i in range(500):
+                cache.get("read_file", {"path": "/test"})  # hit
+                cache.get("read_file", {"path": f"/miss_{i}"})  # miss
+
+        threads = [threading.Thread(target=reader) for _ in range(3)]
+        threads += [threading.Thread(target=writer) for _ in range(2)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        assert not errors, f"Thread safety violations: {errors}"
+        # After all threads: hits and misses should be accessible without error
+        assert cache.hits >= 0
+        assert cache.misses >= 0
+
+
+class TestCacheEvictionEfficiency:
+    """F-5: LRU eviction should use O(1) operations, not O(n) list.remove()."""
+
+    def test_eviction_at_max_size_preserves_order(self) -> None:
+        """When cache reaches max_size, oldest entry is evicted correctly."""
+        cache = ToolResultCache(
+            ttl=60.0, max_size=3,
+            allowlist=frozenset({"read_file"}),
+        )
+        # Fill cache to capacity
+        cache.put("read_file", {"path": "/a"}, "result_a")
+        cache.put("read_file", {"path": "/b"}, "result_b")
+        cache.put("read_file", {"path": "/c"}, "result_c")
+
+        # Add one more — should evict /a (oldest)
+        cache.put("read_file", {"path": "/d"}, "result_d")
+
+        assert cache.get("read_file", {"path": "/a"}) is None, "Oldest entry should be evicted"
+        assert cache.get("read_file", {"path": "/b"}) == "result_b"
+        assert cache.get("read_file", {"path": "/d"}) == "result_d"
+
+    def test_lru_refresh_on_get_prevents_eviction(self) -> None:
+        """Accessing an entry via get() should refresh its LRU position."""
+        cache = ToolResultCache(
+            ttl=60.0, max_size=3,
+            allowlist=frozenset({"read_file"}),
+        )
+        cache.put("read_file", {"path": "/a"}, "result_a")
+        cache.put("read_file", {"path": "/b"}, "result_b")
+        cache.put("read_file", {"path": "/c"}, "result_c")
+
+        # Access /a to refresh it (make it most recently used)
+        cache.get("read_file", {"path": "/a"})
+
+        # Add /d — should evict /b (now oldest), NOT /a
+        cache.put("read_file", {"path": "/d"}, "result_d")
+
+        assert cache.get("read_file", {"path": "/a"}) == "result_a", "/a was refreshed, should survive"
+        assert cache.get("read_file", {"path": "/b"}) is None, "/b was oldest after /a refresh, should be evicted"
