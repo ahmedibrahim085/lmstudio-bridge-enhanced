@@ -78,8 +78,8 @@ class ResponsesClient:
                 pass  # rely on previous_response_id to carry tool context
             else:
                 payload["tools"] = FormatAdapter.openai_tools_to_responses(tools)
-                if tool_choice:
-                    payload["tool_choice"] = tool_choice
+            if tool_choice:
+                payload["tool_choice"] = tool_choice
         if temperature is not None:
             payload["temperature"] = temperature
         if draft_model is not None:
