@@ -42,6 +42,7 @@ from config.constants import (
     MAX_ANTHROPIC_LOOP_MESSAGES,
     MAX_CONSECUTIVE_ERRORS,
 )
+from config.constants.timeouts import DEFAULT_LLM_TIMEOUT
 from core.exceptions import ModelNotFoundError
 from llm.format_adapter import FormatAdapter
 from llm.llm_client import LLMClient
@@ -52,12 +53,11 @@ from mcp_client.discovery import MCPDiscovery
 # This ensures ALL code paths use the same coercion logic via single entry point
 from mcp_client.executor import ToolExecutor
 from mcp_client.type_coercion import safe_call_tool
+from tools.adaptive_timeout import AdaptiveTimeoutManager
 from tools.loop_metrics import LoopMetrics, RoundMetrics
+from tools.model_health import ModelHealthTracker
 from tools.tool_call_guard import ToolCallGuard
 from tools.tool_call_tracker import ToolCallTracker
-from config.constants.timeouts import DEFAULT_LLM_TIMEOUT
-from tools.adaptive_timeout import AdaptiveTimeoutManager
-from tools.model_health import ModelHealthTracker
 from tools.tool_result_cache import ToolResultCache
 from utils.custom_logging import log_error, log_info
 from utils.lms_helper import LMSHelper
@@ -1251,19 +1251,19 @@ Continue with the task based on these results."""
         try:
             for round_num in range(max_rounds):
                 log_info(f"\n--- Anthropic Round {round_num + 1}/{max_rounds} ---")
-    
+
                 round_start_time = time.monotonic()
                 round_tool_calls: list[dict[str, Any]] = []
                 round_errors = 0
-    
+
                 # H-5: Advisory health check before Anthropic LLM call
                 if health_tracker and model:
                     model_status = health_tracker.check_health(model)
                     if model_status != "active":
                         log_info(f"Model '{model}' health: {model_status} (advisory only, continuing)")
-    
+
                 adaptive_timeout = timeout_mgr.get_timeout(model, "anthropic", DEFAULT_LLM_TIMEOUT) if timeout_mgr and model else DEFAULT_LLM_TIMEOUT
-    
+
                 # OPP-39: Context guard — prevent context window overflow
                 effective_window = context_window if context_window is not None else DEFAULT_CONTEXT_WINDOW
                 token_threshold = int(CONTEXT_GUARD_THRESHOLD * effective_window)
@@ -1288,7 +1288,7 @@ Continue with the task based on these results."""
                         f"(~{cumulative_tokens} tokens estimated, "
                         f"limit {token_threshold}/{effective_window})"
                     )
-    
+
                 try:
                     response = await asyncio.to_thread(
                         self.llm.anthropic_messages,
@@ -1333,7 +1333,7 @@ Continue with the task based on these results."""
                     llm_call_duration = time.monotonic() - round_start_time
                     self._record_round_metrics(round_metrics_list, completed_rounds, llm_call_duration, round_tool_calls, round_errors, tracker=tracker, cache=cache)
                     continue
-    
+
                 # Reset error count on success
                 self.consecutive_error_count = 0
                 llm_elapsed = time.monotonic() - round_start_time
@@ -1341,32 +1341,32 @@ Continue with the task based on these results."""
                     health_tracker.record_llm_call(model, success=True, elapsed=llm_elapsed)
                 if model:
                     timeout_mgr.observe(model, "anthropic", llm_elapsed)
-    
+
                 stop_reason = response.get("stop_reason", "")
                 log_info(f"stop_reason: {stop_reason}")
-    
+
                 # Extract tool calls from Anthropic response
                 tool_calls = FormatAdapter.extract_anthropic_tool_calls(response)
-    
+
                 if tool_calls:
                     log_info(f"LLM requested {len(tool_calls)} tool call(s)")
-    
+
                     # Append assistant response to conversation
                     messages.append({"role": "assistant", "content": response.get("content", [])})
-    
+
                     # Convert Anthropic format to common format for shared dispatch
                     common_fc_list = [
                         {"name": tc["name"], "arguments": tc.get("input", {})}
                         for tc in tool_calls
                     ]
-    
+
                     # Execute through shared dispatch path (same as /v1/responses)
                     results = await self._execute_tools_sequential(dispatcher, common_fc_list, guard=guard, tracker=tracker, cache=cache, health_tracker=health_tracker, model=model or "")
-    
+
                     # C-4: Check for orphaned tool calls after execution
                     if tracker is not None:
                         tracker.check_orphans()
-    
+
                     # F-1: Track tool call metrics
                     for tc_name, tc_result in results:
                         is_error = "error" in str(tc_result).lower()[:20]
@@ -1378,11 +1378,11 @@ Continue with the task based on these results."""
                         if is_error:
                             round_errors += 1
                             total_error_count += 1
-    
+
                     # Record completed round metrics
                     completed_rounds += 1
                     self._record_round_metrics(round_metrics_list, completed_rounds, llm_elapsed, round_tool_calls, round_errors, tracker=tracker, cache=cache)
-    
+
                     # Build Anthropic tool result messages with tool_use_ids
                     for tc, (_tc_name, tool_result) in zip(tool_calls, results):
                         tool_result_msg = FormatAdapter.build_anthropic_tool_result(
@@ -1391,13 +1391,13 @@ Continue with the task based on these results."""
                             is_error=str(tool_result).startswith("Error:"),
                         )
                         messages.append(tool_result_msg)
-    
+
                     # Trim message history to prevent unbounded memory growth.
                     # Keep first message (user task) + last (limit-1) messages.
                     if len(messages) > MAX_ANTHROPIC_LOOP_MESSAGES:
                         messages = [messages[0]] + messages[-(MAX_ANTHROPIC_LOOP_MESSAGES - 1):]
                         log_info(f"Trimmed messages to {len(messages)} (window={MAX_ANTHROPIC_LOOP_MESSAGES})")
-    
+
                     # Check abort threshold after tool execution
                     if self.consecutive_error_count >= MAX_CONSECUTIVE_ERRORS:
                         final_status = "aborted"
@@ -1410,7 +1410,7 @@ Continue with the task based on these results."""
                             f"Task aborted: {self.consecutive_error_count} consecutive errors. "
                             "Last batch had failures."
                         )
-    
+
                 else:
                     # No tool calls — extract text content as final answer
                     log_info("Anthropic LLM provided final answer")
@@ -1420,7 +1420,7 @@ Continue with the task based on these results."""
                             text_content = block.get("text", "")
                             log_info(f"LLM text: {text_content[:100]}...")
                             break
-    
+
                     # F-1: Record final round metrics
                     completed_rounds += 1
                     self._record_round_metrics(round_metrics_list, completed_rounds, llm_elapsed, round_tool_calls, round_errors, tracker=tracker, cache=cache)
@@ -1430,11 +1430,11 @@ Continue with the task based on these results."""
                         total_tool_calls=sum(len(rm.tool_calls) for rm in round_metrics_list),
                         total_errors=total_error_count, final_status=final_status, rounds=round_metrics_list,
                     )
-    
+
                     if text_content:
                         return text_content
                     return "No content in response"
-    
+
             # F-1: Record metrics on max_rounds exhaustion
             self.last_loop_metrics = LoopMetrics(
                 total_rounds=completed_rounds, total_duration_seconds=time.monotonic() - loop_start_time,
