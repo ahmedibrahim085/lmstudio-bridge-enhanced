@@ -1077,6 +1077,55 @@ User-defined agent slots with auto-resolved model configuration:
 
 ---
 
+## v5.1.0 Round G — Reliability Modules
+
+Round G added 5 new modules to the autonomous agent loop, all wired into `_execute_tools_sequential` and `_execute_tools_parallel`:
+
+```
+┌─────────────────────────────────────────────────────────┐
+│              Tool Execution Pipeline (v5.1.0)            │
+│                                                          │
+│  LLM Response → Extract Tool Calls                       │
+│       │                                                  │
+│       ▼                                                  │
+│  ┌─────────────────┐                                     │
+│  │ ToolCallGuard    │ Pre-dispatch validation (OPP-33)   │
+│  │                  │ Circuit breaker (OPP-44)           │
+│  └────────┬────────┘                                     │
+│           ▼                                              │
+│  ┌─────────────────┐                                     │
+│  │ ToolResultCache  │ Allowlist-based, TTL + LRU (OPP-40)│
+│  │                  │ Cache hit → skip dispatch           │
+│  └────────┬────────┘                                     │
+│           ▼                                              │
+│  ┌─────────────────┐                                     │
+│  │ ToolCallTracker  │ Start/end timestamps (OPP-37)      │
+│  │                  │ Orphan detection on timeout         │
+│  └────────┬────────┘                                     │
+│           ▼                                              │
+│      dispatcher.dispatch()                               │
+│           │                                              │
+│           ▼                                              │
+│  ┌─────────────────┐                                     │
+│  │ModelHealthTracker│ Per-model error budget (OPP-45)    │
+│  │                  │ Advisory degradation states         │
+│  └─────────────────┘                                     │
+│                                                          │
+│  ┌─────────────────┐                                     │
+│  │AdaptiveTimeout   │ p95-based timeout adaptation       │
+│  │  Manager         │ Per-model, per-endpoint (OPP-46)   │
+│  └─────────────────┘                                     │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Files**: `tools/tool_call_guard.py`, `tools/tool_call_tracker.py`, `tools/tool_result_cache.py`, `tools/model_health.py`, `tools/adaptive_timeout.py`
+
+**Constants**: `config/constants/tool_config.py` — 15 new constants (thresholds, TTLs, feature flags)
+
+**Metrics**: `tools/loop_metrics.py` — `RoundMetrics` extended with `orphan_count`, `cache_hits`, `cache_misses`
+
+---
+
 ## Conclusion
 
 The architecture enables:

@@ -376,34 +376,32 @@ Final completed state: ~1969 tests, 91% coverage, VERSION 5.0.0.
 Phase 1: Kill the Cascade ✅ DONE
   OPP-38 ✅ ──→ fix "default" sentinel escape (6 commits, 22 tests)
 
-Phase 2: Foundations (parallel)
-  OPP-39 ═══╗ context window guard
-  OPP-32 ═══╣ schema-aware type coercion
-  OPP-43 ═══╝ poll rate limiter (after OPP-38 removes error amplification)
+Phase 2: Foundations (parallel) ✅ DONE
+  OPP-39 ✅ ═══╗ context window guard
+  OPP-32 ✅ ═══╣ schema-aware type coercion
+  OPP-43 ✅ ═══╝ poll rate limiter
 
-Phase 3: Build ToolCallContext (sequential pair, then parallel)
-  OPP-33 + OPP-44 ═══╗ pre-dispatch validation + circuit breaker
-  OPP-37 + OPP-40   ═╝ orphan detection + result cache
+Phase 3: Build ToolCallContext ✅ DONE
+  OPP-33 ✅ + OPP-44 ✅ ═══╗ pre-dispatch validation + circuit breaker
+  OPP-37 ✅ + OPP-40 ✅   ═╝ orphan detection + result cache
 
-Phase 4: Model Intelligence
-  OPP-45 ────→ per-model error budget + auto-demotion
+Phase 4: Model Intelligence ✅ DONE
+  OPP-45 ✅ ────→ per-model error budget + auto-demotion
 
-Phase 5: Streaming Refactor (most invasive, do last)
-  OPP-46 ────→ adaptive timeout for both inference phases
+Phase 5: Adaptive Timeout ✅ DONE
+  OPP-46 ✅ ────→ adaptive timeout for both inference phases
 
-Phase 6: Quick Experiment
-  OPP-50 ────→ test omitting tools after round 0 with previous_response_id
+Phase 6: Quick Experiment ✅ DONE
+  OPP-50 ✅ ────→ tool schema dedup with previous_response_id
 ```
 
 ### Consolidated Summary
 
 | Status | Count | OPPs |
 |--------|-------|------|
-| **Active** | 9 | OPP-32, 33, 37, 39, 40, 43, 44, 45, 46 |
-| **Done (Round G)** | 1 | OPP-38 |
-| **Experiment** | 1 | OPP-50 |
+| **Done (Round G)** | 11 | OPP-32, 33, 37, 38, 39, 40, 43, 44, 45, 46, 50 |
 | **Deferred** | 1 | OPP-42 (re-measure after OPP-39) |
 | **Merged** | 4 | OPP-34→45, OPP-47→40, OPP-48→44, OPP-49→46 |
 | **Removed** | 3 | OPP-35, 36, 41 |
 
-Target version: **v5.1.0** (all backward compatible, no breaking changes)
+Released as: **v5.1.0** (all backward compatible, no breaking changes)
