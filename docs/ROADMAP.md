@@ -329,14 +329,14 @@ Final completed state: ~1969 tests, 91% coverage, VERSION 5.0.0.
 | 3 | OPP-39 | Context Window Guard | 7 | 9 | 0.8 | 2 | **25.2** | P0 | PROPOSED |
 | 4 | OPP-40 | Tool Result Caching (+OPP-47) | 7 | 8 | 0.9 | 2 | **25.2** | P1 | PROPOSED |
 | 5 | OPP-37 | Orphan Detection with Fast-Fail | 6 | 8 | 0.8 | 2 | **19.2** | P1 | PROPOSED |
-| 6 | OPP-33 | Pre-Dispatch Tool Argument Validation | 6 | 7 | 0.9 | 1 | **37.8** | P1 | PROPOSED |
+| 6 | OPP-33 | Pre-Dispatch Tool Argument Validation | 6 | 7 | 0.9 | 1 | **37.8** | P1 | **DONE** |
 | ~~7~~ | ~~OPP-34~~ | ~~Model Tool-Calling Error Budget~~ | — | — | — | — | — | — | **MERGED → OPP-45** |
 | ~~8~~ | ~~OPP-35~~ | ~~LMSAuthenticator getModelInfo Caching~~ | — | — | — | — | — | — | **REMOVED** (LM Studio internal, our cache already works) |
 | ~~9~~ | ~~OPP-36~~ | ~~Logprobs Response Bloat Suppression~~ | — | — | — | — | — | — | **REMOVED** (server-side issue, bridge never requests logprobs) |
 | ~~10~~ | ~~OPP-41~~ | ~~Conversation Chain Health Monitoring~~ | — | — | — | — | — | — | **REMOVED** (short chains = efficient, not a bug) |
 | 11 | OPP-42 | Token Budget Monitoring & Alerting | 4 | 5 | 0.8 | 1 | **16** | P2 | **DEFERRED** (re-measure after OPP-39) |
 | 12 | OPP-43 | Poll Rate Limiter (JIT memoization) | 9 | 9 | 0.9 | 2 | **36.5** | P0 | **DONE** |
-| 13 | OPP-44 | Tool Call Circuit Breaker (+OPP-48) | 7 | 8 | 0.8 | 2 | **22.4** | P1 | PROPOSED |
+| 13 | OPP-44 | Tool Call Circuit Breaker (+OPP-48) | 7 | 8 | 0.8 | 2 | **22.4** | P1 | **DONE** |
 | 14 | OPP-45 | Per-Model Error Budget + Auto-Demotion (+OPP-34) | 7 | 8 | 0.8 | 2 | **22.4** | P1 | PROPOSED |
 | 15 | OPP-46 | Adaptive Timeout — Both Phases (+OPP-49) | 6 | 7 | 0.8 | 2 | **16.8** | P1 | PROPOSED |
 | ~~16~~ | ~~OPP-47~~ | ~~Tool Name Normalization Layer~~ | — | — | — | — | — | — | **MERGED → OPP-40** |
