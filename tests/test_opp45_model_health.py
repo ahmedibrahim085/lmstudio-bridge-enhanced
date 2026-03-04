@@ -140,7 +140,7 @@ class TestErrorTracking:
         assert health.total_errors == 1
 
     def test_errors_outside_window_dont_count(self, monkeypatch):
-        tracker = ModelHealthTracker(threshold=0.3, window_seconds=60.0)
+        tracker = ModelHealthTracker(threshold=0.3, window_seconds=60.0, cooldown_seconds=60.0)
         current_time = 1000.0
         monkeypatch.setattr("time.monotonic", lambda: current_time)
         # Record errors at time 1000
