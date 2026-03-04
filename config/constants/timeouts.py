@@ -32,6 +32,7 @@ __all__ = [
     "JIT_TTL_DEFAULT",
     "JIT_TTL_EMBEDDING",
     "JIT_TTL_AUTONOMOUS",
+    "POLL_JIT_GUARD_TTL",
     "DEFAULT_AUTONOMOUS_TIMEOUT",
     "STREAM_READ_TIMEOUT",
     "WAKE_UP_PING_TIMEOUT",
@@ -92,6 +93,10 @@ MODEL_LOADING_DELAY = 2         # Delay for model loading/verification transitio
 JIT_TTL_DEFAULT = 1800          # 30 minutes for general requests
 JIT_TTL_EMBEDDING = 900         # 15 minutes for embedding requests (shorter-lived)
 JIT_TTL_AUTONOMOUS = 10800      # 3 hours for autonomous tasks (long-running)
+
+# JIT Poll Guard (OPP-43) — skip is_model_loaded if confirmed within this window
+# 2× LMS_REST_MODELS_CACHE_TTL (30s) — at most 1 HTTP GET per model per 60s
+POLL_JIT_GUARD_TTL = 60
 
 # Autonomous execution timeout
 DEFAULT_AUTONOMOUS_TIMEOUT = 600  # 10 minutes per autonomous task

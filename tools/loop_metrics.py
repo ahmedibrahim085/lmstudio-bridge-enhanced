@@ -17,6 +17,9 @@ class RoundMetrics:
     llm_call_duration_seconds: float
     tool_calls: list[dict[str, Any]]  # [{name, duration_seconds, success}]
     error_count: int
+    orphan_count: int = 0
+    cache_hits: int = 0
+    cache_misses: int = 0
 
 
 @dataclass
@@ -27,7 +30,7 @@ class LoopMetrics:
     total_duration_seconds: float
     total_tool_calls: int
     total_errors: int
-    final_status: str  # "completed" | "max_rounds" | "aborted"
+    final_status: str  # "completed" | "max_rounds" | "aborted" | "context_overflow"
     rounds: list[RoundMetrics] = field(default_factory=list)
     max_rounds_tracked: int = 100
 

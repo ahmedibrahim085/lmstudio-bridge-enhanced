@@ -19,6 +19,7 @@ import asyncio
 import json
 import logging
 import time
+import uuid
 from contextlib import AsyncExitStack
 from typing import Any, Dict, List, Optional, Union
 
@@ -29,7 +30,10 @@ from mcp.client.stdio import StdioServerParameters, stdio_client
 
 from config.constants import (
     ANTHROPIC_AUTONOMOUS_SYSTEM_TEMPLATE,
+    CHARS_PER_TOKEN_ESTIMATE,
+    CONTEXT_GUARD_THRESHOLD,
     DEFAULT_AUTONOMOUS_FORMAT,
+    DEFAULT_CONTEXT_WINDOW,
     DEFAULT_MAX_ROUNDS,
     DEFAULT_MAX_TOKENS,
     DEFAULT_TEMPERATURE,
@@ -38,6 +42,7 @@ from config.constants import (
     MAX_ANTHROPIC_LOOP_MESSAGES,
     MAX_CONSECUTIVE_ERRORS,
 )
+from config.constants.timeouts import DEFAULT_LLM_TIMEOUT
 from core.exceptions import ModelNotFoundError
 from llm.format_adapter import FormatAdapter
 from llm.llm_client import LLMClient
@@ -48,7 +53,12 @@ from mcp_client.discovery import MCPDiscovery
 # This ensures ALL code paths use the same coercion logic via single entry point
 from mcp_client.executor import ToolExecutor
 from mcp_client.type_coercion import safe_call_tool
+from tools.adaptive_timeout import AdaptiveTimeoutManager
 from tools.loop_metrics import LoopMetrics, RoundMetrics
+from tools.model_health import ModelHealthTracker
+from tools.tool_call_guard import ToolCallGuard
+from tools.tool_call_tracker import ToolCallTracker
+from tools.tool_result_cache import ToolResultCache
 from utils.custom_logging import log_error, log_info
 from utils.lms_helper import LMSHelper
 
@@ -618,6 +628,19 @@ class DynamicAutonomousAgent:
         )
 
     @staticmethod
+    def _estimate_tokens(payload) -> int:
+        """Estimate token count from a payload's JSON-serialized size.
+
+        Uses CHARS_PER_TOKEN_ESTIMATE (4 chars ≈ 1 token) for rough estimation.
+        Returns 0 if the payload cannot be serialized (safe fallback).
+        """
+        try:
+            serialized = json.dumps(payload)
+            return len(serialized) // CHARS_PER_TOKEN_ESTIMATE
+        except (TypeError, ValueError):
+            return 0
+
+    @staticmethod
     def _build_input_text(
         round_num: int,
         task: str,
@@ -652,7 +675,16 @@ Continue with the task based on these results."""
 
         return input_text
 
-    async def _execute_tools_sequential(self, dispatcher, fc_list):
+    async def _execute_tools_sequential(
+        self,
+        dispatcher,
+        fc_list,
+        guard: ToolCallGuard | None = None,
+        tracker: ToolCallTracker | None = None,
+        cache: ToolResultCache | None = None,
+        health_tracker: ModelHealthTracker | None = None,
+        model: str = "",
+    ):
         """Execute tools sequentially. Returns list of (name, result_text) tuples.
 
         Updates self.consecutive_error_count:
@@ -675,26 +707,86 @@ Continue with the task based on these results."""
                     self.consecutive_error_count += 1
                     continue
 
+            # Cache lookup (OPP-40) — skip dispatch on hit
+            if cache is not None:
+                cached_result = cache.get(fc_name, tool_args)
+                if cached_result is not None:
+                    log_info(f"Cache hit for '{fc_name}'")
+                    results.append((fc_name, cached_result))
+                    self.consecutive_error_count = 0
+                    continue
+
+            # Pre-dispatch validation (OPP-33)
+            if guard is not None:
+                validation_errors = guard.validate_args(fc_name, tool_args)
+                if validation_errors:
+                    error_msg = f"Validation failed for '{fc_name}': {'; '.join(validation_errors)}"
+                    log_error(error_msg)
+                    results.append((fc_name, f"Error: {error_msg}"))
+                    self.consecutive_error_count += 1
+                    continue
+
+                # Circuit breaker check (OPP-44)
+                allowed, reason = guard.check_circuit(fc_name)
+                if not allowed:
+                    log_error(f"Circuit breaker blocked '{fc_name}': {reason}")
+                    results.append((fc_name, f"Error: {reason}"))
+                    self.consecutive_error_count += 1
+                    continue
+
             log_info(f"Executing {fc_name}")
+
+            # Orphan tracking: mark dispatched (OPP-37)
+            call_id = uuid.uuid4().hex[:8]
+            if tracker is not None:
+                tracker.mark_dispatched(call_id, fc_name)
 
             try:
                 display_name, tool_result = await dispatcher.dispatch(fc_name, tool_args)
                 self.consecutive_error_count = 0  # Reset on success
+                if guard is not None:
+                    guard.record_success(fc_name)
+                if tracker is not None:
+                    tracker.mark_completed(call_id)
+                # Store successful result in cache (OPP-40)
+                if cache is not None:
+                    cache.put(fc_name, tool_args, tool_result)
                 log_info(f"Tool result: {str(tool_result)[:200]}...")
             except KeyError as e:
                 tool_result = f"Error: {e}"
                 log_error(str(e))
                 self.consecutive_error_count += 1
+                if guard is not None:
+                    guard.record_failure(fc_name)
+                if tracker is not None:
+                    tracker.mark_orphaned(call_id)
+                if health_tracker is not None and model:
+                    health_tracker.record_tool_error(model, fc_name, type(e).__name__)
             except Exception as e:
                 tool_result = f"Error: {e}"
                 log_error(f"Tool execution failed: {e}")
                 self.consecutive_error_count += 1
+                if guard is not None:
+                    guard.record_failure(fc_name)
+                if tracker is not None:
+                    tracker.mark_orphaned(call_id)
+                if health_tracker is not None and model:
+                    health_tracker.record_tool_error(model, fc_name, type(e).__name__)
 
             results.append((fc_name, tool_result))
 
         return results
 
-    async def _execute_tools_parallel(self, dispatcher, fc_list):
+    async def _execute_tools_parallel(
+        self,
+        dispatcher,
+        fc_list,
+        guard: ToolCallGuard | None = None,
+        tracker: ToolCallTracker | None = None,
+        cache: ToolResultCache | None = None,
+        health_tracker: ModelHealthTracker | None = None,
+        model: str = "",
+    ):
         """Execute tools in parallel using asyncio.gather(). Returns list of (name, result_text) tuples.
 
         Error counting (batch semantics):
@@ -715,14 +807,59 @@ Continue with the task based on these results."""
                     log_error(error_msg)
                     return fc_name, f"Error: {error_msg}", False
 
+            # Cache lookup (OPP-40) — skip dispatch on hit (tracker/guard not needed for cached calls)
+            if cache is not None:
+                cached_result = cache.get(fc_name, tool_args)
+                if cached_result is not None:
+                    log_info(f"Cache hit for '{fc_name}'")
+                    return fc_name, cached_result, True
+
+            # Pre-dispatch validation (OPP-33)
+            if guard is not None:
+                validation_errors = guard.validate_args(fc_name, tool_args)
+                if validation_errors:
+                    error_msg = f"Validation failed for '{fc_name}': {'; '.join(validation_errors)}"
+                    log_error(error_msg)
+                    return fc_name, f"Error: {error_msg}", False
+
+                # Circuit breaker check (OPP-44)
+                allowed, reason = guard.check_circuit(fc_name)
+                if not allowed:
+                    log_error(f"Circuit breaker blocked '{fc_name}': {reason}")
+                    return fc_name, f"Error: {reason}", False
+
+            # Orphan tracking: mark dispatched (OPP-37)
+            call_id = uuid.uuid4().hex[:8]
+            if tracker is not None:
+                tracker.mark_dispatched(call_id, fc_name)
+
             try:
                 display_name, tool_result = await dispatcher.dispatch(fc_name, tool_args)
+                if guard is not None:
+                    guard.record_success(fc_name)
+                if tracker is not None:
+                    tracker.mark_completed(call_id)
+                # Store successful result in cache (OPP-40)
+                if cache is not None:
+                    cache.put(fc_name, tool_args, tool_result)
                 log_info(f"Tool result: {str(tool_result)[:200]}...")
                 return fc_name, tool_result, True  # True = success
             except KeyError as e:
+                if guard is not None:
+                    guard.record_failure(fc_name)
+                if tracker is not None:
+                    tracker.mark_orphaned(call_id)
+                if health_tracker is not None and model:
+                    health_tracker.record_tool_error(model, fc_name, type(e).__name__)
                 log_error(str(e))
                 return fc_name, f"Error: {e}", False
             except Exception as e:
+                if guard is not None:
+                    guard.record_failure(fc_name)
+                if tracker is not None:
+                    tracker.mark_orphaned(call_id)
+                if health_tracker is not None and model:
+                    health_tracker.record_tool_error(model, fc_name, type(e).__name__)
                 log_error(f"Tool execution failed: {e}")
                 return fc_name, f"Error: {e}", False
 
@@ -764,11 +901,13 @@ Continue with the task based on these results."""
         llm_call_duration: float,
         round_tool_calls: list,
         round_errors: int,
+        tracker: Any = None,
+        cache: Any = None,
     ) -> None:
         """Record metrics for a single autonomous loop round.
 
         Silently swallows exceptions — metrics must never break the loop.
-        Caps the list at 100 entries, popping the oldest when full.
+        Caps the list at LoopMetrics.max_rounds_tracked entries, popping the oldest when full.
         """
         try:
             rm = RoundMetrics(
@@ -776,8 +915,11 @@ Continue with the task based on these results."""
                 llm_call_duration_seconds=llm_call_duration,
                 tool_calls=round_tool_calls,
                 error_count=round_errors,
+                orphan_count=tracker.orphan_count if tracker else 0,
+                cache_hits=cache.hits if cache else 0,
+                cache_misses=cache.misses if cache else 0,
             )
-            if len(round_metrics_list) < 100:
+            if len(round_metrics_list) < LoopMetrics.max_rounds_tracked:
                 round_metrics_list.append(rm)
             else:
                 round_metrics_list.pop(0)
@@ -793,7 +935,8 @@ Continue with the task based on these results."""
         max_rounds: int,
         max_tokens: int,
         model: Optional[str] = None,
-        parallel_tools: bool = False
+        parallel_tools: bool = False,
+        context_window: Optional[int] = None,
     ) -> str:
         """Core autonomous loop using stateful /v1/responses API with explicit tool result injection.
 
@@ -819,6 +962,18 @@ Continue with the task based on these results."""
         previous_response_id = None
         pending_tool_results = []  # Track tool results to inject into next round
         self.consecutive_error_count = 0
+        # C-1: Pass tool schemas so guard can validate args before dispatch
+        tool_schemas = {
+            t["function"]["name"]: t["function"].get("parameters", {})
+            for t in openai_tools
+            if "function" in t
+        }
+        guard = ToolCallGuard(tool_schemas=tool_schemas)  # OPP-33 + OPP-44
+        tracker = ToolCallTracker()  # Orphan detection per loop execution (OPP-37)
+        cache = ToolResultCache()    # Tool result cache per loop execution (OPP-40)
+        health_tracker = ModelHealthTracker()  # Per-model error budget (OPP-45)
+        timeout_mgr = AdaptiveTimeoutManager()  # Adaptive timeout (OPP-46)
+        cumulative_tokens = 0  # OPP-39: running token estimate across rounds
 
         # --- OPP-07: Metrics tracking initialisation ---
         self.last_loop_metrics = None
@@ -844,11 +999,38 @@ Continue with the task based on these results."""
                 if round_num > 0:
                     pending_tool_results = []
 
+                # OPP-39: Context guard — prevent context window overflow
+                effective_window = context_window if context_window is not None else DEFAULT_CONTEXT_WINDOW
+                token_threshold = int(CONTEXT_GUARD_THRESHOLD * effective_window)
+                round_estimate = self._estimate_tokens(input_text) + self._estimate_tokens(openai_tools)
+                cumulative_tokens = cumulative_tokens + round_estimate
+                if cumulative_tokens > token_threshold:
+                    log_error(
+                        f"Context guard triggered: cumulative token estimate {cumulative_tokens} "
+                        f"exceeds {CONTEXT_GUARD_THRESHOLD*100:.0f}% of context window "
+                        f"({token_threshold}/{effective_window})"
+                    )
+                    final_status = "context_overflow"
+                    return (
+                        f"Task aborted: context window nearly full "
+                        f"(~{cumulative_tokens} tokens estimated, "
+                        f"limit {token_threshold}/{effective_window})"
+                    )
+
                 # Call /v1/responses with tools (stateful API!)
                 # Use tool_choice="required" on first round to FORCE tool usage
                 # This prevents LLMs from hallucinating instead of calling tools
                 # On subsequent rounds, use "auto" to allow final answers
                 current_tool_choice = "required" if round_num == 0 else "auto"
+
+                # OPP-45: Advisory health check before LLM call
+                if health_tracker and model:
+                    model_status = health_tracker.check_health(model)
+                    if model_status != "active":
+                        log_info(f"Model '{model}' health: {model_status} (advisory only, continuing)")
+
+                # C-3: Compute adaptive timeout from observed response times
+                adaptive_timeout = timeout_mgr.get_timeout(model, "responses", DEFAULT_LLM_TIMEOUT) if timeout_mgr and model else DEFAULT_LLM_TIMEOUT
 
                 # CRITICAL: Run sync HTTP call in thread pool to avoid blocking event loop
                 # This prevents MCP connection TaskGroup failures during long LLM calls
@@ -861,38 +1043,50 @@ Continue with the task based on these results."""
                         max_tokens=max_tokens,
                         model=model,
                         tool_choice=current_tool_choice,
-                        temperature=DEFAULT_TEMPERATURE
+                        temperature=DEFAULT_TEMPERATURE,
+                        timeout=adaptive_timeout,
                     )
                 except Exception as e:
                     self.consecutive_error_count += 1
                     total_error_count += 1
                     round_errors += 1
+                    if health_tracker and model:
+                        health_tracker.record_llm_call(model, success=False, elapsed=time.monotonic() - round_start_time)
                     log_error(f"LLM call failed (consecutive: {self.consecutive_error_count}): {e}")
                     if self.consecutive_error_count >= MAX_CONSECUTIVE_ERRORS:
                         final_status = "aborted"
                         # Record round before early return
                         completed_rounds += 1
                         llm_call_duration = time.monotonic() - round_start_time
-                        self._record_round_metrics(round_metrics_list, completed_rounds, llm_call_duration, round_tool_calls, round_errors)
+                        self._record_round_metrics(round_metrics_list, completed_rounds, llm_call_duration, round_tool_calls, round_errors, tracker=tracker, cache=cache)
                         return f"Task aborted: {self.consecutive_error_count} consecutive errors. Last: {e}"
                     pending_tool_results.append(("_llm_error", f"LLM call failed: {e}"))
                     # Record this round and continue
                     completed_rounds += 1
                     llm_call_duration = time.monotonic() - round_start_time
-                    self._record_round_metrics(round_metrics_list, completed_rounds, llm_call_duration, round_tool_calls, round_errors)
+                    self._record_round_metrics(round_metrics_list, completed_rounds, llm_call_duration, round_tool_calls, round_errors, tracker=tracker, cache=cache)
                     continue
 
                 llm_call_duration = time.monotonic() - round_start_time
+                if health_tracker and model:
+                    health_tracker.record_llm_call(model, success=True, elapsed=llm_call_duration)
+                if model:
+                    timeout_mgr.observe(model, "responses", llm_call_duration)
 
                 # Save response ID for next round (maintains conversation state)
                 previous_response_id = response["id"]
                 log_info(f"Response ID: {previous_response_id}")
+
+                # OPP-39: Add response size to cumulative token estimate
+                cumulative_tokens += self._estimate_tokens(response)
 
                 # Check for incomplete response (truncation)
                 status = response.get("status")
                 if status == "incomplete":
                     incomplete_reason = response.get("incomplete_details", {}).get("reason", "unknown")
                     log_error(f"Response incomplete: {incomplete_reason}")
+                    # OPP-39: Incomplete response suggests context pressure — boost estimate
+                    cumulative_tokens += effective_window // 2
 
                 # Process output array (not choices - different format!)
                 output = response.get("output", [])
@@ -925,9 +1119,13 @@ Continue with the task based on these results."""
                     log_info(f"LLM requested {len(function_calls)} tool call(s)")
 
                     if parallel_tools and len(function_calls) > 1:
-                        pending_tool_results = await self._execute_tools_parallel(dispatcher, function_calls)
+                        pending_tool_results = await self._execute_tools_parallel(dispatcher, function_calls, guard=guard, tracker=tracker, cache=cache, health_tracker=health_tracker, model=model or "")
                     else:
-                        pending_tool_results = await self._execute_tools_sequential(dispatcher, function_calls)
+                        pending_tool_results = await self._execute_tools_sequential(dispatcher, function_calls, guard=guard, tracker=tracker, cache=cache, health_tracker=health_tracker, model=model or "")
+
+                    # C-4: Check for orphaned tool calls after execution
+                    if tracker is not None:
+                        tracker.check_orphans()
 
                     # Track tool call metrics (after execution)
                     for tc_name, tc_result in pending_tool_results:
@@ -943,7 +1141,7 @@ Continue with the task based on these results."""
 
                     # Record completed round metrics
                     completed_rounds += 1
-                    self._record_round_metrics(round_metrics_list, completed_rounds, llm_call_duration, round_tool_calls, round_errors)
+                    self._record_round_metrics(round_metrics_list, completed_rounds, llm_call_duration, round_tool_calls, round_errors, tracker=tracker, cache=cache)
 
                     # Check abort threshold after tool execution
                     if self.consecutive_error_count >= MAX_CONSECUTIVE_ERRORS:
@@ -957,7 +1155,21 @@ Continue with the task based on these results."""
 
                     # Record completed round metrics (no tool calls this round)
                     completed_rounds += 1
-                    self._record_round_metrics(round_metrics_list, completed_rounds, llm_call_duration, round_tool_calls, round_errors)
+                    self._record_round_metrics(round_metrics_list, completed_rounds, llm_call_duration, round_tool_calls, round_errors, tracker=tracker, cache=cache)
+
+                    # OPP-39: Post-response guard — check after response is accumulated
+                    if cumulative_tokens > token_threshold:
+                        log_error(
+                            f"Context guard triggered: cumulative token estimate {cumulative_tokens} "
+                            f"exceeds {CONTEXT_GUARD_THRESHOLD*100:.0f}% of context window "
+                            f"({token_threshold}/{effective_window})"
+                        )
+                        final_status = "context_overflow"
+                        return (
+                            f"Task aborted: context window nearly full "
+                            f"(~{cumulative_tokens} tokens estimated, "
+                            f"limit {token_threshold}/{effective_window})"
+                        )
 
                     final_status = "completed"
                     if text_content:
@@ -992,6 +1204,7 @@ Continue with the task based on these results."""
         max_tokens: int,
         model: Optional[str] = None,
         parallel_tools: bool = False,
+        context_window: Optional[int] = None,
     ) -> str:
         """Core autonomous loop using Anthropic /v1/messages API.
 
@@ -1014,105 +1227,236 @@ Continue with the task based on these results."""
         messages: list[dict[str, Any]] = [{"role": "user", "content": task}]
 
         self.consecutive_error_count = 0
+        # C-1: Pass tool schemas so guard can validate args before dispatch
+        tool_schemas = {
+            t["function"]["name"]: t["function"].get("parameters", {})
+            for t in openai_tools
+            if "function" in t
+        }
+        guard = ToolCallGuard(tool_schemas=tool_schemas)  # OPP-33 + OPP-44
+        tracker = ToolCallTracker()  # Orphan detection per loop execution (OPP-37)
+        cache = ToolResultCache()    # Tool result cache per loop execution (OPP-40)
+        health_tracker = ModelHealthTracker()  # Per-model error budget (OPP-45)
+        timeout_mgr = AdaptiveTimeoutManager()  # Adaptive timeout (OPP-46)
 
-        for round_num in range(max_rounds):
-            log_info(f"\n--- Anthropic Round {round_num + 1}/{max_rounds} ---")
+        # --- F-1: Metrics tracking initialisation (mirrors _autonomous_loop) ---
+        self.last_loop_metrics = None
+        loop_start_time = time.monotonic()
+        total_error_count = 0
+        completed_rounds = 0
+        round_metrics_list: list[Any] = []
+        final_status = "max_rounds"
+        cumulative_tokens = 0  # G-2: Running counter — never decreases after message trimming
 
+        try:
+            for round_num in range(max_rounds):
+                log_info(f"\n--- Anthropic Round {round_num + 1}/{max_rounds} ---")
+
+                round_start_time = time.monotonic()
+                round_tool_calls: list[dict[str, Any]] = []
+                round_errors = 0
+
+                # H-5: Advisory health check before Anthropic LLM call
+                if health_tracker and model:
+                    model_status = health_tracker.check_health(model)
+                    if model_status != "active":
+                        log_info(f"Model '{model}' health: {model_status} (advisory only, continuing)")
+
+                adaptive_timeout = timeout_mgr.get_timeout(model, "anthropic", DEFAULT_LLM_TIMEOUT) if timeout_mgr and model else DEFAULT_LLM_TIMEOUT
+
+                # OPP-39: Context guard — prevent context window overflow
+                effective_window = context_window if context_window is not None else DEFAULT_CONTEXT_WINDOW
+                token_threshold = int(CONTEXT_GUARD_THRESHOLD * effective_window)
+                # G-2: Accumulate round estimate like responses loop (line 1006)
+                # Estimate tokens for this round: system prompt + tools + current messages
+                round_estimate = self._estimate_tokens(messages) + self._estimate_tokens(anthropic_tools or [])
+                cumulative_tokens = cumulative_tokens + round_estimate
+                if cumulative_tokens > token_threshold:
+                    log_error(
+                        f"Anthropic context guard triggered: ~{cumulative_tokens} tokens "
+                        f"exceeds {CONTEXT_GUARD_THRESHOLD*100:.0f}% of context window "
+                        f"({token_threshold}/{effective_window})"
+                    )
+                    final_status = "context_overflow"
+                    self.last_loop_metrics = LoopMetrics(
+                        total_rounds=completed_rounds, total_duration_seconds=time.monotonic() - loop_start_time,
+                        total_tool_calls=sum(len(rm.tool_calls) for rm in round_metrics_list),
+                        total_errors=total_error_count, final_status=final_status, rounds=round_metrics_list,
+                    )
+                    return (
+                        f"Task aborted: context window nearly full "
+                        f"(~{cumulative_tokens} tokens estimated, "
+                        f"limit {token_threshold}/{effective_window})"
+                    )
+
+                try:
+                    response = await asyncio.to_thread(
+                        self.llm.anthropic_messages,
+                        messages=messages,
+                        system=ANTHROPIC_AUTONOMOUS_SYSTEM_TEMPLATE,
+                        max_tokens=max_tokens,
+                        tools=anthropic_tools if anthropic_tools else None,
+                        model=model,
+                        timeout=adaptive_timeout,
+                    )
+                except Exception as e:
+                    self.consecutive_error_count += 1
+                    total_error_count += 1
+                    round_errors += 1
+                    if health_tracker and model:
+                        health_tracker.record_llm_call(model, success=False, elapsed=time.monotonic() - round_start_time)
+                    log_error(
+                        f"Anthropic LLM call failed (consecutive: {self.consecutive_error_count}): {e}"
+                    )
+                    if self.consecutive_error_count >= MAX_CONSECUTIVE_ERRORS:
+                        final_status = "aborted"
+                        completed_rounds += 1
+                        llm_call_duration = time.monotonic() - round_start_time
+                        self._record_round_metrics(round_metrics_list, completed_rounds, llm_call_duration, round_tool_calls, round_errors, tracker=tracker, cache=cache)
+                        self.last_loop_metrics = LoopMetrics(
+                            total_rounds=completed_rounds, total_duration_seconds=time.monotonic() - loop_start_time,
+                            total_tool_calls=sum(len(rm.tool_calls) for rm in round_metrics_list),
+                            total_errors=total_error_count, final_status=final_status, rounds=round_metrics_list,
+                        )
+                        return (
+                            f"Task aborted: {self.consecutive_error_count} consecutive errors. Last: {e}"
+                        )
+                    # Inject error hint only if it won't create consecutive user messages.
+                    # Anthropic API requires strictly alternating user/assistant roles.
+                    if messages and messages[-1].get("role") != "user":
+                        messages.append({
+                            "role": "user",
+                            "content": f"Previous LLM call failed: {e}. Please try again.",
+                        })
+                    # Record round and continue
+                    completed_rounds += 1
+                    llm_call_duration = time.monotonic() - round_start_time
+                    self._record_round_metrics(round_metrics_list, completed_rounds, llm_call_duration, round_tool_calls, round_errors, tracker=tracker, cache=cache)
+                    continue
+
+                # Reset error count on success
+                self.consecutive_error_count = 0
+                llm_elapsed = time.monotonic() - round_start_time
+                if health_tracker and model:
+                    health_tracker.record_llm_call(model, success=True, elapsed=llm_elapsed)
+                if model:
+                    timeout_mgr.observe(model, "anthropic", llm_elapsed)
+
+                stop_reason = response.get("stop_reason", "")
+                log_info(f"stop_reason: {stop_reason}")
+
+                # Extract tool calls from Anthropic response
+                tool_calls = FormatAdapter.extract_anthropic_tool_calls(response)
+
+                if tool_calls:
+                    log_info(f"LLM requested {len(tool_calls)} tool call(s)")
+
+                    # Append assistant response to conversation
+                    messages.append({"role": "assistant", "content": response.get("content", [])})
+
+                    # Convert Anthropic format to common format for shared dispatch
+                    common_fc_list = [
+                        {"name": tc["name"], "arguments": tc.get("input", {})}
+                        for tc in tool_calls
+                    ]
+
+                    # Execute through shared dispatch path (same as /v1/responses)
+                    results = await self._execute_tools_sequential(dispatcher, common_fc_list, guard=guard, tracker=tracker, cache=cache, health_tracker=health_tracker, model=model or "")
+
+                    # C-4: Check for orphaned tool calls after execution
+                    if tracker is not None:
+                        tracker.check_orphans()
+
+                    # F-1: Track tool call metrics
+                    for tc_name, tc_result in results:
+                        is_error = "error" in str(tc_result).lower()[:20]
+                        round_tool_calls.append({
+                            "name": tc_name,
+                            "duration_seconds": 0.0,
+                            "success": not is_error,
+                        })
+                        if is_error:
+                            round_errors += 1
+                            total_error_count += 1
+
+                    # Record completed round metrics
+                    completed_rounds += 1
+                    self._record_round_metrics(round_metrics_list, completed_rounds, llm_elapsed, round_tool_calls, round_errors, tracker=tracker, cache=cache)
+
+                    # Build Anthropic tool result messages with tool_use_ids
+                    for tc, (_tc_name, tool_result) in zip(tool_calls, results):
+                        tool_result_msg = FormatAdapter.build_anthropic_tool_result(
+                            tool_use_id=tc["id"],
+                            content=tool_result,
+                            is_error=str(tool_result).startswith("Error:"),
+                        )
+                        messages.append(tool_result_msg)
+
+                    # Trim message history to prevent unbounded memory growth.
+                    # Keep first message (user task) + last (limit-1) messages.
+                    if len(messages) > MAX_ANTHROPIC_LOOP_MESSAGES:
+                        messages = [messages[0]] + messages[-(MAX_ANTHROPIC_LOOP_MESSAGES - 1):]
+                        log_info(f"Trimmed messages to {len(messages)} (window={MAX_ANTHROPIC_LOOP_MESSAGES})")
+
+                    # Check abort threshold after tool execution
+                    if self.consecutive_error_count >= MAX_CONSECUTIVE_ERRORS:
+                        final_status = "aborted"
+                        self.last_loop_metrics = LoopMetrics(
+                            total_rounds=completed_rounds, total_duration_seconds=time.monotonic() - loop_start_time,
+                            total_tool_calls=sum(len(rm.tool_calls) for rm in round_metrics_list),
+                            total_errors=total_error_count, final_status=final_status, rounds=round_metrics_list,
+                        )
+                        return (
+                            f"Task aborted: {self.consecutive_error_count} consecutive errors. "
+                            "Last batch had failures."
+                        )
+
+                else:
+                    # No tool calls — extract text content as final answer
+                    log_info("Anthropic LLM provided final answer")
+                    text_content = None
+                    for block in response.get("content", []):
+                        if block.get("type") == "text":
+                            text_content = block.get("text", "")
+                            log_info(f"LLM text: {text_content[:100]}...")
+                            break
+
+                    # F-1: Record final round metrics
+                    completed_rounds += 1
+                    self._record_round_metrics(round_metrics_list, completed_rounds, llm_elapsed, round_tool_calls, round_errors, tracker=tracker, cache=cache)
+                    final_status = "completed"
+                    self.last_loop_metrics = LoopMetrics(
+                        total_rounds=completed_rounds, total_duration_seconds=time.monotonic() - loop_start_time,
+                        total_tool_calls=sum(len(rm.tool_calls) for rm in round_metrics_list),
+                        total_errors=total_error_count, final_status=final_status, rounds=round_metrics_list,
+                    )
+
+                    if text_content:
+                        return text_content
+                    return "No content in response"
+
+            # F-1: Record metrics on max_rounds exhaustion
+            self.last_loop_metrics = LoopMetrics(
+                total_rounds=completed_rounds, total_duration_seconds=time.monotonic() - loop_start_time,
+                total_tool_calls=sum(len(rm.tool_calls) for rm in round_metrics_list),
+                total_errors=total_error_count, final_status=final_status, rounds=round_metrics_list,
+            )
+            return "Task incomplete: Maximum rounds reached"
+
+        finally:
+            # G-1: Always set last_loop_metrics regardless of how the loop exited.
+            # Wrap in try/except so a metrics bug can NEVER break the caller.
             try:
-                response = await asyncio.to_thread(
-                    self.llm.anthropic_messages,
-                    messages=messages,
-                    system=ANTHROPIC_AUTONOMOUS_SYSTEM_TEMPLATE,
-                    max_tokens=max_tokens,
-                    tools=anthropic_tools if anthropic_tools else None,
-                    model=model,
+                self.last_loop_metrics = LoopMetrics(
+                    total_rounds=completed_rounds,
+                    total_duration_seconds=time.monotonic() - loop_start_time,
+                    total_tool_calls=sum(len(rm.tool_calls) for rm in round_metrics_list),
+                    total_errors=total_error_count,
+                    final_status=final_status,
+                    rounds=round_metrics_list,
                 )
-            except Exception as e:
-                self.consecutive_error_count += 1
-                log_error(
-                    f"Anthropic LLM call failed (consecutive: {self.consecutive_error_count}): {e}"
-                )
-                if self.consecutive_error_count >= MAX_CONSECUTIVE_ERRORS:
-                    return (
-                        f"Task aborted: {self.consecutive_error_count} consecutive errors. Last: {e}"
-                    )
-                # Inject error hint only if it won't create consecutive user messages.
-                # Anthropic API requires strictly alternating user/assistant roles.
-                if messages and messages[-1].get("role") != "user":
-                    messages.append({
-                        "role": "user",
-                        "content": f"Previous LLM call failed: {e}. Please try again.",
-                    })
-                # Otherwise just retry with existing context (error is already logged)
-                continue
-
-            # Reset error count on success
-            self.consecutive_error_count = 0
-
-            stop_reason = response.get("stop_reason", "")
-            log_info(f"stop_reason: {stop_reason}")
-
-            # Extract tool calls from Anthropic response
-            tool_calls = FormatAdapter.extract_anthropic_tool_calls(response)
-
-            if tool_calls:
-                log_info(f"LLM requested {len(tool_calls)} tool call(s)")
-
-                # Append assistant response to conversation
-                messages.append({"role": "assistant", "content": response.get("content", [])})
-
-                # Execute each tool and collect results
-                for tc in tool_calls:
-                    tc_name = tc["name"]
-                    tc_input = tc.get("input", {})
-                    tc_id = tc["id"]
-
-                    log_info(f"Executing {tc_name}")
-                    try:
-                        _, tool_result = await dispatcher.dispatch(tc_name, tc_input)
-                        self.consecutive_error_count = 0
-                        log_info(f"Tool result: {str(tool_result)[:200]}...")
-                    except Exception as e:
-                        tool_result = f"Error: {e}"
-                        log_error(f"Tool execution failed: {e}")
-                        self.consecutive_error_count += 1
-
-                    # Inject tool result back into messages using Anthropic format
-                    tool_result_msg = FormatAdapter.build_anthropic_tool_result(
-                        tool_use_id=tc_id,
-                        content=tool_result,
-                        is_error=str(tool_result).startswith("Error:"),
-                    )
-                    messages.append(tool_result_msg)
-
-                # Trim message history to prevent unbounded memory growth.
-                # Keep first message (user task) + last (limit-1) messages.
-                if len(messages) > MAX_ANTHROPIC_LOOP_MESSAGES:
-                    messages = [messages[0]] + messages[-(MAX_ANTHROPIC_LOOP_MESSAGES - 1):]
-                    log_info(f"Trimmed messages to {len(messages)} (window={MAX_ANTHROPIC_LOOP_MESSAGES})")
-
-                # Check abort threshold after tool execution
-                if self.consecutive_error_count >= MAX_CONSECUTIVE_ERRORS:
-                    return (
-                        f"Task aborted: {self.consecutive_error_count} consecutive errors. "
-                        "Last batch had failures."
-                    )
-
-            else:
-                # No tool calls — extract text content as final answer
-                log_info("Anthropic LLM provided final answer")
-                text_content = None
-                for block in response.get("content", []):
-                    if block.get("type") == "text":
-                        text_content = block.get("text", "")
-                        log_info(f"LLM text: {text_content[:100]}...")
-                        break
-
-                if text_content:
-                    return text_content
-                return "No content in response"
-
-        return "Task incomplete: Maximum rounds reached"
+            except Exception:  # noqa: S110 — metrics must never break the autonomous loop
+                pass
 
     async def _run_autonomous_dispatch(
         self,
@@ -1124,6 +1468,7 @@ Continue with the task based on these results."""
         model: Optional[str] = None,
         parallel_tools: bool = False,
         api_format: str = DEFAULT_AUTONOMOUS_FORMAT,
+        context_window: Optional[int] = None,
     ) -> str:
         """Dispatch to the correct autonomous loop based on api_format.
 
@@ -1149,6 +1494,7 @@ Continue with the task based on these results."""
                 max_tokens=max_tokens,
                 model=model,
                 parallel_tools=parallel_tools,
+                context_window=context_window,
             )
         return await self._autonomous_loop(
             dispatcher=dispatcher,
@@ -1158,6 +1504,7 @@ Continue with the task based on these results."""
             max_tokens=max_tokens,
             model=model,
             parallel_tools=parallel_tools,
+            context_window=context_window,
         )
 
 

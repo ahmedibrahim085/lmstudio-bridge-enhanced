@@ -12,9 +12,9 @@
 | Tests | ~1969 passed, 0 failures |
 | Coverage | **91%+** |
 | Coverage target | **80% minimum / 89% goal (exceeded)** |
-| VERSION | 5.0.0 (in config/constants/version.py) |
+| VERSION | 5.1.0 (in config/constants/version.py) |
 | Completed rounds | Phase 1, 1.5, Round A-D, Error Audit, Code Quality, v5.0.0 (Pre-flight + Phase A + Phase B + Phase C), Log Analysis (4 rounds) |
-| Next | Round G Phase 2: OPP-32 (schema coercion), OPP-39 (context guard), OPP-43 (poll limiter) |
+| Next | Round G COMPLETE — all OPPs done. VERSION 5.1.0. |
 
 ---
 
@@ -190,7 +190,7 @@ Log Analysis ──────────┘ DONE (4-round deep analysis)
   Source: 188K-line LM Studio server log
   31 issues → 19 OPPs proposed (OPP-32 to OPP-50)
                         │
-Round G ───────────────┘ PROPOSED (10 active OPPs after root cause analysis)
+Round G ───────────────┘ DONE (10 active OPPs after root cause analysis)
   Phase 1: OPP-38 ────→ kill "default" cascade (highest ROI)
   Phase 2: OPP-39 ═══╗ foundations (parallel)
            OPP-32 ═══╣
@@ -406,7 +406,7 @@ These are not individual OPPs — they are **synergy effects** from combining mu
 
 ---
 
-## Round G — Log Analysis OPPs (PROPOSED)
+## Round G — Log Analysis OPPs (DONE)
 
 > Source: `docs/LOG_ANALYSIS_2026-03-02.md` — 4-round deep analysis of 188K-line LM Studio server log
 > 31 issues found (8 CRITICAL, 12 HIGH, 8 MEDIUM, 3 LOW) → 19 raw OPPs → **10 actionable** after root cause analysis
@@ -419,10 +419,10 @@ These are not individual OPPs — they are **synergy effects** from combining mu
 
 | Step | OPP | Name | Type | Fixes | Effort | Files |
 |------|-----|------|------|-------|--------|-------|
-| G-1 | OPP-32 | Schema-Aware Type Coercion | EVOLUTION | 11/13 WARNs, 15 orphans | MEDIUM | `mcp_client/type_coercion.py` |
+| G-1 | OPP-32 | Schema-Aware Type Coercion | EVOLUTION | 11/13 WARNs, 15 orphans | MEDIUM | ✅ **DONE** — 2 commits, 22 tests |
 | G-2 | OPP-38 | Fix "model: default" Fallback | BUGFIX | 167 ERRORs, 135 rejected requests | LOW | ✅ **DONE** — 6 commits, 22 tests |
-| G-3 | OPP-39 | Context Window Guard | NEW | 282K wasted tokens (3 × 94K overflow) | MEDIUM | `tools/dynamic_autonomous.py` |
-| G-4 | OPP-43 | Poll Rate Limiter (backoff + idle suspension) | NEW | 11,613 polls (85% of events), 789/min peak | MEDIUM | `utils/lms_helper.py`, `llm/llm_client.py` |
+| G-3 | OPP-39 | Context Window Guard | NEW | 282K wasted tokens (3 × 94K overflow) | MEDIUM | ✅ **DONE** — 2 commits, 20 tests |
+| G-4 | OPP-43 | Poll Rate Limiter (JIT memoization) | DONE | 11,613 polls (85% of events), 789/min peak | MEDIUM | ✅ **DONE** — 2 commits, 21 tests, 60s JIT guard TTL |
 
 ### Priority 1 (High — Reliability / Efficiency)
 

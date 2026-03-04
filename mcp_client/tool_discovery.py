@@ -64,6 +64,20 @@ class ToolDiscovery:
         tools = await self.discover_tools()
         return [tool.name for tool in tools]
 
+    async def get_tool_schema(self, name: str) -> Optional[Dict[str, Any]]:
+        """Get the inputSchema for a specific tool by name.
+
+        Args:
+            name: Tool name
+
+        Returns:
+            inputSchema dict or None if tool not found
+        """
+        tool = await self.get_tool_by_name(name)
+        if tool is not None:
+            return tool.inputSchema
+        return None
+
     def clear_cache(self) -> None:
         """Clear the tools cache."""
         self._tools_cache = None

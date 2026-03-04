@@ -33,6 +33,8 @@ from .thinking import *
 from .thinking import __all__ as _thinking_all
 from .timeouts import *
 from .timeouts import __all__ as _timeouts_all
+from .tool_config import *
+from .tool_config import __all__ as _tool_config_all
 from .version import *
 
 # Build package-level __all__ from all domain modules
@@ -42,5 +44,5 @@ __all__ = (
     _version_all + _server_all + _api_all + _timeouts_all + _models_all
     + _errors_all + _limits_all + _sampling_all + _streaming_all
     + _thinking_all + _security_all + _images_all + _mcp_all
-    + _selection_all + _testing_all
+    + _selection_all + _testing_all + _tool_config_all
 )

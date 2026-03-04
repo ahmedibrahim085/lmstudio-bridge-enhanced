@@ -21,7 +21,7 @@
 | v5.0.0 Phase B (Features) | OPP-21, 24, 27, 28, 29, 31 | **DONE** | v5.0.0 | ~100 |
 | v5.0.0 Phase C (Major) | OPP-19, 25 | **DONE** | v5.0.0 | ~60 |
 | Log Analysis | 31 issues (4 rounds), 19 raw → 10 active OPPs | **ANALYSIS DONE** | — | — |
-| Round G (Log Analysis OPPs) | 10 active + 1 experiment + 1 deferred | **PROPOSED** | v5.1.0 | ~TBD |
+| Round G (Log Analysis OPPs) | 10 active + 1 experiment + 1 deferred | **DONE** | v5.1.0 | ~TBD |
 
 ---
 
@@ -314,7 +314,7 @@ Final completed state: ~1969 tests, 91% coverage, VERSION 5.0.0.
 
 ---
 
-## Round G — Log Analysis OPPs (PROPOSED)
+## Round G — Log Analysis OPPs (DONE)
 
 > Source: 4-round deep analysis of 188K-line LM Studio server log (`docs/LOG_ANALYSIS_2026-03-02.md`)
 > 31 issues found → 19 raw OPPs → **10 active** after root cause analysis (4 merged, 3 removed, 1 deferred, 1 experiment)
@@ -325,24 +325,24 @@ Final completed state: ~1969 tests, 91% coverage, VERSION 5.0.0.
 | Rank | OPP | Name | R | I | C | E | RICE | Priority | Status |
 |------|-----|------|---|---|---|---|------|----------|--------|
 | 1 | OPP-38 | Fix "model: default" Fallback | 10 | 10 | 1.0 | 0.5 | **200** | P0 | **DONE** |
-| 2 | OPP-32 | Schema-Aware Type Coercion | 8 | 9 | 0.9 | 2 | **32.4** | P0 | PROPOSED |
-| 3 | OPP-39 | Context Window Guard | 7 | 9 | 0.8 | 2 | **25.2** | P0 | PROPOSED |
-| 4 | OPP-40 | Tool Result Caching (+OPP-47) | 7 | 8 | 0.9 | 2 | **25.2** | P1 | PROPOSED |
-| 5 | OPP-37 | Orphan Detection with Fast-Fail | 6 | 8 | 0.8 | 2 | **19.2** | P1 | PROPOSED |
-| 6 | OPP-33 | Pre-Dispatch Tool Argument Validation | 6 | 7 | 0.9 | 1 | **37.8** | P1 | PROPOSED |
+| 2 | OPP-32 | Schema-Aware Type Coercion | 8 | 9 | 0.9 | 2 | **32.4** | P0 | **DONE** |
+| 3 | OPP-39 | Context Window Guard | 7 | 9 | 0.8 | 2 | **25.2** | P0 | **DONE** |
+| 4 | OPP-40 | Tool Result Caching (+OPP-47) | 7 | 8 | 0.9 | 2 | **25.2** | P1 | **DONE** |
+| 5 | OPP-37 | Orphan Detection with Fast-Fail | 6 | 8 | 0.8 | 2 | **19.2** | P1 | **DONE** |
+| 6 | OPP-33 | Pre-Dispatch Tool Argument Validation | 6 | 7 | 0.9 | 1 | **37.8** | P1 | **DONE** |
 | ~~7~~ | ~~OPP-34~~ | ~~Model Tool-Calling Error Budget~~ | — | — | — | — | — | — | **MERGED → OPP-45** |
 | ~~8~~ | ~~OPP-35~~ | ~~LMSAuthenticator getModelInfo Caching~~ | — | — | — | — | — | — | **REMOVED** (LM Studio internal, our cache already works) |
 | ~~9~~ | ~~OPP-36~~ | ~~Logprobs Response Bloat Suppression~~ | — | — | — | — | — | — | **REMOVED** (server-side issue, bridge never requests logprobs) |
 | ~~10~~ | ~~OPP-41~~ | ~~Conversation Chain Health Monitoring~~ | — | — | — | — | — | — | **REMOVED** (short chains = efficient, not a bug) |
 | 11 | OPP-42 | Token Budget Monitoring & Alerting | 4 | 5 | 0.8 | 1 | **16** | P2 | **DEFERRED** (re-measure after OPP-39) |
-| 12 | OPP-43 | Poll Rate Limiter (backoff + idle) | 9 | 9 | 0.9 | 2 | **36.5** | P0 | PROPOSED |
-| 13 | OPP-44 | Tool Call Circuit Breaker (+OPP-48) | 7 | 8 | 0.8 | 2 | **22.4** | P1 | PROPOSED |
-| 14 | OPP-45 | Per-Model Error Budget + Auto-Demotion (+OPP-34) | 7 | 8 | 0.8 | 2 | **22.4** | P1 | PROPOSED |
-| 15 | OPP-46 | Adaptive Timeout — Both Phases (+OPP-49) | 6 | 7 | 0.8 | 2 | **16.8** | P1 | PROPOSED |
+| 12 | OPP-43 | Poll Rate Limiter (JIT memoization) | 9 | 9 | 0.9 | 2 | **36.5** | P0 | **DONE** |
+| 13 | OPP-44 | Tool Call Circuit Breaker (+OPP-48) | 7 | 8 | 0.8 | 2 | **22.4** | P1 | **DONE** |
+| 14 | OPP-45 | Per-Model Error Budget + Auto-Demotion (+OPP-34) | 7 | 8 | 0.8 | 2 | **22.4** | P1 | **DONE** |
+| 15 | OPP-46 | Adaptive Timeout — Both Phases (+OPP-49) | 6 | 7 | 0.8 | 2 | **16.8** | P1 | **DONE** |
 | ~~16~~ | ~~OPP-47~~ | ~~Tool Name Normalization Layer~~ | — | — | — | — | — | — | **MERGED → OPP-40** |
 | ~~17~~ | ~~OPP-48~~ | ~~Truncated Tool Call Recovery~~ | — | — | — | — | — | — | **MERGED → OPP-44** |
 | ~~18~~ | ~~OPP-49~~ | ~~Generation-Aware Timeout~~ | — | — | — | — | — | — | **MERGED → OPP-46** |
-| 19 | OPP-50 | Tool Schema Dedup Experiment | 8 | 5 | 0.9 | 2 | **18** | P1 | EXPERIMENT |
+| 19 | OPP-50 | Tool Schema Dedup Experiment | 8 | 5 | 0.9 | 2 | **18** | P1 | **DONE** |
 
 ### Key Findings Driving These OPPs
 

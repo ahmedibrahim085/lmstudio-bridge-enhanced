@@ -39,9 +39,10 @@ DOMAIN_MODULES = [
     "mcp",
     "selection",
     "testing",
+    "tool_config",
 ]
 
-EXPECTED_COUNT = 240
+EXPECTED_COUNT = 259
 
 
 def _get_domain_all(module_name: str) -> list[str]:
@@ -188,7 +189,7 @@ class TestConfigPackageReexport:
         from config import VERSION
 
         assert isinstance(VERSION, str)
-        assert VERSION == "5.0.0"
+        assert VERSION == "5.1.0"
 
 
 # ---------------------------------------------------------------------------

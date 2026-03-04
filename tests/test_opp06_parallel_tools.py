@@ -490,7 +490,7 @@ class TestParallelLoopIntegration(unittest.TestCase):
 
         parallel_called = {"called": False}
 
-        async def spy_parallel(dispatcher, fc_list):  # noqa: ARG001
+        async def spy_parallel(dispatcher, fc_list, **kwargs):  # noqa: ARG001
             parallel_called["called"] = True
             return [(fc["name"], "ok") for fc in fc_list]
 
@@ -534,7 +534,7 @@ class TestParallelLoopIntegration(unittest.TestCase):
 
         sequential_called = {"called": False}
 
-        async def spy_sequential(dispatcher, fc_list):  # noqa: ARG001
+        async def spy_sequential(dispatcher, fc_list, **kwargs):  # noqa: ARG001
             sequential_called["called"] = True
             return [(fc["name"], "ok") for fc in fc_list]
 

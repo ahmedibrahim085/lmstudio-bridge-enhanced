@@ -20,9 +20,12 @@ Configuration:
     This allows adding custom numeric parameters without code changes.
 """
 
+import json
 import logging
 import os
 from typing import Any, Dict, Set
+
+from config.constants.tool_config import SCHEMA_COERCION_ENABLED
 
 logger = logging.getLogger(__name__)
 
@@ -108,7 +111,68 @@ def coerce_tool_arg_types(args: Dict[str, Any]) -> Dict[str, Any]:
     return coerced
 
 
-async def safe_call_tool(session, tool_name: str, arguments: Dict[str, Any]):
+def coerce_with_schema(args: Dict[str, Any], schema: Dict[str, Any] | None) -> Dict[str, Any]:
+    """Coerce tool arguments using MCP tool schema for array/object types.
+
+    Only coerces string values when schema explicitly declares them as
+    "type": "array" or "type": "object". This prevents blind JSON parsing.
+
+    Args:
+        args: Tool arguments dictionary
+        schema: MCP tool inputSchema dict, or None
+
+    Returns:
+        New dict with coerced values where applicable (immutable pattern)
+    """
+    if schema is None or "properties" not in schema:
+        return args
+
+    if not SCHEMA_COERCION_ENABLED:
+        return args
+
+    coerced: Dict[str, Any] = {}
+    schema_properties = schema["properties"]
+
+    for key, value in args.items():
+        if key in schema_properties:
+            expected_type = schema_properties[key].get("type")
+            if (
+                expected_type in ("array", "object")
+                and isinstance(value, str)
+                and value  # non-empty string
+            ):
+                try:
+                    parsed = json.loads(value)
+                    if expected_type == "array" and isinstance(parsed, list):
+                        coerced[key] = parsed
+                        logger.debug(
+                            f"Schema-coerced '{key}' from JSON string to list"
+                        )
+                    elif expected_type == "object" and isinstance(parsed, dict):
+                        coerced[key] = parsed
+                        logger.debug(
+                            f"Schema-coerced '{key}' from JSON string to dict"
+                        )
+                    else:
+                        # Type mismatch: parsed type doesn't match schema type
+                        coerced[key] = value
+                except (json.JSONDecodeError, ValueError):
+                    # Invalid JSON: keep original
+                    coerced[key] = value
+            else:
+                coerced[key] = value
+        else:
+            coerced[key] = value
+
+    return coerced
+
+
+async def safe_call_tool(
+    session,
+    tool_name: str,
+    arguments: Dict[str, Any],
+    tool_schema: Dict[str, Any] | None = None,
+):
     """Wrapper for session.call_tool that always applies type coercion.
 
     This is the SINGLE ENTRY POINT for all tool calls. Using this wrapper
@@ -118,6 +182,7 @@ async def safe_call_tool(session, tool_name: str, arguments: Dict[str, Any]):
         session: MCP ClientSession with call_tool method
         tool_name: Name of the tool to call
         arguments: Tool arguments (will be coerced)
+        tool_schema: Optional MCP tool inputSchema for schema-aware coercion
 
     Returns:
         CallToolResult from the MCP server
@@ -127,7 +192,9 @@ async def safe_call_tool(session, tool_name: str, arguments: Dict[str, Any]):
         # "head": "10" is automatically coerced to "head": 10
     """
     coerced_args = coerce_tool_arg_types(arguments)
+    if tool_schema is not None:
+        coerced_args = coerce_with_schema(coerced_args, tool_schema)
     return await session.call_tool(tool_name, coerced_args)
 
 
-__all__ = ['coerce_tool_arg_types', 'safe_call_tool', 'NUMERIC_PARAMS']
+__all__ = ['coerce_tool_arg_types', 'coerce_with_schema', 'safe_call_tool', 'NUMERIC_PARAMS']

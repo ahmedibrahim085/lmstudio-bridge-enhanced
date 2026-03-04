@@ -42,6 +42,8 @@ __all__ = [
     "DEFAULT_AUTONOMOUS_FORMAT",
     "MAX_ANTHROPIC_LOOP_MESSAGES",
     "ANTHROPIC_AUTONOMOUS_SYSTEM_TEMPLATE",
+    "CONTEXT_GUARD_THRESHOLD",
+    "DEFAULT_CONTEXT_WINDOW",
     "HTTP_OK",
     "HTTP_BAD_REQUEST",
     "HTTP_NOT_FOUND",
@@ -103,6 +105,11 @@ SUPPORTED_API_FORMATS = [FORMAT_OPENAI, FORMAT_ANTHROPIC, FORMAT_RESPONSES]
 # OPP-17: Dual-format autonomous loop
 DEFAULT_AUTONOMOUS_FORMAT = FORMAT_RESPONSES  # Current behavior preserved
 MAX_ANTHROPIC_LOOP_MESSAGES = 100
+
+# OPP-39: Context Window Guard — prevent context overflow
+CONTEXT_GUARD_THRESHOLD = 0.8  # Abort if cumulative tokens exceed 80% of context window
+DEFAULT_CONTEXT_WINDOW = 32768  # Default context window size when model info unavailable
+
 ANTHROPIC_AUTONOMOUS_SYSTEM_TEMPLATE = (
     "You are an autonomous agent with access to tools. "
     "Use the available tools to complete the task. "
