@@ -17,6 +17,9 @@ class RoundMetrics:
     llm_call_duration_seconds: float
     tool_calls: list[dict[str, Any]]  # [{name, duration_seconds, success}]
     error_count: int
+    orphan_count: int = 0
+    cache_hits: int = 0
+    cache_misses: int = 0
 
 
 @dataclass

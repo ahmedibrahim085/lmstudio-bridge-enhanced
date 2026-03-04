@@ -19,6 +19,7 @@ import asyncio
 import json
 import logging
 import time
+import uuid
 from contextlib import AsyncExitStack
 from typing import Any, Dict, List, Optional, Union
 
@@ -50,6 +51,8 @@ from mcp_client.executor import ToolExecutor
 from mcp_client.type_coercion import safe_call_tool
 from tools.loop_metrics import LoopMetrics, RoundMetrics
 from tools.tool_call_guard import ToolCallGuard
+from tools.tool_call_tracker import ToolCallTracker
+from tools.tool_result_cache import ToolResultCache
 from utils.custom_logging import log_error, log_info
 from utils.lms_helper import LMSHelper
 
@@ -653,7 +656,14 @@ Continue with the task based on these results."""
 
         return input_text
 
-    async def _execute_tools_sequential(self, dispatcher, fc_list, guard: ToolCallGuard | None = None):
+    async def _execute_tools_sequential(
+        self,
+        dispatcher,
+        fc_list,
+        guard: ToolCallGuard | None = None,
+        tracker: ToolCallTracker | None = None,
+        cache: ToolResultCache | None = None,
+    ):
         """Execute tools sequentially. Returns list of (name, result_text) tuples.
 
         Updates self.consecutive_error_count:
@@ -676,6 +686,15 @@ Continue with the task based on these results."""
                     self.consecutive_error_count += 1
                     continue
 
+            # Cache lookup (OPP-40) — skip dispatch on hit
+            if cache is not None:
+                cached_result = cache.get(fc_name, tool_args)
+                if cached_result is not None:
+                    log_info(f"Cache hit for '{fc_name}'")
+                    results.append((fc_name, cached_result))
+                    self.consecutive_error_count = 0
+                    continue
+
             # Pre-dispatch validation (OPP-33)
             if guard is not None:
                 validation_errors = guard.validate_args(fc_name, tool_args)
@@ -696,11 +715,21 @@ Continue with the task based on these results."""
 
             log_info(f"Executing {fc_name}")
 
+            # Orphan tracking: mark dispatched (OPP-37)
+            call_id = uuid.uuid4().hex[:8]
+            if tracker is not None:
+                tracker.mark_dispatched(call_id, fc_name)
+
             try:
                 display_name, tool_result = await dispatcher.dispatch(fc_name, tool_args)
                 self.consecutive_error_count = 0  # Reset on success
                 if guard is not None:
                     guard.record_success(fc_name)
+                if tracker is not None:
+                    tracker.mark_completed(call_id)
+                # Store successful result in cache (OPP-40)
+                if cache is not None:
+                    cache.put(fc_name, tool_args, tool_result)
                 log_info(f"Tool result: {str(tool_result)[:200]}...")
             except KeyError as e:
                 tool_result = f"Error: {e}"
@@ -708,18 +737,29 @@ Continue with the task based on these results."""
                 self.consecutive_error_count += 1
                 if guard is not None:
                     guard.record_failure(fc_name)
+                if tracker is not None:
+                    tracker.mark_orphaned(call_id)
             except Exception as e:
                 tool_result = f"Error: {e}"
                 log_error(f"Tool execution failed: {e}")
                 self.consecutive_error_count += 1
                 if guard is not None:
                     guard.record_failure(fc_name)
+                if tracker is not None:
+                    tracker.mark_orphaned(call_id)
 
             results.append((fc_name, tool_result))
 
         return results
 
-    async def _execute_tools_parallel(self, dispatcher, fc_list, guard: ToolCallGuard | None = None):
+    async def _execute_tools_parallel(
+        self,
+        dispatcher,
+        fc_list,
+        guard: ToolCallGuard | None = None,
+        tracker: ToolCallTracker | None = None,
+        cache: ToolResultCache | None = None,
+    ):
         """Execute tools in parallel using asyncio.gather(). Returns list of (name, result_text) tuples.
 
         Error counting (batch semantics):
@@ -740,6 +780,13 @@ Continue with the task based on these results."""
                     log_error(error_msg)
                     return fc_name, f"Error: {error_msg}", False
 
+            # Cache lookup (OPP-40) — skip dispatch on hit (tracker/guard not needed for cached calls)
+            if cache is not None:
+                cached_result = cache.get(fc_name, tool_args)
+                if cached_result is not None:
+                    log_info(f"Cache hit for '{fc_name}'")
+                    return fc_name, cached_result, True
+
             # Pre-dispatch validation (OPP-33)
             if guard is not None:
                 validation_errors = guard.validate_args(fc_name, tool_args)
@@ -754,20 +801,34 @@ Continue with the task based on these results."""
                     log_error(f"Circuit breaker blocked '{fc_name}': {reason}")
                     return fc_name, f"Error: {reason}", False
 
+            # Orphan tracking: mark dispatched (OPP-37)
+            call_id = uuid.uuid4().hex[:8]
+            if tracker is not None:
+                tracker.mark_dispatched(call_id, fc_name)
+
             try:
                 display_name, tool_result = await dispatcher.dispatch(fc_name, tool_args)
                 if guard is not None:
                     guard.record_success(fc_name)
+                if tracker is not None:
+                    tracker.mark_completed(call_id)
+                # Store successful result in cache (OPP-40)
+                if cache is not None:
+                    cache.put(fc_name, tool_args, tool_result)
                 log_info(f"Tool result: {str(tool_result)[:200]}...")
                 return fc_name, tool_result, True  # True = success
             except KeyError as e:
                 if guard is not None:
                     guard.record_failure(fc_name)
+                if tracker is not None:
+                    tracker.mark_orphaned(call_id)
                 log_error(str(e))
                 return fc_name, f"Error: {e}", False
             except Exception as e:
                 if guard is not None:
                     guard.record_failure(fc_name)
+                if tracker is not None:
+                    tracker.mark_orphaned(call_id)
                 log_error(f"Tool execution failed: {e}")
                 return fc_name, f"Error: {e}", False
 
@@ -865,6 +926,8 @@ Continue with the task based on these results."""
         pending_tool_results = []  # Track tool results to inject into next round
         self.consecutive_error_count = 0
         guard = ToolCallGuard()  # One guard instance per loop execution (OPP-33 + OPP-44)
+        tracker = ToolCallTracker()  # Orphan detection per loop execution (OPP-37)
+        cache = ToolResultCache()    # Tool result cache per loop execution (OPP-40)
 
         # --- OPP-07: Metrics tracking initialisation ---
         self.last_loop_metrics = None
@@ -971,9 +1034,9 @@ Continue with the task based on these results."""
                     log_info(f"LLM requested {len(function_calls)} tool call(s)")
 
                     if parallel_tools and len(function_calls) > 1:
-                        pending_tool_results = await self._execute_tools_parallel(dispatcher, function_calls, guard=guard)
+                        pending_tool_results = await self._execute_tools_parallel(dispatcher, function_calls, guard=guard, tracker=tracker, cache=cache)
                     else:
-                        pending_tool_results = await self._execute_tools_sequential(dispatcher, function_calls, guard=guard)
+                        pending_tool_results = await self._execute_tools_sequential(dispatcher, function_calls, guard=guard, tracker=tracker, cache=cache)
 
                     # Track tool call metrics (after execution)
                     for tc_name, tc_result in pending_tool_results:
@@ -1060,7 +1123,9 @@ Continue with the task based on these results."""
         messages: list[dict[str, Any]] = [{"role": "user", "content": task}]
 
         self.consecutive_error_count = 0
-        guard = ToolCallGuard()  # One guard instance per loop execution (OPP-33 + OPP-44)
+        guard = ToolCallGuard()    # One guard instance per loop execution (OPP-33 + OPP-44)
+        tracker = ToolCallTracker()  # Orphan detection per loop execution (OPP-37)
+        cache = ToolResultCache()    # Tool result cache per loop execution (OPP-40)
 
         for round_num in range(max_rounds):
             log_info(f"\n--- Anthropic Round {round_num + 1}/{max_rounds} ---")
@@ -1115,7 +1180,7 @@ Continue with the task based on these results."""
                 ]
 
                 # Execute through shared dispatch path (same as /v1/responses)
-                results = await self._execute_tools_sequential(dispatcher, common_fc_list, guard=guard)
+                results = await self._execute_tools_sequential(dispatcher, common_fc_list, guard=guard, tracker=tracker, cache=cache)
 
                 # Build Anthropic tool result messages with tool_use_ids
                 for tc, (fc_name, tool_result) in zip(tool_calls, results):
