@@ -19,6 +19,7 @@ import json
 import logging
 import threading
 import time
+from collections import OrderedDict
 from dataclasses import dataclass
 
 from config.constants.tool_config import (
@@ -55,7 +56,7 @@ class ToolResultCache:
     ) -> None:
         self._lock = threading.Lock()
         self._cache: dict[str, CacheEntry] = {}
-        self._insertion_order: list[str] = []  # Tracks order for LRU eviction
+        self._insertion_order: OrderedDict[str, None] = OrderedDict()  # O(1) LRU eviction
         self._ttl = ttl
         self._max_size = max_size
         self._allowlist = allowlist if allowlist is not None else TOOL_RESULT_CACHE_ALLOWLIST
@@ -90,15 +91,12 @@ class ToolResultCache:
             if time.monotonic() - entry.created_at >= self._ttl:
                 # Entry expired — evict it
                 self._cache.pop(key, None)
-                if key in self._insertion_order:
-                    self._insertion_order.remove(key)
+                self._insertion_order.pop(key, None)  # O(1)
                 self._misses += 1
                 return None
 
-            # Cache hit — refresh position in insertion order for LRU
-            if key in self._insertion_order:
-                self._insertion_order.remove(key)
-            self._insertion_order.append(key)
+            # Cache hit — move to end for LRU refresh (O(1))
+            self._insertion_order.move_to_end(key)
             self._hits += 1
             return entry.result
 
@@ -128,9 +126,9 @@ class ToolResultCache:
 
         key = self._make_key(normalized, args)
         with self._lock:
-            # Evict oldest entries until we have room
+            # Evict oldest entries until we have room (O(1) per eviction)
             while len(self._cache) >= self._max_size and self._insertion_order:
-                oldest_key = self._insertion_order.pop(0)
+                oldest_key, _ = self._insertion_order.popitem(last=False)
                 self._cache.pop(oldest_key, None)
 
             self._cache[key] = CacheEntry(
@@ -138,10 +136,9 @@ class ToolResultCache:
                 created_at=time.monotonic(),
                 tool_name=normalized,
             )
-            # Remove existing position to avoid duplicates, then append
-            if key in self._insertion_order:
-                self._insertion_order.remove(key)
-            self._insertion_order.append(key)
+            # Remove existing position to avoid duplicates, then add to end (O(1))
+            self._insertion_order.pop(key, None)
+            self._insertion_order[key] = None
 
     # ------------------------------------------------------------------
     # Properties
@@ -150,12 +147,14 @@ class ToolResultCache:
     @property
     def hits(self) -> int:
         """Total cache hits since creation."""
-        return self._hits
+        with self._lock:
+            return self._hits
 
     @property
     def misses(self) -> int:
         """Total cache misses since creation."""
-        return self._misses
+        with self._lock:
+            return self._misses
 
     # ------------------------------------------------------------------
     # Internal helpers
