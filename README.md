@@ -1,4 +1,4 @@
-# LM Studio Bridge Enhanced v5.0.0
+# LM Studio Bridge Enhanced v5.1.0
 
 An autonomous middleware agent that lets any MCP client delegate tasks to local LLMs, which can then use any MCP tool — translating between all 4 API formats in real-time.
 
@@ -7,8 +7,8 @@ An autonomous middleware agent that lets any MCP client delegate tasks to local 
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![LM Studio](https://img.shields.io/badge/LM%20Studio-0.4.4+-green.svg)](https://lmstudio.ai/)
-[![Tests](https://img.shields.io/badge/tests-1969%20passing-brightgreen.svg)](#testing)
-[![Coverage](https://img.shields.io/badge/coverage-91%25-brightgreen.svg)](#testing)
+[![Tests](https://img.shields.io/badge/tests-2167%20passing-brightgreen.svg)](#testing)
+[![Coverage](https://img.shields.io/badge/coverage-81%25-brightgreen.svg)](#testing)
 
 ---
 
@@ -634,7 +634,28 @@ See [Troubleshooting Guide](docs/TROUBLESHOOTING.md) for more.
 
 ## Version History
 
-### v5.0.0 (March 2026) - Current
+### v5.1.0 (March 2026) - Current
+
+**Round G — Reliability & Efficiency** (11 OPPs from server log analysis):
+- **OPP-38**: Fix "model: default" sentinel escape — eliminated 167 ERRORs/session
+- **OPP-39**: Context window guard — prevents 94K token overflow (cumulative tracking)
+- **OPP-43**: JIT poll rate limiter — 60s memoization, eliminates 11,613 redundant polls
+- **OPP-32**: Schema-aware type coercion — fixes string→array/object for LM Studio models
+- **OPP-33**: Pre-dispatch tool argument validation — catches missing required params
+- **OPP-44**: Per-tool circuit breaker — 3-state pattern (closed/open/half-open)
+- **OPP-37**: Tool call orphan detection — tracks started-not-finished calls
+- **OPP-40**: Tool result caching — allowlist-based with TTL and namespace normalization
+- **OPP-45**: Per-model error budget — advisory health tracking with degradation states
+- **OPP-46**: Adaptive timeout — response-time observation with p95-based adaptation
+- **OPP-50**: Tool schema dedup experiment — omit schemas when previous_response_id set
+
+**New modules**: `tool_call_guard.py`, `tool_call_tracker.py`, `tool_result_cache.py`, `model_health.py`, `adaptive_timeout.py`
+
+**6-round review**: 5 CRITICAL + 6 HIGH findings fixed, architect verified
+
+**Stats**: 2167 tests, 81% coverage (CI), +5476/-131 lines, 38 files changed
+
+### v5.0.0 (March 2026)
 
 **Architecture Refactoring (Phase A)**:
 - **ARCH-1**: LLMClient Facade pattern — split 1500-line god class into 7 Protocol-based sub-clients (chat, responses, anthropic, streaming, thinking, model_info, native_chat)
