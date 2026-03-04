@@ -49,6 +49,7 @@ from mcp_client.discovery import MCPDiscovery
 from mcp_client.executor import ToolExecutor
 from mcp_client.type_coercion import safe_call_tool
 from tools.loop_metrics import LoopMetrics, RoundMetrics
+from tools.tool_call_guard import ToolCallGuard
 from utils.custom_logging import log_error, log_info
 from utils.lms_helper import LMSHelper
 
@@ -652,7 +653,7 @@ Continue with the task based on these results."""
 
         return input_text
 
-    async def _execute_tools_sequential(self, dispatcher, fc_list):
+    async def _execute_tools_sequential(self, dispatcher, fc_list, guard: ToolCallGuard | None = None):
         """Execute tools sequentially. Returns list of (name, result_text) tuples.
 
         Updates self.consecutive_error_count:
@@ -675,26 +676,50 @@ Continue with the task based on these results."""
                     self.consecutive_error_count += 1
                     continue
 
+            # Pre-dispatch validation (OPP-33)
+            if guard is not None:
+                validation_errors = guard.validate_args(fc_name, tool_args)
+                if validation_errors:
+                    error_msg = f"Validation failed for '{fc_name}': {'; '.join(validation_errors)}"
+                    log_error(error_msg)
+                    results.append((fc_name, f"Error: {error_msg}"))
+                    self.consecutive_error_count += 1
+                    continue
+
+                # Circuit breaker check (OPP-44)
+                allowed, reason = guard.check_circuit(fc_name)
+                if not allowed:
+                    log_error(f"Circuit breaker blocked '{fc_name}': {reason}")
+                    results.append((fc_name, f"Error: {reason}"))
+                    self.consecutive_error_count += 1
+                    continue
+
             log_info(f"Executing {fc_name}")
 
             try:
                 display_name, tool_result = await dispatcher.dispatch(fc_name, tool_args)
                 self.consecutive_error_count = 0  # Reset on success
+                if guard is not None:
+                    guard.record_success(fc_name)
                 log_info(f"Tool result: {str(tool_result)[:200]}...")
             except KeyError as e:
                 tool_result = f"Error: {e}"
                 log_error(str(e))
                 self.consecutive_error_count += 1
+                if guard is not None:
+                    guard.record_failure(fc_name)
             except Exception as e:
                 tool_result = f"Error: {e}"
                 log_error(f"Tool execution failed: {e}")
                 self.consecutive_error_count += 1
+                if guard is not None:
+                    guard.record_failure(fc_name)
 
             results.append((fc_name, tool_result))
 
         return results
 
-    async def _execute_tools_parallel(self, dispatcher, fc_list):
+    async def _execute_tools_parallel(self, dispatcher, fc_list, guard: ToolCallGuard | None = None):
         """Execute tools in parallel using asyncio.gather(). Returns list of (name, result_text) tuples.
 
         Error counting (batch semantics):
@@ -715,14 +740,34 @@ Continue with the task based on these results."""
                     log_error(error_msg)
                     return fc_name, f"Error: {error_msg}", False
 
+            # Pre-dispatch validation (OPP-33)
+            if guard is not None:
+                validation_errors = guard.validate_args(fc_name, tool_args)
+                if validation_errors:
+                    error_msg = f"Validation failed for '{fc_name}': {'; '.join(validation_errors)}"
+                    log_error(error_msg)
+                    return fc_name, f"Error: {error_msg}", False
+
+                # Circuit breaker check (OPP-44)
+                allowed, reason = guard.check_circuit(fc_name)
+                if not allowed:
+                    log_error(f"Circuit breaker blocked '{fc_name}': {reason}")
+                    return fc_name, f"Error: {reason}", False
+
             try:
                 display_name, tool_result = await dispatcher.dispatch(fc_name, tool_args)
+                if guard is not None:
+                    guard.record_success(fc_name)
                 log_info(f"Tool result: {str(tool_result)[:200]}...")
                 return fc_name, tool_result, True  # True = success
             except KeyError as e:
+                if guard is not None:
+                    guard.record_failure(fc_name)
                 log_error(str(e))
                 return fc_name, f"Error: {e}", False
             except Exception as e:
+                if guard is not None:
+                    guard.record_failure(fc_name)
                 log_error(f"Tool execution failed: {e}")
                 return fc_name, f"Error: {e}", False
 
@@ -819,6 +864,7 @@ Continue with the task based on these results."""
         previous_response_id = None
         pending_tool_results = []  # Track tool results to inject into next round
         self.consecutive_error_count = 0
+        guard = ToolCallGuard()  # One guard instance per loop execution (OPP-33 + OPP-44)
 
         # --- OPP-07: Metrics tracking initialisation ---
         self.last_loop_metrics = None
@@ -925,9 +971,9 @@ Continue with the task based on these results."""
                     log_info(f"LLM requested {len(function_calls)} tool call(s)")
 
                     if parallel_tools and len(function_calls) > 1:
-                        pending_tool_results = await self._execute_tools_parallel(dispatcher, function_calls)
+                        pending_tool_results = await self._execute_tools_parallel(dispatcher, function_calls, guard=guard)
                     else:
-                        pending_tool_results = await self._execute_tools_sequential(dispatcher, function_calls)
+                        pending_tool_results = await self._execute_tools_sequential(dispatcher, function_calls, guard=guard)
 
                     # Track tool call metrics (after execution)
                     for tc_name, tc_result in pending_tool_results:
@@ -1014,6 +1060,7 @@ Continue with the task based on these results."""
         messages: list[dict[str, Any]] = [{"role": "user", "content": task}]
 
         self.consecutive_error_count = 0
+        guard = ToolCallGuard()  # One guard instance per loop execution (OPP-33 + OPP-44)
 
         for round_num in range(max_rounds):
             log_info(f"\n--- Anthropic Round {round_num + 1}/{max_rounds} ---")
@@ -1068,7 +1115,7 @@ Continue with the task based on these results."""
                 ]
 
                 # Execute through shared dispatch path (same as /v1/responses)
-                results = await self._execute_tools_sequential(dispatcher, common_fc_list)
+                results = await self._execute_tools_sequential(dispatcher, common_fc_list, guard=guard)
 
                 # Build Anthropic tool result messages with tool_use_ids
                 for tc, (fc_name, tool_result) in zip(tool_calls, results):
