@@ -129,3 +129,32 @@ class TestToolSchemaDedup:
             "Expected tools to be present when TOOL_SCHEMA_DEDUP_ENABLED=False "
             "(the default), but 'tools' was absent from payload"
         )
+
+    @patch("llm.responses_client.ensure_model_loaded")
+    def test_dedup_preserves_tool_choice(
+        self, mock_ensure: MagicMock
+    ) -> None:
+        """When dedup enabled + previous_response_id set, tool_choice preserved even though tools omitted."""
+        client, mock_session = _make_client()
+
+        with patch(
+            "config.constants.tool_config.TOOL_SCHEMA_DEDUP_ENABLED", True
+        ), patch(
+            "llm.responses_client.TOOL_SCHEMA_DEDUP_ENABLED", True
+        ):
+            client.create_response(
+                input_text="hello",
+                tools=_SAMPLE_TOOLS,
+                previous_response_id="prev-789",
+                tool_choice="required",
+            )
+
+        payload: Dict[str, Any] = mock_session.post.call_args.kwargs["json"]
+        assert "tools" not in payload, (
+            "Expected tools to be omitted in dedup mode"
+        )
+        assert payload.get("tool_choice") == "required", (
+            "Expected tool_choice='required' to be preserved in payload "
+            "even when tool schemas are deduplicated, but got: "
+            f"{payload.get('tool_choice')!r}"
+        )
