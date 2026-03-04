@@ -52,6 +52,7 @@ from mcp_client.type_coercion import safe_call_tool
 from tools.loop_metrics import LoopMetrics, RoundMetrics
 from tools.tool_call_guard import ToolCallGuard
 from tools.tool_call_tracker import ToolCallTracker
+from config.constants.timeouts import DEFAULT_LLM_TIMEOUT
 from tools.adaptive_timeout import AdaptiveTimeoutManager
 from tools.model_health import ModelHealthTracker
 from tools.tool_result_cache import ToolResultCache
@@ -666,6 +667,7 @@ Continue with the task based on these results."""
         tracker: ToolCallTracker | None = None,
         cache: ToolResultCache | None = None,
         health_tracker: ModelHealthTracker | None = None,
+        model: str = "",
     ):
         """Execute tools sequentially. Returns list of (name, result_text) tuples.
 
@@ -742,6 +744,8 @@ Continue with the task based on these results."""
                     guard.record_failure(fc_name)
                 if tracker is not None:
                     tracker.mark_orphaned(call_id)
+                if health_tracker is not None and model:
+                    health_tracker.record_tool_error(model, fc_name, type(e).__name__)
             except Exception as e:
                 tool_result = f"Error: {e}"
                 log_error(f"Tool execution failed: {e}")
@@ -750,6 +754,8 @@ Continue with the task based on these results."""
                     guard.record_failure(fc_name)
                 if tracker is not None:
                     tracker.mark_orphaned(call_id)
+                if health_tracker is not None and model:
+                    health_tracker.record_tool_error(model, fc_name, type(e).__name__)
 
             results.append((fc_name, tool_result))
 
@@ -763,6 +769,7 @@ Continue with the task based on these results."""
         tracker: ToolCallTracker | None = None,
         cache: ToolResultCache | None = None,
         health_tracker: ModelHealthTracker | None = None,
+        model: str = "",
     ):
         """Execute tools in parallel using asyncio.gather(). Returns list of (name, result_text) tuples.
 
@@ -826,6 +833,8 @@ Continue with the task based on these results."""
                     guard.record_failure(fc_name)
                 if tracker is not None:
                     tracker.mark_orphaned(call_id)
+                if health_tracker is not None and model:
+                    health_tracker.record_tool_error(model, fc_name, type(e).__name__)
                 log_error(str(e))
                 return fc_name, f"Error: {e}", False
             except Exception as e:
@@ -833,6 +842,8 @@ Continue with the task based on these results."""
                     guard.record_failure(fc_name)
                 if tracker is not None:
                     tracker.mark_orphaned(call_id)
+                if health_tracker is not None and model:
+                    health_tracker.record_tool_error(model, fc_name, type(e).__name__)
                 log_error(f"Tool execution failed: {e}")
                 return fc_name, f"Error: {e}", False
 
@@ -874,6 +885,8 @@ Continue with the task based on these results."""
         llm_call_duration: float,
         round_tool_calls: list,
         round_errors: int,
+        tracker: Any = None,
+        cache: Any = None,
     ) -> None:
         """Record metrics for a single autonomous loop round.
 
@@ -886,6 +899,9 @@ Continue with the task based on these results."""
                 llm_call_duration_seconds=llm_call_duration,
                 tool_calls=round_tool_calls,
                 error_count=round_errors,
+                orphan_count=tracker.orphan_count if tracker else 0,
+                cache_hits=cache.hits if cache else 0,
+                cache_misses=cache.misses if cache else 0,
             )
             if len(round_metrics_list) < 100:
                 round_metrics_list.append(rm)
@@ -929,7 +945,13 @@ Continue with the task based on these results."""
         previous_response_id = None
         pending_tool_results = []  # Track tool results to inject into next round
         self.consecutive_error_count = 0
-        guard = ToolCallGuard()  # One guard instance per loop execution (OPP-33 + OPP-44)
+        # C-1: Pass tool schemas so guard can validate args before dispatch
+        tool_schemas = {
+            t["function"]["name"]: t["function"].get("parameters", {})
+            for t in openai_tools
+            if "function" in t
+        }
+        guard = ToolCallGuard(tool_schemas=tool_schemas)  # OPP-33 + OPP-44
         tracker = ToolCallTracker()  # Orphan detection per loop execution (OPP-37)
         cache = ToolResultCache()    # Tool result cache per loop execution (OPP-40)
         health_tracker = ModelHealthTracker()  # Per-model error budget (OPP-45)
@@ -971,6 +993,9 @@ Continue with the task based on these results."""
                     if model_status != "active":
                         log_info(f"Model '{model}' health: {model_status} (advisory only, continuing)")
 
+                # C-3: Compute adaptive timeout from observed response times
+                adaptive_timeout = timeout_mgr.get_timeout(model, "responses", DEFAULT_LLM_TIMEOUT) if timeout_mgr and model else DEFAULT_LLM_TIMEOUT
+
                 # CRITICAL: Run sync HTTP call in thread pool to avoid blocking event loop
                 # This prevents MCP connection TaskGroup failures during long LLM calls
                 try:
@@ -982,7 +1007,8 @@ Continue with the task based on these results."""
                         max_tokens=max_tokens,
                         model=model,
                         tool_choice=current_tool_choice,
-                        temperature=DEFAULT_TEMPERATURE
+                        temperature=DEFAULT_TEMPERATURE,
+                        timeout=adaptive_timeout,
                     )
                 except Exception as e:
                     self.consecutive_error_count += 1
@@ -996,13 +1022,13 @@ Continue with the task based on these results."""
                         # Record round before early return
                         completed_rounds += 1
                         llm_call_duration = time.monotonic() - round_start_time
-                        self._record_round_metrics(round_metrics_list, completed_rounds, llm_call_duration, round_tool_calls, round_errors)
+                        self._record_round_metrics(round_metrics_list, completed_rounds, llm_call_duration, round_tool_calls, round_errors, tracker=tracker, cache=cache)
                         return f"Task aborted: {self.consecutive_error_count} consecutive errors. Last: {e}"
                     pending_tool_results.append(("_llm_error", f"LLM call failed: {e}"))
                     # Record this round and continue
                     completed_rounds += 1
                     llm_call_duration = time.monotonic() - round_start_time
-                    self._record_round_metrics(round_metrics_list, completed_rounds, llm_call_duration, round_tool_calls, round_errors)
+                    self._record_round_metrics(round_metrics_list, completed_rounds, llm_call_duration, round_tool_calls, round_errors, tracker=tracker, cache=cache)
                     continue
 
                 llm_call_duration = time.monotonic() - round_start_time
@@ -1052,9 +1078,13 @@ Continue with the task based on these results."""
                     log_info(f"LLM requested {len(function_calls)} tool call(s)")
 
                     if parallel_tools and len(function_calls) > 1:
-                        pending_tool_results = await self._execute_tools_parallel(dispatcher, function_calls, guard=guard, tracker=tracker, cache=cache, health_tracker=health_tracker)
+                        pending_tool_results = await self._execute_tools_parallel(dispatcher, function_calls, guard=guard, tracker=tracker, cache=cache, health_tracker=health_tracker, model=model or "")
                     else:
-                        pending_tool_results = await self._execute_tools_sequential(dispatcher, function_calls, guard=guard, tracker=tracker, cache=cache, health_tracker=health_tracker)
+                        pending_tool_results = await self._execute_tools_sequential(dispatcher, function_calls, guard=guard, tracker=tracker, cache=cache, health_tracker=health_tracker, model=model or "")
+
+                    # C-4: Check for orphaned tool calls after execution
+                    if tracker is not None:
+                        tracker.check_orphans()
 
                     # Track tool call metrics (after execution)
                     for tc_name, tc_result in pending_tool_results:
@@ -1070,7 +1100,7 @@ Continue with the task based on these results."""
 
                     # Record completed round metrics
                     completed_rounds += 1
-                    self._record_round_metrics(round_metrics_list, completed_rounds, llm_call_duration, round_tool_calls, round_errors)
+                    self._record_round_metrics(round_metrics_list, completed_rounds, llm_call_duration, round_tool_calls, round_errors, tracker=tracker, cache=cache)
 
                     # Check abort threshold after tool execution
                     if self.consecutive_error_count >= MAX_CONSECUTIVE_ERRORS:
@@ -1084,7 +1114,7 @@ Continue with the task based on these results."""
 
                     # Record completed round metrics (no tool calls this round)
                     completed_rounds += 1
-                    self._record_round_metrics(round_metrics_list, completed_rounds, llm_call_duration, round_tool_calls, round_errors)
+                    self._record_round_metrics(round_metrics_list, completed_rounds, llm_call_duration, round_tool_calls, round_errors, tracker=tracker, cache=cache)
 
                     final_status = "completed"
                     if text_content:
@@ -1141,7 +1171,13 @@ Continue with the task based on these results."""
         messages: list[dict[str, Any]] = [{"role": "user", "content": task}]
 
         self.consecutive_error_count = 0
-        guard = ToolCallGuard()    # One guard instance per loop execution (OPP-33 + OPP-44)
+        # C-1: Pass tool schemas so guard can validate args before dispatch
+        tool_schemas = {
+            t["function"]["name"]: t["function"].get("parameters", {})
+            for t in openai_tools
+            if "function" in t
+        }
+        guard = ToolCallGuard(tool_schemas=tool_schemas)  # OPP-33 + OPP-44
         tracker = ToolCallTracker()  # Orphan detection per loop execution (OPP-37)
         cache = ToolResultCache()    # Tool result cache per loop execution (OPP-40)
         health_tracker = ModelHealthTracker()  # Per-model error budget (OPP-45)
@@ -1151,6 +1187,13 @@ Continue with the task based on these results."""
             log_info(f"\n--- Anthropic Round {round_num + 1}/{max_rounds} ---")
 
             round_start_time = time.monotonic()
+
+            # H-5: Advisory health check before Anthropic LLM call
+            if health_tracker and model:
+                model_status = health_tracker.check_health(model)
+                if model_status != "active":
+                    log_info(f"Model '{model}' health: {model_status} (advisory only, continuing)")
+
             try:
                 response = await asyncio.to_thread(
                     self.llm.anthropic_messages,
@@ -1162,6 +1205,8 @@ Continue with the task based on these results."""
                 )
             except Exception as e:
                 self.consecutive_error_count += 1
+                if health_tracker and model:
+                    health_tracker.record_llm_call(model, success=False, elapsed=time.monotonic() - round_start_time)
                 log_error(
                     f"Anthropic LLM call failed (consecutive: {self.consecutive_error_count}): {e}"
                 )
@@ -1181,8 +1226,11 @@ Continue with the task based on these results."""
 
             # Reset error count on success
             self.consecutive_error_count = 0
+            llm_elapsed = time.monotonic() - round_start_time
+            if health_tracker and model:
+                health_tracker.record_llm_call(model, success=True, elapsed=llm_elapsed)
             if model:
-                timeout_mgr.observe(model, "responses", time.monotonic() - round_start_time)
+                timeout_mgr.observe(model, "responses", llm_elapsed)
 
             stop_reason = response.get("stop_reason", "")
             log_info(f"stop_reason: {stop_reason}")
@@ -1203,7 +1251,11 @@ Continue with the task based on these results."""
                 ]
 
                 # Execute through shared dispatch path (same as /v1/responses)
-                results = await self._execute_tools_sequential(dispatcher, common_fc_list, guard=guard, tracker=tracker, cache=cache, health_tracker=health_tracker)
+                results = await self._execute_tools_sequential(dispatcher, common_fc_list, guard=guard, tracker=tracker, cache=cache, health_tracker=health_tracker, model=model or "")
+
+                # C-4: Check for orphaned tool calls after execution
+                if tracker is not None:
+                    tracker.check_orphans()
 
                 # Build Anthropic tool result messages with tool_use_ids
                 for tc, (fc_name, tool_result) in zip(tool_calls, results):
