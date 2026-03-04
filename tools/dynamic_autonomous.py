@@ -52,6 +52,7 @@ from mcp_client.type_coercion import safe_call_tool
 from tools.loop_metrics import LoopMetrics, RoundMetrics
 from tools.tool_call_guard import ToolCallGuard
 from tools.tool_call_tracker import ToolCallTracker
+from tools.adaptive_timeout import AdaptiveTimeoutManager
 from tools.model_health import ModelHealthTracker
 from tools.tool_result_cache import ToolResultCache
 from utils.custom_logging import log_error, log_info
@@ -932,6 +933,7 @@ Continue with the task based on these results."""
         tracker = ToolCallTracker()  # Orphan detection per loop execution (OPP-37)
         cache = ToolResultCache()    # Tool result cache per loop execution (OPP-40)
         health_tracker = ModelHealthTracker()  # Per-model error budget (OPP-45)
+        timeout_mgr = AdaptiveTimeoutManager()  # Adaptive timeout (OPP-46)
 
         # --- OPP-07: Metrics tracking initialisation ---
         self.last_loop_metrics = None
@@ -1006,6 +1008,8 @@ Continue with the task based on these results."""
                 llm_call_duration = time.monotonic() - round_start_time
                 if health_tracker and model:
                     health_tracker.record_llm_call(model, success=True, elapsed=llm_call_duration)
+                if model:
+                    timeout_mgr.observe(model, "responses", llm_call_duration)
 
                 # Save response ID for next round (maintains conversation state)
                 previous_response_id = response["id"]
@@ -1141,10 +1145,12 @@ Continue with the task based on these results."""
         tracker = ToolCallTracker()  # Orphan detection per loop execution (OPP-37)
         cache = ToolResultCache()    # Tool result cache per loop execution (OPP-40)
         health_tracker = ModelHealthTracker()  # Per-model error budget (OPP-45)
+        timeout_mgr = AdaptiveTimeoutManager()  # Adaptive timeout (OPP-46)
 
         for round_num in range(max_rounds):
             log_info(f"\n--- Anthropic Round {round_num + 1}/{max_rounds} ---")
 
+            round_start_time = time.monotonic()
             try:
                 response = await asyncio.to_thread(
                     self.llm.anthropic_messages,
@@ -1175,6 +1181,8 @@ Continue with the task based on these results."""
 
             # Reset error count on success
             self.consecutive_error_count = 0
+            if model:
+                timeout_mgr.observe(model, "responses", time.monotonic() - round_start_time)
 
             stop_reason = response.get("stop_reason", "")
             log_info(f"stop_reason: {stop_reason}")
