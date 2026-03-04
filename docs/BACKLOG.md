@@ -12,7 +12,7 @@
 | Tests | ~1969 passed, 0 failures |
 | Coverage | **91%+** |
 | Coverage target | **80% minimum / 89% goal (exceeded)** |
-| VERSION | 5.0.0 (in config/constants/version.py) |
+| VERSION | 5.1.0 (in config/constants/version.py) |
 | Completed rounds | Phase 1, 1.5, Round A-D, Error Audit, Code Quality, v5.0.0 (Pre-flight + Phase A + Phase B + Phase C), Log Analysis (4 rounds) |
 | Next | Round G COMPLETE — all 8 OPPs done. VERSION bump to v5.1.0 pending. |
 
