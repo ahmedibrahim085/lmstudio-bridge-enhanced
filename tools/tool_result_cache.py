@@ -71,11 +71,13 @@ class ToolResultCache:
         normalized = self._normalize_name(tool_name)
 
         if normalized not in self._allowlist:
-            self._misses += 1
+            with self._lock:
+                self._misses += 1
             return None
 
         if self._ttl <= 0:
-            self._misses += 1
+            with self._lock:
+                self._misses += 1
             return None
 
         key = self._make_key(normalized, args)
