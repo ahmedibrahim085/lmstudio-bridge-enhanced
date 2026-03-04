@@ -14,7 +14,7 @@
 | Coverage target | **80% minimum / 89% goal (exceeded)** |
 | VERSION | 5.0.0 (in config/constants/version.py) |
 | Completed rounds | Phase 1, 1.5, Round A-D, Error Audit, Code Quality, v5.0.0 (Pre-flight + Phase A + Phase B + Phase C), Log Analysis (4 rounds) |
-| Next | Round G Phase 5: OPP-46 (adaptive timeout) |
+| Next | Round G Phase 6: OPP-50 (tool schema dedup experiment) |
 
 ---
 

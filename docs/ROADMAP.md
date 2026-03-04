@@ -338,7 +338,7 @@ Final completed state: ~1969 tests, 91% coverage, VERSION 5.0.0.
 | 12 | OPP-43 | Poll Rate Limiter (JIT memoization) | 9 | 9 | 0.9 | 2 | **36.5** | P0 | **DONE** |
 | 13 | OPP-44 | Tool Call Circuit Breaker (+OPP-48) | 7 | 8 | 0.8 | 2 | **22.4** | P1 | **DONE** |
 | 14 | OPP-45 | Per-Model Error Budget + Auto-Demotion (+OPP-34) | 7 | 8 | 0.8 | 2 | **22.4** | P1 | **DONE** |
-| 15 | OPP-46 | Adaptive Timeout — Both Phases (+OPP-49) | 6 | 7 | 0.8 | 2 | **16.8** | P1 | PROPOSED |
+| 15 | OPP-46 | Adaptive Timeout — Both Phases (+OPP-49) | 6 | 7 | 0.8 | 2 | **16.8** | P1 | **DONE** |
 | ~~16~~ | ~~OPP-47~~ | ~~Tool Name Normalization Layer~~ | — | — | — | — | — | — | **MERGED → OPP-40** |
 | ~~17~~ | ~~OPP-48~~ | ~~Truncated Tool Call Recovery~~ | — | — | — | — | — | — | **MERGED → OPP-44** |
 | ~~18~~ | ~~OPP-49~~ | ~~Generation-Aware Timeout~~ | — | — | — | — | — | — | **MERGED → OPP-46** |
