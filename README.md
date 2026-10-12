@@ -1,4 +1,4 @@
-# LM Studio Bridge Enhanced v5.1.0
+# LM Studio Bridge Enhanced v5.1.1
 
 An autonomous middleware agent that lets any MCP client delegate tasks to local LLMs, which can then use any MCP tool — translating between all 4 API formats in real-time.
 
@@ -634,7 +634,11 @@ See [Troubleshooting Guide](docs/TROUBLESHOOTING.md) for more.
 
 ## Version History
 
-### v5.1.0 (March 2026) - Current
+### v5.1.1 (October 2026) - Current
+
+**Fix**: pin `mcp[cli]` to `>=1.0.0,<2` in `requirements.txt` (#28). mcp 2.x renamed `FastMCP`, so a fresh install could not start the server.
+
+### v5.1.0 (March 2026)
 
 **Round G — Reliability & Efficiency** (11 OPPs from server log analysis):
 - **OPP-38**: Fix "model: default" sentinel escape — eliminated 167 ERRORs/session
