@@ -9,8 +9,8 @@
 
 ## Summary
 
-Patch release. A fresh install of v5.1.0 could not start the server: `requirements.txt` and `setup.py` did not cap the
-`mcp` dependency, so `pip` now resolves `mcp` 2.x, which renamed `FastMCP`:
+Patch release. A fresh install of v5.1.0 could not start the server: `requirements.txt` did not cap the `mcp`
+dependency, so `pip` now resolves `mcp` 2.x, which renamed `FastMCP`:
 
 ```
 python -c "import main"
@@ -22,7 +22,8 @@ ModuleNotFoundError: No module named 'mcp.server.fastmcp'. This is mcp 2.x, wher
 - `requirements.txt`: `mcp[cli]>=1.0.0` → `mcp[cli]>=1.0.0,<2`
 
 `pip install .` is not covered: it builds from `pyproject.toml`, whose `[project]` table declares no dependencies, so
-`setup.py`'s `install_requires` is not used. That is a separate gap, recorded in #22.
+`setup.py`'s `install_requires` is ignored and `pip install .` installs no dependencies at all. That is a separate gap,
+recorded in #22.
 
 No code change. Migrating to mcp 2.x is a separate decision, recorded in #28.
 
