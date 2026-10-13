@@ -95,7 +95,7 @@ class TestAnthropicCumulativeGuard:
             return_value=_make_anthropic_tool_response("search", {"query": "test " + "a" * 100})
         )
 
-        result = asyncio.get_event_loop().run_until_complete(
+        result = asyncio.run(
             agent._autonomous_loop_anthropic(
                 dispatcher=dispatcher,
                 openai_tools=_OPENAI_TOOLS,
@@ -149,7 +149,7 @@ class TestAnthropicCumulativeGuard:
 
         agent._estimate_tokens = tracking_estimate
 
-        result = asyncio.get_event_loop().run_until_complete(
+        result = asyncio.run(
             agent._autonomous_loop_anthropic(
                 dispatcher=dispatcher,
                 openai_tools=_OPENAI_TOOLS,
@@ -193,7 +193,7 @@ class TestAnthropicCumulativeGuard:
             return_value=_make_anthropic_tool_response("search", {"query": "q"})
         )
 
-        result = asyncio.get_event_loop().run_until_complete(
+        result = asyncio.run(
             agent._autonomous_loop_anthropic(
                 dispatcher=dispatcher,
                 openai_tools=_OPENAI_TOOLS,

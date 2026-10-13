@@ -189,7 +189,7 @@ class TestConfigPackageReexport:
         from config import VERSION
 
         assert isinstance(VERSION, str)
-        assert VERSION == "5.1.1"
+        assert VERSION == "5.1.2"
 
 
 # ---------------------------------------------------------------------------

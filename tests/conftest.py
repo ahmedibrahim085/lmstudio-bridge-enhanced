@@ -284,8 +284,7 @@ def pytest_runtest_setup(item):
         return
 
     # Check if required MCPs are available
-    loop = asyncio.get_event_loop()
-    is_running, skip_reason = loop.run_until_complete(
+    is_running, skip_reason = asyncio.run(
         check_required_mcps(required_mcps)
     )
 

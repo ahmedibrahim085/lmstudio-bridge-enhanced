@@ -13,15 +13,10 @@ Features:
 """
 
 import asyncio
+import concurrent.futures
 import logging
 import threading
-from typing import Any, Dict, List, Optional
-
-# Enable nested asyncio.run() calls to prevent RuntimeError when called from
-# within an already-running event loop (e.g., from FastMCP async context)
-import nest_asyncio
-
-nest_asyncio.apply()
+from typing import Any, Coroutine, Dict, List, Optional
 
 from .cache import CacheManager
 from .lms_integration import LMSIntegration
@@ -29,6 +24,22 @@ from .research import ModelResearcher, apply_research_to_metadata
 from .schemas import ModelMetadata, ModelType, ResearchStatus
 
 logger = logging.getLogger(__name__)
+
+
+def _run_sync(coro: Coroutine[Any, Any, Any]) -> Any:
+    """Run a coroutine from sync code, even when an event loop is already running.
+
+    Replaces a module-level nest_asyncio.apply(), which patched every event loop
+    and broke anyio.run() on Python 3.14+ (issue #14). Inside a running loop the
+    coroutine runs on its own loop in a worker thread.
+    """
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(coro)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+        return pool.submit(asyncio.run, coro).result()
+
 
 __all__ = [
     "ModelRegistry",
@@ -206,7 +217,7 @@ class ModelRegistry:
         # Auto-research if enabled
         if auto_research:
             logger.info(f"Auto-researching capabilities for {model_id}")
-            result = asyncio.run(self.researcher.research_model(lms_meta))
+            result = _run_sync(self.researcher.research_model(lms_meta))
 
             if result.success:
                 lms_meta = apply_research_to_metadata(lms_meta, result)
@@ -369,7 +380,7 @@ class ModelRegistry:
         remove_unavailable: bool = True
     ) -> Dict[str, Any]:
         """Synchronous wrapper for refresh_registry."""
-        return asyncio.run(
+        return _run_sync(
             self.refresh_registry(
                 models=models,
                 force_all=force_all,

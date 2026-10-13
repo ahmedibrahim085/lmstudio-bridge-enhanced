@@ -98,7 +98,7 @@ class TestAnthropicLoopMetricsSet:
             return_value=_make_anthropic_text_response("Task complete.")
         )
 
-        asyncio.get_event_loop().run_until_complete(
+        asyncio.run(
             agent._autonomous_loop_anthropic(
                 dispatcher=dispatcher,
                 openai_tools=_OPENAI_TOOLS,
@@ -130,7 +130,7 @@ class TestAnthropicLoopMetricsSet:
             ]
         )
 
-        asyncio.get_event_loop().run_until_complete(
+        asyncio.run(
             agent._autonomous_loop_anthropic(
                 dispatcher=dispatcher,
                 openai_tools=_OPENAI_TOOLS,
@@ -169,7 +169,7 @@ class TestAnthropicRoundMetrics:
             ]
         )
 
-        asyncio.get_event_loop().run_until_complete(
+        asyncio.run(
             agent._autonomous_loop_anthropic(
                 dispatcher=dispatcher,
                 openai_tools=_OPENAI_TOOLS,
@@ -206,7 +206,7 @@ class TestAnthropicMetricsOnAbort:
             side_effect=RuntimeError("LLM connection failed")
         )
 
-        result = asyncio.get_event_loop().run_until_complete(
+        result = asyncio.run(
             agent._autonomous_loop_anthropic(
                 dispatcher=dispatcher,
                 openai_tools=_OPENAI_TOOLS,
@@ -244,7 +244,7 @@ class TestAnthropicMetricsMaxRounds:
             return_value=_make_anthropic_tool_response("read_file", {"path": "/f"})
         )
 
-        result = asyncio.get_event_loop().run_until_complete(
+        result = asyncio.run(
             agent._autonomous_loop_anthropic(
                 dispatcher=dispatcher,
                 openai_tools=_OPENAI_TOOLS,
@@ -296,7 +296,7 @@ class TestAnthropicMetricsTryFinally:
             "tools.dynamic_autonomous.FormatAdapter.extract_anthropic_tool_calls",
             side_effect=TypeError("unexpected NoneType in response parsing"),
         ), pytest.raises(TypeError, match="unexpected NoneType"):
-            asyncio.get_event_loop().run_until_complete(
+            asyncio.run(
                 agent._autonomous_loop_anthropic(
                     dispatcher=dispatcher,
                     openai_tools=_OPENAI_TOOLS,
