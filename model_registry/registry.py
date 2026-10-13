@@ -40,6 +40,7 @@ def _run_sync(coro: Coroutine[Any, Any, Any]) -> Any:
     with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
         return pool.submit(asyncio.run, coro).result()
 
+
 __all__ = [
     "ModelRegistry",
     "get_registry",
