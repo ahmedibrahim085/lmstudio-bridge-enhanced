@@ -377,7 +377,7 @@ class TestAutonomousPreload(unittest.TestCase):
             mock_discovery.get_connection_params.side_effect = ValueError("No MCP config needed for test")
             mock_discovery_cls.return_value = mock_discovery
 
-            asyncio.get_event_loop().run_until_complete(
+            asyncio.run(
                 agent.autonomous_with_mcp(
                     mcp_name="filesystem",
                     task="Test preload"
@@ -400,7 +400,7 @@ class TestAutonomousPreload(unittest.TestCase):
             mock_discovery.validate_mcp_names.side_effect = ValueError("No MCP config needed for test")
             mock_discovery_cls.return_value = mock_discovery
 
-            asyncio.get_event_loop().run_until_complete(
+            asyncio.run(
                 agent.autonomous_with_multiple_mcps(
                     mcp_names=["filesystem", "memory"],
                     task="Test preload multi"
@@ -447,7 +447,7 @@ class TestAutonomousLoopTemperature(unittest.TestCase):
         # Mock session
         mock_session = AsyncMock()
 
-        asyncio.get_event_loop().run_until_complete(
+        asyncio.run(
             agent._autonomous_loop(
                 dispatcher=_SingleSessionDispatcher(mock_session),
                 openai_tools=[],

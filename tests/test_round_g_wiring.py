@@ -125,7 +125,7 @@ class TestGuardReceivesToolSchemas:
             mock_guard_instance.check_circuit.return_value = (True, None)
             MockGuard.return_value = mock_guard_instance
 
-            asyncio.get_event_loop().run_until_complete(
+            asyncio.run(
                 agent._autonomous_loop(
                     dispatcher=dispatcher,
                     openai_tools=_OPENAI_TOOLS,
@@ -177,7 +177,7 @@ class TestHealthTrackerRecordsToolErrors:
             mock_health.record_llm_call.return_value = None
             MockHealth.return_value = mock_health
 
-            asyncio.get_event_loop().run_until_complete(
+            asyncio.run(
                 agent._autonomous_loop(
                     dispatcher=dispatcher,
                     openai_tools=_OPENAI_TOOLS,
@@ -216,7 +216,7 @@ class TestAdaptiveTimeoutUsed:
             mock_timeout_mgr.get_timeout.return_value = 42.0
             MockTimeout.return_value = mock_timeout_mgr
 
-            asyncio.get_event_loop().run_until_complete(
+            asyncio.run(
                 agent._autonomous_loop(
                     dispatcher=dispatcher,
                     openai_tools=_OPENAI_TOOLS,
@@ -263,7 +263,7 @@ class TestOrphansCheckedAfterExecution:
             mock_tracker.check_orphans.return_value = []
             MockTracker.return_value = mock_tracker
 
-            asyncio.get_event_loop().run_until_complete(
+            asyncio.run(
                 agent._autonomous_loop(
                     dispatcher=dispatcher,
                     openai_tools=_OPENAI_TOOLS,
@@ -298,7 +298,7 @@ class TestRoundMetricsIncludeCacheStats:
             ]
         )
 
-        asyncio.get_event_loop().run_until_complete(
+        asyncio.run(
             agent._autonomous_loop(
                 dispatcher=dispatcher,
                 openai_tools=_OPENAI_TOOLS,
