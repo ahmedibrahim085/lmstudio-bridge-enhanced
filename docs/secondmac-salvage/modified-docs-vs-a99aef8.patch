@@ -1,0 +1,62 @@
+diff --git a/docs/BACKLOG.md b/docs/BACKLOG.md
+index eed0446..f68543a 100644
+--- a/docs/BACKLOG.md
++++ b/docs/BACKLOG.md
+@@ -509,10 +509,18 @@ Phase 6: Quick Experiment ✅ DONE
+ |--------|-------|------|
+ | **Done (Round G)** | 11 | OPP-32, 33, 37, 38, 39, 40, 43, 44, 45, 46, 50 |
+ | **Deferred** | 1 | OPP-42 (re-measure after OPP-39) |
++| **Spec Complete** | 1 | OPP-51 (god module refactoring) |
+ | **Merged** | 4 | OPP-34→45, OPP-47→40, OPP-48→44, OPP-49→46 |
+ | **Removed** | 3 | OPP-35, 36, 41 |
+ | **Total original** | 19 | OPP-32 through OPP-50 |
+ 
++### Round H — Tech Debt (v5.2.0)
++
++| OPP | Title | Priority | Status | Spec |
++|-----|-------|----------|--------|------|
++| OPP-51 | Refactor `dynamic_autonomous.py` god module (4 phases) | P1 | SPEC COMPLETE | `docs/OPP-51-GOD-MODULE-REFACTOR.md` |
++| OPP-42 | Token Budget Monitoring (re-measure after OPP-39) | P2 | DEFERRED | — |
++
+ ### Gate
+ 
+ - [x] All P0 OPPs (32, 38, 39, 43) implemented and tested
+@@ -550,6 +558,8 @@ Phase 6: Quick Experiment ✅ DONE
+ | 2026-03-02 | All v5 sections marked DONE, gate checklist verified, documentation updated |
+ | 2026-03-02 | Log analysis: 2-round deep analysis of 188K-line server log → 17 issues, 11 new OPPs (OPP-32 to OPP-42) |
+ | 2026-03-02 | Added Round G (Log Analysis OPPs) with 4 batches, 3 dependency chains, gate criteria |
++| 2026-03-04 | v5.1.0 released: 11 Round G OPPs, 2167 tests, 81% CI coverage, PR #12 merged |
++| 2026-03-04 | OPP-51 spec complete: god module refactoring, 4-phase extraction plan, `docs/OPP-51-GOD-MODULE-REFACTOR.md` |
+ | 2026-03-02 | Round 3 log analysis: 11 additional findings → 5 new OPPs (OPP-43 to OPP-47), total 28 issues, 16 OPPs |
+ | 2026-03-02 | Round G updated: 16 OPPs across 5 batches, 5 dependency chains (J-M + independent), gate updated |
+ | 2026-03-02 | Round 4 log analysis: 3 additional findings → 3 new OPPs (OPP-48 to OPP-50), total 31 issues, 19 OPPs |
+diff --git a/docs/ROADMAP.md b/docs/ROADMAP.md
+index fb8ddd1..e04b82e 100644
+--- a/docs/ROADMAP.md
++++ b/docs/ROADMAP.md
+@@ -405,3 +405,25 @@ Phase 6: Quick Experiment ✅ DONE
+ | **Removed** | 3 | OPP-35, 36, 41 |
+ 
+ Released as: **v5.1.0** (all backward compatible, no breaking changes)
++
++---
++
++## Round H — Tech Debt (v5.2.0)
++
++| OPP | Title | Priority | RICE | Status |
++|-----|-------|----------|------|--------|
++| OPP-51 | Refactor `dynamic_autonomous.py` god module | P1 | 18.0 | SPEC COMPLETE |
++| OPP-42 | Token Budget Monitoring | P2 | — | DEFERRED (re-measure after OPP-39) |
++
++### OPP-51: God Module Refactoring (4 phases)
++
++**Problem**: 1,515-line god module with 6 mixed concerns and 260 lines of copy-paste duplication between two autonomous loops.
++
++| Phase | Extraction | Lines Saved | Priority |
++|-------|-----------|-------------|----------|
++| 1 | `GuardedToolExecutor` (tool execution pipeline) | ~300 | HIGH |
++| 2 | `LoopStrategy` (merge duplicate loops via strategy pattern) | ~130 | HIGH |
++| 3 | `MCPConnectionManager` (connection boilerplate) | ~80 | MEDIUM |
++| 4 | `TokenBudgetManager` (token estimation + context guard) | ~20 | LOW |
++
++**Spec**: `docs/OPP-51-GOD-MODULE-REFACTOR.md`
